@@ -1,0 +1,32 @@
+[package]
+name = "natia"
+version = "0.1.0"
+description = "NATIA - AI-powered note taking"
+authors = []
+edition = "2021"
+
+[lib]
+name = "natia_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+tauri = { version = "2", features = [] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+rusqlite = { version = "0.31", features = ["bundled"] }
+chrono = { version = "0.4", features = ["serde"] }
+uuid = { version = "1", features = ["v4"] }
+reqwest = { version = "0.12", features = ["json"] }
+argon2 = "0.5"
+aes-gcm = { version = "0.10", features = ["aes"] }
+rand = "0.8"
+base64 = "0.22"
+zip = "0.6"
+tauri-plugin-dialog = "2"
+
+[features]
+default = ["custom-protocol"]
+custom-protocol = ["tauri/custom-protocol"]

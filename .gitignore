@@ -1,0 +1,7 @@
+﻿node_modules/
+fablenote/src-tauri/target/
+fablenote/dist/
+*.db
+*.db-shm
+*.db-wal
+.env
