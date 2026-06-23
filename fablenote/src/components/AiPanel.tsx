@@ -24,7 +24,8 @@ import {
   Zap,
 } from "lucide-react";
 import * as Diff from "diff";
-import { chat, fetchModels } from "../hooks/useOllama";
+import { fetchModels } from "../hooks/useOllama";
+import { aiChat, aiStream, activeModel } from "../lib/aiInvoke";
 import { useStore } from "../store";
 
 interface PullProgress {
@@ -97,7 +98,7 @@ export default function AiPanel({ onOpenConv }: { onOpenConv: () => void }) {
     setQuickLoading(true);
     setQuickResponse("");
     try {
-      const result = await chat(settings.ollama_url, selectedModel, shadowPrompt, msg);
+      const result = await aiChat(settings, shadowPrompt, msg, selectedModel);
       setQuickResponse(result);
       setQuickInput("");
     } catch (e: unknown) {
@@ -132,8 +133,8 @@ export default function AiPanel({ onOpenConv }: { onOpenConv: () => void }) {
   const traceDoneRef = useRef<(() => void) | null>(null);
 
   useEffect(() => {
-    refreshModels();
-  }, [settings.ollama_url]);
+    if (settings.ai_provider === "ollama") refreshModels();
+  }, [settings.ollama_url, settings.ai_provider]);
 
   useEffect(() => {
     setSelectedModel(settings.default_model);
@@ -212,7 +213,7 @@ export default function AiPanel({ onOpenConv }: { onOpenConv: () => void }) {
     startTimer();
 
     try {
-      const result = await chat(settings.ollama_url, selectedModel, shadowPrompt, fullMessage);
+      const result = await aiChat(settings, shadowPrompt, fullMessage, selectedModel);
       stopTimer();
       const elapsed = Math.round((Date.now() - startTimeRef.current) / 100) / 10;
       const truncatedResp = result.length > 600 ? result.substring(0, 600) + "…" : result;
@@ -271,7 +272,7 @@ export default function AiPanel({ onOpenConv }: { onOpenConv: () => void }) {
     startTimer();
 
     try {
-      const result = await chat(settings.ollama_url, selectedModel, shadowPrompt, fullMessage);
+      const result = await aiChat(settings, shadowPrompt, fullMessage, selectedModel);
       stopTimer();
       const elapsed = Math.round((Date.now() - startTimeRef.current) / 100) / 10;
       const truncatedResp = result.length > 600 ? result.substring(0, 600) + "…" : result;
@@ -425,7 +426,7 @@ Réponds UNIQUEMENT avec ce JSON (rien d'autre, pas de texte, pas de \`\`\`) :
     startTimer();
 
     try {
-      const result = await chat(settings.ollama_url, selectedModel, sortSystem, fullMessage);
+      const result = await aiChat(settings, sortSystem, fullMessage, selectedModel);
       stopTimer();
       const elapsed = Math.round((Date.now() - startTimeRef.current) / 100) / 10;
       const truncatedResp = result.length > 600 ? result.substring(0, 600) + "…" : result;
@@ -479,7 +480,7 @@ Réponds UNIQUEMENT avec ce JSON (rien d'autre, pas de texte, pas de \`\`\`) :
     };
     setLastTrace(traceBase); startTimeRef.current = Date.now(); startTimer();
     try {
-      const result = await chat(settings.ollama_url, selectedModel, shadowPrompt, fullMessage);
+      const result = await aiChat(settings, shadowPrompt, fullMessage, selectedModel);
       stopTimer();
       const elapsed = Math.round((Date.now() - startTimeRef.current) / 100) / 10;
       setLastTrace({ ...traceBase, response: result.slice(0, 600), elapsed, status: "done" });
@@ -505,7 +506,7 @@ Réponds UNIQUEMENT avec ce JSON (rien d'autre, pas de texte, pas de \`\`\`) :
     };
     setLastTrace(traceBase); startTimeRef.current = Date.now(); startTimer();
     try {
-      const result = await chat(settings.ollama_url, selectedModel, shadowPrompt, fullMessage);
+      const result = await aiChat(settings, shadowPrompt, fullMessage, selectedModel);
       stopTimer();
       const elapsed = Math.round((Date.now() - startTimeRef.current) / 100) / 10;
       setLastTrace({ ...traceBase, response: result.slice(0, 600), elapsed, status: "done" });
@@ -531,7 +532,7 @@ Réponds UNIQUEMENT avec ce JSON (rien d'autre, pas de texte, pas de \`\`\`) :
     };
     setLastTrace(traceBase); startTimeRef.current = Date.now(); startTimer();
     try {
-      const result = await chat(settings.ollama_url, selectedModel, shadowPrompt, fullMessage);
+      const result = await aiChat(settings, shadowPrompt, fullMessage, selectedModel);
       stopTimer();
       const elapsed = Math.round((Date.now() - startTimeRef.current) / 100) / 10;
       setLastTrace({ ...traceBase, response: result.slice(0, 600), elapsed, status: "done" });
@@ -607,12 +608,7 @@ Réponds UNIQUEMENT avec ce JSON (rien d'autre, pas de texte, pas de \`\`\`) :
     });
 
     try {
-      await invoke("ollama_stream", {
-        baseUrl: settings.ollama_url,
-        model: selectedModel,
-        system: shadowPrompt,
-        message: msg,
-      });
+      await aiStream(settings, shadowPrompt, msg, [], selectedModel);
     } catch (e: unknown) {
       const errMsg = e instanceof Error ? e.message : String(e);
       setTraceResponse(`Erreur : ${errMsg}`);
@@ -701,79 +697,92 @@ Réponds UNIQUEMENT avec ce JSON (rien d'autre, pas de texte, pas de \`\`\`) :
           <>
             {/* Model selector */}
             <div>
-              <div className="flex items-center justify-between mb-1">
-                <label className="text-xs text-muted">Modèle</label>
-                <div className="flex items-center gap-1">
-                  <button
-                    onClick={refreshModels}
-                    disabled={isRefreshing}
-                    title="Rafraîchir la liste"
-                    className="p-0.5 rounded text-muted hover:text-primary transition-colors disabled:opacity-40"
-                  >
-                    <RefreshCw size={11} className={isRefreshing ? "animate-spin" : ""} />
-                  </button>
-                  <button
-                    onClick={() => { setShowPullInput((s) => !s); setPullError(""); }}
-                    title="Télécharger un modèle"
-                    className={`p-0.5 rounded transition-colors ${showPullInput ? "text-accent" : "text-muted hover:text-primary"}`}
-                  >
-                    <Plus size={12} />
-                  </button>
-                </div>
-              </div>
-              <div className="relative">
-                <select
-                  value={selectedModel}
-                  onChange={(e) => setSelectedModel(e.target.value)}
-                  className="w-full bg-hover border border-border rounded-lg px-3 py-1.5 text-sm text-primary outline-none appearance-none cursor-pointer"
-                >
-                  {models.length === 0 && (
-                    <option value={selectedModel}>{selectedModel || "Aucun modèle"}</option>
-                  )}
-                  {models.map((m) => (
-                    <option key={m} value={m}>{m}</option>
-                  ))}
-                </select>
-                <ChevronDown size={13} className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted pointer-events-none" />
-              </div>
-
-              {/* Download UI */}
-              {showPullInput && (
-                <div className="mt-2 flex flex-col gap-1.5">
-                  <div className="flex gap-1.5">
-                    <input
-                      value={pullModel}
-                      onChange={(e) => setPullModel(e.target.value)}
-                      onKeyDown={(e) => { if (e.key === "Enter") startPull(); if (e.key === "Escape") setShowPullInput(false); }}
-                      placeholder="ex : llama3.2:3b"
-                      disabled={isPulling}
-                      className="flex-1 bg-hover border border-border rounded-lg px-2.5 py-1.5 text-xs text-primary outline-none focus:border-accent/50 transition-colors placeholder-muted"
-                    />
-                    <button
-                      onClick={startPull}
-                      disabled={isPulling || !pullModel.trim()}
-                      className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-accent hover:bg-accent-hover disabled:opacity-50 text-white text-xs transition-colors shrink-0"
-                    >
-                      {isPulling ? <Loader2 size={11} className="animate-spin" /> : <Download size={11} />}
-                      {isPulling ? "…" : "Télécharger"}
-                    </button>
+              {settings.ai_provider === "ollama" ? (
+                <>
+                  <div className="flex items-center justify-between mb-1">
+                    <label className="text-xs text-muted">Modèle Ollama</label>
+                    <div className="flex items-center gap-1">
+                      <button
+                        onClick={refreshModels}
+                        disabled={isRefreshing}
+                        title="Rafraîchir la liste"
+                        className="p-0.5 rounded text-muted hover:text-primary transition-colors disabled:opacity-40"
+                      >
+                        <RefreshCw size={11} className={isRefreshing ? "animate-spin" : ""} />
+                      </button>
+                      <button
+                        onClick={() => { setShowPullInput((s) => !s); setPullError(""); }}
+                        title="Télécharger un modèle"
+                        className={`p-0.5 rounded transition-colors ${showPullInput ? "text-accent" : "text-muted hover:text-primary"}`}
+                      >
+                        <Plus size={12} />
+                      </button>
+                    </div>
                   </div>
-                  {isPulling && pullProgress && (
-                    <div className="flex flex-col gap-1">
-                      <div className="h-1 rounded-full bg-hover overflow-hidden">
-                        <div
-                          className="h-full bg-accent rounded-full transition-all duration-300"
-                          style={{ width: `${pullProgress.total > 0 ? pullProgress.percent : 5}%` }}
+                  <div className="relative">
+                    <select
+                      value={selectedModel}
+                      onChange={(e) => setSelectedModel(e.target.value)}
+                      className="w-full bg-hover border border-border rounded-lg px-3 py-1.5 text-sm text-primary outline-none appearance-none cursor-pointer"
+                    >
+                      {models.length === 0 && (
+                        <option value={selectedModel}>{selectedModel || "Aucun modèle"}</option>
+                      )}
+                      {models.map((m) => (
+                        <option key={m} value={m}>{m}</option>
+                      ))}
+                    </select>
+                    <ChevronDown size={13} className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted pointer-events-none" />
+                  </div>
+
+                  {showPullInput && (
+                    <div className="mt-2 flex flex-col gap-1.5">
+                      <div className="flex gap-1.5">
+                        <input
+                          value={pullModel}
+                          onChange={(e) => setPullModel(e.target.value)}
+                          onKeyDown={(e) => { if (e.key === "Enter") startPull(); if (e.key === "Escape") setShowPullInput(false); }}
+                          placeholder="ex : llama3.2:3b"
+                          disabled={isPulling}
+                          className="flex-1 bg-hover border border-border rounded-lg px-2.5 py-1.5 text-xs text-primary outline-none focus:border-accent/50 transition-colors placeholder-muted"
                         />
+                        <button
+                          onClick={startPull}
+                          disabled={isPulling || !pullModel.trim()}
+                          className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-accent hover:bg-accent-hover disabled:opacity-50 text-white text-xs transition-colors shrink-0"
+                        >
+                          {isPulling ? <Loader2 size={11} className="animate-spin" /> : <Download size={11} />}
+                          {isPulling ? "…" : "Télécharger"}
+                        </button>
                       </div>
-                      <p className="text-[10px] text-muted truncate">
-                        {pullProgress.status}{pullProgress.total > 0 && ` — ${pullProgress.percent}%`}
-                      </p>
+                      {isPulling && pullProgress && (
+                        <div className="flex flex-col gap-1">
+                          <div className="h-1 rounded-full bg-hover overflow-hidden">
+                            <div
+                              className="h-full bg-accent rounded-full transition-all duration-300"
+                              style={{ width: `${pullProgress.total > 0 ? pullProgress.percent : 5}%` }}
+                            />
+                          </div>
+                          <p className="text-[10px] text-muted truncate">
+                            {pullProgress.status}{pullProgress.total > 0 && ` — ${pullProgress.percent}%`}
+                          </p>
+                        </div>
+                      )}
+                      {pullError && (
+                        <p className="text-[10px] text-red-400 bg-red-400/10 rounded px-2 py-1">{pullError}</p>
+                      )}
                     </div>
                   )}
-                  {pullError && (
-                    <p className="text-[10px] text-red-400 bg-red-400/10 rounded px-2 py-1">{pullError}</p>
-                  )}
+                </>
+              ) : (
+                <div className="flex items-center gap-2 px-3 py-2 bg-hover rounded-lg border border-border">
+                  <Zap size={12} className="text-accent shrink-0" />
+                  <div className="flex flex-col min-w-0">
+                    <span className="text-[10px] text-muted uppercase tracking-wide">
+                      {settings.ai_provider === "claude" ? "Anthropic Claude" : settings.ai_provider === "openai" ? "OpenAI" : settings.ai_provider === "gemini" ? "Google Gemini" : "Mistral AI"}
+                    </span>
+                    <span className="text-xs text-primary truncate">{activeModel(settings)}</span>
+                  </div>
                 </div>
               )}
             </div>

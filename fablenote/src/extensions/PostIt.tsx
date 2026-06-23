@@ -1,5 +1,7 @@
+import { useState, useRef } from "react";
 import { Node, mergeAttributes } from "@tiptap/core";
 import { NodeViewWrapper, NodeViewContent, ReactNodeViewRenderer } from "@tiptap/react";
+import { GripVertical, Pin, PinOff } from "lucide-react";
 
 const POSTIT_COLORS = [
   "#fef08a",
@@ -18,12 +20,87 @@ function PostItView({
   node: { attrs: Record<string, unknown> };
   updateAttributes: (attrs: Record<string, unknown>) => void;
 }) {
-  const color = node.attrs.color as string;
+  const color    = node.attrs.color as string;
+  const floating = node.attrs.floating as boolean;
+  const attrX    = (node.attrs.x as number) || 0;
+  const attrY    = (node.attrs.y as number) || 0;
+
+  const [localPos, setLocalPos] = useState<{ x: number; y: number } | null>(null);
+  const dragStart = useRef<{ px: number; py: number; nx: number; ny: number } | null>(null);
+
+  const posX = localPos ? localPos.x : attrX;
+  const posY = localPos ? localPos.y : attrY;
+
+  const handleDragStart = (e: React.PointerEvent) => {
+    e.preventDefault();
+    e.currentTarget.setPointerCapture(e.pointerId);
+    dragStart.current = { px: e.clientX, py: e.clientY, nx: attrX, ny: attrY };
+    setLocalPos({ x: attrX, y: attrY });
+  };
+
+  const handleDragMove = (e: React.PointerEvent) => {
+    if (!dragStart.current) return;
+    const dx = e.clientX - dragStart.current.px;
+    const dy = e.clientY - dragStart.current.py;
+    setLocalPos({ x: dragStart.current.nx + dx, y: dragStart.current.ny + dy });
+  };
+
+  const handleDragEnd = (e: React.PointerEvent) => {
+    if (!dragStart.current) return;
+    const dx = e.clientX - dragStart.current.px;
+    const dy = e.clientY - dragStart.current.py;
+    const finalX = dragStart.current.nx + dx;
+    const finalY = dragStart.current.ny + dy;
+    updateAttributes({ x: finalX, y: finalY });
+    setLocalPos(null);
+    dragStart.current = null;
+  };
+
+  const toggleFloat = () => {
+    updateAttributes({ floating: !floating, x: 0, y: 0 });
+    setLocalPos(null);
+    dragStart.current = null;
+  };
 
   return (
-    <NodeViewWrapper>
-      <div className="postit" style={{ backgroundColor: color }} data-type="postit">
+    <NodeViewWrapper
+      style={floating
+        ? { position: "relative", height: 0, overflow: "visible", zIndex: 10 }
+        : {}}
+    >
+      <div
+        className="postit"
+        style={{
+          backgroundColor: color,
+          ...(floating
+            ? {
+                position: "absolute",
+                left: posX,
+                top: posY,
+                zIndex: 50,
+                width: 280,
+                userSelect: dragStart.current ? "none" : "auto",
+                boxShadow: "0 4px 20px rgba(0,0,0,0.18)",
+              }
+            : {}),
+        }}
+        data-type="postit"
+      >
         <div className="postit-controls" contentEditable={false}>
+          {/* Drag handle — only when floating */}
+          {floating && (
+            <div
+              className="postit-drag-handle"
+              onPointerDown={handleDragStart}
+              onPointerMove={handleDragMove}
+              onPointerUp={handleDragEnd}
+              title="Déplacer"
+            >
+              <GripVertical size={13} />
+            </div>
+          )}
+
+          {/* Color swatches */}
           {POSTIT_COLORS.map((c) => (
             <button
               key={c}
@@ -40,6 +117,15 @@ function PostItView({
               }}
             />
           ))}
+
+          {/* Float toggle */}
+          <button
+            onClick={toggleFloat}
+            className="postit-float-btn"
+            title={floating ? "Ancrer dans le texte" : "Mode flottant"}
+          >
+            {floating ? <Pin size={12} /> : <PinOff size={12} />}
+          </button>
         </div>
         <NodeViewContent className="postit-content" />
       </div>
@@ -70,6 +156,21 @@ export const PostIt = Node.create({
           style: `background-color: ${attrs.color as string}`,
         }),
       },
+      floating: {
+        default: false,
+        parseHTML: (el) => el.getAttribute("data-floating") === "true",
+        renderHTML: (attrs) => ({ "data-floating": String(attrs.floating) }),
+      },
+      x: {
+        default: 0,
+        parseHTML: (el) => parseFloat(el.getAttribute("data-x") ?? "0"),
+        renderHTML: (attrs) => ({ "data-x": String(attrs.x) }),
+      },
+      y: {
+        default: 0,
+        parseHTML: (el) => parseFloat(el.getAttribute("data-y") ?? "0"),
+        renderHTML: (attrs) => ({ "data-y": String(attrs.y) }),
+      },
     };
   },
 
@@ -92,7 +193,7 @@ export const PostIt = Node.create({
         ({ commands }) => {
           return commands.insertContent({
             type: "postit",
-            attrs: { color: "#fef08a", ...attrs },
+            attrs: { color: "#fef08a", floating: false, x: 0, y: 0, ...attrs },
             content: [{ type: "paragraph" }],
           });
         },

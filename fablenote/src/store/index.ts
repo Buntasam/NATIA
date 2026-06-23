@@ -1,6 +1,6 @@
 import { invoke } from "@tauri-apps/api/core";
 import { create } from "zustand";
-import { Note, NoteMetadata, Settings, Version } from "../types";
+import { Note, NoteMetadata, Settings, TrashItem, Version } from "../types";
 
 interface AppStore {
   // Data
@@ -27,6 +27,7 @@ interface AppStore {
   showAiPanel: boolean;
   showVersionPanel: boolean;
   showSettings: boolean;
+  showTrash: boolean;
   isLoading: boolean;
   isSaving: boolean;
 
@@ -68,6 +69,14 @@ interface AppStore {
   toggleAiPanel: () => void;
   toggleVersionPanel: () => void;
   toggleSettings: () => void;
+  toggleTrash: () => void;
+
+  // Trash actions
+  getTrash: () => Promise<TrashItem[]>;
+  restoreFromTrash: (id: string, itemType: string) => Promise<void>;
+  emptyTrash: () => Promise<void>;
+  permanentDeleteItem: (id: string, itemType: string) => Promise<void>;
+
   setActiveNoteContent: (content: string) => void;
   setVersionLimit: (limit: number | null) => void;
   setSaveMode: (mode: "manual" | "balanced" | "auto") => void;
@@ -76,6 +85,15 @@ interface AppStore {
 export const DEFAULT_SETTINGS: Settings = {
   default_model: "gemma3:1b",
   ollama_url: "http://localhost:11434",
+  ai_provider: "ollama",
+  claude_api_key: "",
+  claude_model: "claude-haiku-4-5-20251001",
+  openai_api_key: "",
+  openai_model: "gpt-4o-mini",
+  gemini_api_key: "",
+  gemini_model: "gemini-2.0-flash",
+  mistral_api_key: "",
+  mistral_model: "mistral-small-latest",
   global_shadow_prompt: "Tu es un assistant de prise de notes, précis et concis. Réponds toujours en français.",
   correct_prompt: "Corrige les fautes de grammaire et d'orthographe. Réponds uniquement avec le texte corrigé, sans explication :",
   summary_prompt: "Résume en 2-3 phrases en français :",
@@ -139,6 +157,7 @@ export const useStore = create<AppStore>((set, get) => ({
   showAiPanel: false,
   showVersionPanel: false,
   showSettings: false,
+  showTrash: false,
   isLoading: false,
   isSaving: false,
 
@@ -334,6 +353,17 @@ export const useStore = create<AppStore>((set, get) => ({
   toggleAiPanel: () => set((s) => ({ showAiPanel: !s.showAiPanel, showVersionPanel: false })),
   toggleVersionPanel: () => set((s) => ({ showVersionPanel: !s.showVersionPanel, showAiPanel: false })),
   toggleSettings: () => set((s) => ({ showSettings: !s.showSettings })),
+  toggleTrash: () => set((s) => ({ showTrash: !s.showTrash })),
+
+  getTrash: () => invoke<TrashItem[]>("get_trash"),
+  restoreFromTrash: async (id, itemType) => {
+    await invoke("restore_from_trash", { id, itemType });
+    await get().loadNotes();
+    await get().loadFolders();
+  },
+  emptyTrash: () => invoke("empty_trash"),
+  permanentDeleteItem: (id, itemType) => invoke("permanent_delete_item", { id, itemType }),
+
   setActiveNoteContent: (content) =>
     set((s) => (s.activeNote ? { activeNote: { ...s.activeNote, content } } : {})),
 }));

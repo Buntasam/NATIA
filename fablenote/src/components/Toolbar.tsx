@@ -1,6 +1,7 @@
-import { useState } from "react";
+import React, { useRef, useState } from "react";
 import { Editor } from "@tiptap/react";
 import {
+  Bell,
   Bold,
   ChevronDown,
   Code,
@@ -8,13 +9,16 @@ import {
   Heading2,
   Heading3,
   Highlighter,
+  Image,
   Italic,
+  Link,
   List,
   ListChecks,
   ListOrdered,
   Quote,
   StickyNote,
   Strikethrough,
+  Table,
   Underline,
 } from "lucide-react";
 
@@ -28,6 +32,9 @@ const HIGHLIGHT_COLORS = [
   { hex: "#fca5a5", label: "Rouge" },
   { hex: "#d1fae5", label: "Menthe" },
 ];
+
+const GRID_MAX_COLS = 8;
+const GRID_MAX_ROWS = 8;
 
 interface ToolbarButtonProps {
   onClick: () => void;
@@ -58,9 +65,111 @@ function Divider() {
   return <div className="w-px h-5 bg-border mx-0.5" />;
 }
 
+// ─── Table picker (grid) ──────────────────────────────────────────────────────
+
+interface TablePickerProps {
+  pos: { top: number; left: number };
+  inTable: boolean;
+  onInsert: (rows: number, cols: number) => void;
+  onAddColBefore: () => void;
+  onAddColAfter: () => void;
+  onAddRowBefore: () => void;
+  onAddRowAfter: () => void;
+  onDelCol: () => void;
+  onDelRow: () => void;
+  onDelTable: () => void;
+  onClose: () => void;
+}
+
+function TablePicker({
+  pos, inTable,
+  onInsert, onAddColBefore, onAddColAfter, onAddRowBefore, onAddRowAfter,
+  onDelCol, onDelRow, onDelTable, onClose,
+}: TablePickerProps) {
+  const [hover, setHover] = useState({ r: 0, c: 0 });
+
+  return (
+    <>
+      <div className="fixed inset-0 z-40" onClick={onClose} />
+      <div
+        className="fixed z-50 bg-panel border border-border rounded-xl shadow-2xl p-3 select-none"
+        style={{ top: pos.top, left: pos.left }}
+      >
+        {/* Grid label */}
+        <p className="text-xs text-muted text-center mb-2">
+          {hover.r > 0 && hover.c > 0
+            ? <span className="text-primary font-semibold">{hover.c} × {hover.r}</span>
+            : "Choisir la taille"}
+        </p>
+
+        {/* Grid */}
+        <div
+          className="grid gap-0.5"
+          style={{ gridTemplateColumns: `repeat(${GRID_MAX_COLS}, 1fr)` }}
+          onMouseLeave={() => setHover({ r: 0, c: 0 })}
+        >
+          {Array.from({ length: GRID_MAX_ROWS }).map((_, ri) =>
+            Array.from({ length: GRID_MAX_COLS }).map((_, ci) => {
+              const active = ri < hover.r && ci < hover.c;
+              return (
+                <div
+                  key={`${ri}-${ci}`}
+                  onMouseEnter={() => setHover({ r: ri + 1, c: ci + 1 })}
+                  onClick={() => { onInsert(ri + 1, ci + 1); onClose(); }}
+                  className={`w-5 h-5 rounded-sm border cursor-pointer transition-colors ${
+                    active
+                      ? "bg-accent border-accent"
+                      : "bg-hover border-border hover:border-accent/50"
+                  }`}
+                />
+              );
+            })
+          )}
+        </div>
+
+        {/* Edit actions — only when inside a table */}
+        {inTable && (
+          <div className="mt-3 pt-3 border-t border-border space-y-0.5">
+            <p className="text-xs text-muted mb-1.5 font-medium uppercase tracking-wider">Éditer</p>
+            <div className="grid grid-cols-2 gap-1">
+              {[
+                ["+ Col avant", onAddColBefore],
+                ["+ Col après", onAddColAfter],
+                ["+ Ligne avant", onAddRowBefore],
+                ["+ Ligne après", onAddRowAfter],
+                ["Suppr. col", onDelCol],
+                ["Suppr. ligne", onDelRow],
+              ].map(([label, action]) => (
+                <button
+                  key={label as string}
+                  onClick={() => { (action as () => void)(); onClose(); }}
+                  className="text-xs px-2 py-1.5 rounded text-secondary hover:text-primary hover:bg-hover transition-colors text-left"
+                >
+                  {label as string}
+                </button>
+              ))}
+            </div>
+            <button
+              onClick={() => { onDelTable(); onClose(); }}
+              className="w-full text-xs px-2 py-1.5 rounded text-red-500 hover:bg-hover transition-colors text-left mt-1"
+            >
+              Supprimer le tableau
+            </button>
+          </div>
+        )}
+      </div>
+    </>
+  );
+}
+
+// ─── Main toolbar ─────────────────────────────────────────────────────────────
+
 export default function Toolbar({ editor }: { editor: Editor | null }) {
   const [highlightColor, setHighlightColor] = useState(HIGHLIGHT_COLORS[0].hex);
   const [showColorPicker, setShowColorPicker] = useState(false);
+  const [tablePicker, setTablePicker] = useState<{ top: number; left: number } | null>(null);
+  const tableButtonRef = useRef<HTMLDivElement>(null);
+  const imageInputRef = useRef<HTMLInputElement>(null);
 
   if (!editor) return null;
 
@@ -68,6 +177,32 @@ export default function Toolbar({ editor }: { editor: Editor | null }) {
     setHighlightColor(color);
     editor.chain().focus().toggleHighlight({ color }).run();
     setShowColorPicker(false);
+  };
+
+  const insertImage = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    e.target.value = "";
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      const src = ev.target?.result as string;
+      editor.chain().focus().setImage({ src }).run();
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const setLink = () => {
+    const prev = editor.getAttributes("link").href as string | undefined;
+    const url = window.prompt("URL du lien :", prev ?? "https://");
+    if (url === null) return;
+    if (url === "") { editor.chain().focus().unsetLink().run(); return; }
+    editor.chain().focus().setLink({ href: url }).run();
+  };
+
+  const openTablePicker = () => {
+    if (!tableButtonRef.current) return;
+    const rect = tableButtonRef.current.getBoundingClientRect();
+    setTablePicker({ top: rect.bottom + 6, left: rect.left });
   };
 
   return (
@@ -110,10 +245,7 @@ export default function Toolbar({ editor }: { editor: Editor | null }) {
         >
           <div className="relative flex flex-col items-center gap-0.5">
             <Highlighter size={14} />
-            <div
-              className="w-3.5 h-1 rounded-full"
-              style={{ backgroundColor: highlightColor }}
-            />
+            <div className="w-3.5 h-1 rounded-full" style={{ backgroundColor: highlightColor }} />
           </div>
         </Btn>
         <button
@@ -135,10 +267,7 @@ export default function Toolbar({ editor }: { editor: Editor | null }) {
                   className="w-5 h-5 rounded-full transition-transform hover:scale-110"
                   style={{
                     background: hex,
-                    outline:
-                      hex === highlightColor
-                        ? "2px solid #555"
-                        : "1px solid rgba(0,0,0,0.18)",
+                    outline: hex === highlightColor ? "2px solid #555" : "1px solid rgba(0,0,0,0.18)",
                     outlineOffset: hex === highlightColor ? "1px" : "0",
                   }}
                 />
@@ -222,8 +351,54 @@ export default function Toolbar({ editor }: { editor: Editor | null }) {
       >
         <StickyNote size={15} />
       </Btn>
+      <Btn
+        title="Insérer un rappel"
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        onClick={() => (editor.chain().focus() as any).insertReminder().run()}
+        active={editor.isActive("reminder")}
+      >
+        <Bell size={15} />
+      </Btn>
+
+      <Divider />
+
+      {/* Link */}
+      <Btn title="Lien (Ctrl+K)" onClick={setLink} active={editor.isActive("link")}>
+        <Link size={15} />
+      </Btn>
+
+      {/* Image */}
+      <Btn title="Insérer une image" onClick={() => imageInputRef.current?.click()}>
+        <Image size={15} />
+      </Btn>
+      <input ref={imageInputRef} type="file" accept="image/*" className="hidden" onChange={insertImage} />
+
+      {/* Table — grid picker */}
+      <div ref={tableButtonRef}>
+        <Btn
+          title="Tableau"
+          onClick={openTablePicker}
+          active={editor.isActive("table")}
+        >
+          <Table size={15} />
+        </Btn>
+      </div>
+
+      {tablePicker && (
+        <TablePicker
+          pos={tablePicker}
+          inTable={editor.isActive("table")}
+          onInsert={(r, c) => editor.chain().focus().insertTable({ rows: r, cols: c, withHeaderRow: true }).run()}
+          onAddColBefore={() => editor.chain().focus().addColumnBefore().run()}
+          onAddColAfter={() => editor.chain().focus().addColumnAfter().run()}
+          onAddRowBefore={() => editor.chain().focus().addRowBefore().run()}
+          onAddRowAfter={() => editor.chain().focus().addRowAfter().run()}
+          onDelCol={() => editor.chain().focus().deleteColumn().run()}
+          onDelRow={() => editor.chain().focus().deleteRow().run()}
+          onDelTable={() => editor.chain().focus().deleteTable().run()}
+          onClose={() => setTablePicker(null)}
+        />
+      )}
     </div>
   );
 }
-
-import React from "react";

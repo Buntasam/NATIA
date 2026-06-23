@@ -177,6 +177,39 @@ body,
   margin-bottom: 0;
 }
 
+.postit-drag-handle {
+  display: flex;
+  align-items: center;
+  cursor: grab;
+  color: rgba(0, 0, 0, 0.4);
+  flex-shrink: 0;
+  padding: 0 2px;
+  touch-action: none;
+}
+
+.postit-drag-handle:active {
+  cursor: grabbing;
+}
+
+.postit-float-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  background: none;
+  cursor: pointer;
+  color: rgba(0, 0, 0, 0.4);
+  padding: 1px;
+  border-radius: 3px;
+  flex-shrink: 0;
+  transition: color 0.1s, background 0.1s;
+}
+
+.postit-float-btn:hover {
+  color: rgba(0, 0, 0, 0.75);
+  background: rgba(0, 0, 0, 0.08);
+}
+
 .ProseMirror strong { font-weight: 600; color: var(--color-primary); }
 .ProseMirror em { color: var(--color-secondary); }
 .ProseMirror u { text-decoration: underline; text-underline-offset: 3px; }
@@ -217,3 +250,130 @@ body,
 }
 
 .ProseMirror:focus-visible { outline: none; }
+
+/* ─── Tables ─────────────────────────────────────────────────────────────────── */
+.ProseMirror table {
+  border-collapse: collapse;
+  width: 100%;
+  margin: 1rem 0;
+  table-layout: fixed;
+  overflow: hidden;
+}
+.ProseMirror table td,
+.ProseMirror table th {
+  border: 1px solid var(--color-border);
+  padding: 0.45rem 0.65rem;
+  min-width: 2rem;
+  vertical-align: top;
+  position: relative;
+  box-sizing: border-box;
+}
+.ProseMirror table th {
+  background: var(--color-sidebar);
+  font-weight: 600;
+  text-align: left;
+}
+.ProseMirror table .selectedCell::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: rgba(100, 150, 255, 0.12);
+}
+.ProseMirror table .column-resize-handle {
+  position: absolute;
+  right: -2px;
+  top: 0;
+  bottom: 0;
+  width: 4px;
+  background: #d97757;
+  pointer-events: none;
+}
+.tableWrapper { overflow-x: auto; }
+
+/* ─── Images ─────────────────────────────────────────────────────────────────── */
+.ProseMirror img {
+  max-width: 100%;
+  height: auto;
+  border-radius: 6px;
+  margin: 0.5rem 0;
+  display: block;
+}
+.ProseMirror img.ProseMirror-selectednode {
+  outline: 2px solid #d97757;
+  outline-offset: 2px;
+}
+
+/* ─── Links ──────────────────────────────────────────────────────────────────── */
+.ProseMirror a.note-link {
+  color: #d97757;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  cursor: pointer;
+}
+.ProseMirror a.note-link:hover { opacity: 0.8; }
+
+/* ─── Code highlight ─────────────────────────────────────────────────────────── */
+.ProseMirror pre .hljs-keyword { color: #c678dd; }
+.ProseMirror pre .hljs-string  { color: #98c379; }
+.ProseMirror pre .hljs-number  { color: #d19a66; }
+.ProseMirror pre .hljs-comment { color: #5c6370; font-style: italic; }
+.ProseMirror pre .hljs-title   { color: #61afef; }
+.ProseMirror pre .hljs-built_in { color: #e06c75; }
+.ProseMirror pre .hljs-attr    { color: #e06c75; }
+.ProseMirror pre .hljs-literal { color: #56b6c2; }
+
+/* ─── Presentation mode ─────────────────────────────────────────────────────── */
+.slide-content { color: white; }
+.slide-content h1 { font-size: 3rem; font-weight: 700; margin-bottom: 1.5rem; line-height: 1.2; }
+.slide-content h2 { font-size: 2rem; font-weight: 600; margin-bottom: 1rem; color: rgba(255,255,255,0.85); }
+.slide-content h3 { font-size: 1.5rem; font-weight: 600; margin-bottom: 0.75rem; color: rgba(255,255,255,0.8); }
+.slide-content p { font-size: 1.2rem; line-height: 1.7; color: rgba(255,255,255,0.8); margin-bottom: 0.75rem; }
+.slide-content ul, .slide-content ol { padding-left: 1.5rem; }
+.slide-content li { font-size: 1.1rem; line-height: 1.8; color: rgba(255,255,255,0.75); }
+.slide-content code { background: rgba(255,255,255,0.1); padding: 0.1em 0.4em; border-radius: 4px; font-size: 0.9em; }
+.slide-content blockquote { border-left: 4px solid #d97757; padding-left: 1rem; font-style: italic; color: rgba(255,255,255,0.6); }
+.slide-content strong { color: white; }
+.slide-content mark { background: rgba(217,119,87,0.3); color: white; }
+
+/* ─── Reminders ──────────────────────────────────────────────────────────────── */
+.reminder-block {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  background: var(--color-sidebar);
+  border: 1px solid var(--color-border);
+  border-left: 3px solid #d97757;
+  border-radius: 6px;
+  padding: 8px 12px;
+  margin: 8px 0;
+}
+.reminder-block.reminder-done {
+  opacity: 0.5;
+  border-left-color: var(--color-muted);
+}
+.reminder-block.reminder-past {
+  border-left-color: #ef4444;
+  background: rgba(239, 68, 68, 0.04);
+}
+.reminder-icon { color: #d97757; flex-shrink: 0; padding-top: 2px; }
+.reminder-body { flex: 1; min-width: 0; }
+.reminder-text { font-size: 0.9rem; color: var(--color-primary); }
+.reminder-date { font-size: 0.75rem; display: block; margin-top: 2px; cursor: pointer; }
+.reminder-done .reminder-text { text-decoration: line-through; }
+
+/* ─── Wikilinks ──────────────────────────────────────────────────────────────── */
+.wikilink,
+.wikilink-candidate {
+  color: #d97757;
+  background: rgba(217, 119, 87, 0.08);
+  border-radius: 3px;
+  padding: 0 2px;
+  cursor: pointer;
+  text-decoration: none;
+  transition: background 0.1s;
+}
+.wikilink:hover,
+.wikilink-candidate:hover {
+  background: rgba(217, 119, 87, 0.18);
+}

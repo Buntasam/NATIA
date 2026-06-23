@@ -7,10 +7,25 @@ import Typography from "@tiptap/extension-typography";
 import Placeholder from "@tiptap/extension-placeholder";
 import TaskList from "@tiptap/extension-task-list";
 import TaskItem from "@tiptap/extension-task-item";
+import { Table } from "@tiptap/extension-table";
+import { TableRow } from "@tiptap/extension-table-row";
+import { TableHeader } from "@tiptap/extension-table-header";
+import { TableCell } from "@tiptap/extension-table-cell";
+import Image from "@tiptap/extension-image";
+import Link from "@tiptap/extension-link";
+import CodeBlockLowlight from "@tiptap/extension-code-block-lowlight";
+import { common, createLowlight } from "lowlight";
 import { PostIt } from "../extensions/PostIt";
-import { BrainCircuit, Clock, Download, Save, Upload } from "lucide-react";
+import { Wikilink } from "../extensions/Wikilink";
+import { Reminder } from "../extensions/Reminder";
+import { BrainCircuit, Clock, Download, LayoutTemplate, Link2, Save, Upload } from "lucide-react";
+import TemplatesPanel from "./TemplatesPanel";
+import BacklinksPanel from "./BacklinksPanel";
+
+const lowlight = createLowlight(common);
 import { useStore } from "../store";
 import Toolbar from "./Toolbar";
+import VoiceRecorder from "./VoiceRecorder";
 
 const AUTOSAVE_DELAY = 1500;
 
@@ -148,6 +163,7 @@ export default function Editor() {
     updateNote,
     renameNote,
     createNote,
+    selectNote,
     isSaving,
     showAiPanel,
     showVersionPanel,
@@ -159,6 +175,8 @@ export default function Editor() {
 
   const [localTitle, setLocalTitle] = useState("");
   const [showExport, setShowExport] = useState(false);
+  const [showTemplates, setShowTemplates] = useState(false);
+  const [showBacklinks, setShowBacklinks] = useState(false);
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const titleTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const lastSavedContent = useRef<string>("");
@@ -168,8 +186,47 @@ export default function Editor() {
   useEffect(() => { saveModeRef.current = saveMode; }, [saveMode]);
 
   const editor = useEditor({
+    editorProps: {
+      handleDrop: (view, event) => {
+        const files = event.dataTransfer?.files;
+        if (!files?.length) return false;
+        const file = files[0];
+        if (!file.type.startsWith("image/")) return false;
+        const reader = new FileReader();
+        reader.onload = (e) => {
+          const src = e.target?.result as string;
+          const { schema } = view.state;
+          const node = schema.nodes.image.create({ src });
+          const tr = view.state.tr.replaceSelectionWith(node);
+          view.dispatch(tr);
+        };
+        reader.readAsDataURL(file);
+        return true;
+      },
+      handlePaste: (view, event) => {
+        const items = event.clipboardData?.items;
+        if (!items) return false;
+        for (const item of Array.from(items)) {
+          if (item.type.startsWith("image/")) {
+            const file = item.getAsFile();
+            if (!file) continue;
+            const reader = new FileReader();
+            reader.onload = (e) => {
+              const src = e.target?.result as string;
+              const { schema } = view.state;
+              const node = schema.nodes.image.create({ src });
+              const tr = view.state.tr.replaceSelectionWith(node);
+              view.dispatch(tr);
+            };
+            reader.readAsDataURL(file);
+            return true;
+          }
+        }
+        return false;
+      },
+    },
     extensions: [
-      StarterKit,
+      StarterKit.configure({ codeBlock: false }),
       Underline,
       Highlight.configure({ multicolor: true }),
       Typography,
@@ -178,7 +235,16 @@ export default function Editor() {
       Placeholder.configure({
         placeholder: "Commence à écrire ta note…",
       }),
+      Table.configure({ resizable: true }),
+      TableRow,
+      TableHeader,
+      TableCell,
+      Image.configure({ inline: false, allowBase64: true }),
+      Link.configure({ openOnClick: false, HTMLAttributes: { class: "note-link" } }),
+      CodeBlockLowlight.configure({ lowlight }),
       PostIt,
+      Wikilink,
+      Reminder,
     ],
     content: "",
     onUpdate: ({ editor }) => {
@@ -342,7 +408,7 @@ export default function Editor() {
   return (
     <div className="flex flex-col h-full overflow-hidden">
       {/* Note header */}
-      <div className="flex items-center gap-3 px-6 pt-5 pb-2 border-b border-border shrink-0">
+      <div className="relative flex items-center gap-3 px-6 pt-5 pb-2 border-b border-border shrink-0">
         <input
           type="text"
           value={localTitle}
@@ -351,6 +417,13 @@ export default function Editor() {
           className="flex-1 bg-transparent text-xl font-semibold text-primary placeholder-muted outline-none"
         />
         <div className="flex items-center gap-1 shrink-0">
+          <button
+            onClick={() => setShowTemplates(true)}
+            title="Templates"
+            className="p-1.5 rounded transition-colors text-secondary hover:text-primary hover:bg-hover"
+          >
+            <LayoutTemplate size={17} />
+          </button>
           <button
             onClick={saveNow}
             title="Sauvegarder (Ctrl+S)"
@@ -418,6 +491,15 @@ export default function Editor() {
           </div>
 
           <button
+            onClick={() => setShowBacklinks((s) => !s)}
+            title="Liens & backlinks"
+            className={`p-1.5 rounded transition-colors ${
+              showBacklinks ? "text-accent bg-accent/10" : "text-secondary hover:text-primary hover:bg-hover"
+            }`}
+          >
+            <Link2 size={17} />
+          </button>
+          <button
             onClick={toggleAiPanel}
             title="Panneau IA (Ctrl+Shift+A)"
             className={`p-1.5 rounded transition-colors ${
@@ -439,6 +521,13 @@ export default function Editor() {
           >
             <Clock size={17} />
           </button>
+          <VoiceRecorder
+            onInsert={(text) => {
+              if (editor) {
+                editor.chain().focus().insertContent(" " + text).run();
+              }
+            }}
+          />
         </div>
       </div>
 
@@ -454,16 +543,43 @@ export default function Editor() {
             if (!target.closest(".ProseMirror") && editor) {
               editor.commands.focus("end");
             }
+            // Wikilink click
+            const wl = (target as HTMLElement).closest("[data-wikilink]") as HTMLElement | null;
+            if (wl) {
+              const noteId = wl.getAttribute("data-note-id");
+              if (noteId) selectNote(noteId);
+            }
           }}
         >
           <div className="max-w-2xl mx-auto min-h-full pb-24">
             <EditorContent editor={editor} className="min-h-full" />
           </div>
         </div>
+        {showBacklinks && (
+          <div className="w-64 border-l border-border shrink-0 overflow-hidden">
+            <BacklinksPanel onClose={() => setShowBacklinks(false)} />
+          </div>
+        )}
       </div>
 
       {/* Tags row */}
       <TagsBar noteId={activeNote.id} tags={activeNote.tags} folder={activeNote.folder} />
+
+      {showTemplates && (
+        <TemplatesPanel
+          onClose={() => setShowTemplates(false)}
+          onApply={(content, title) => {
+            if (editor) {
+              editor.commands.setContent(content);
+            }
+            if (title !== "Note vide") {
+              setLocalTitle(title);
+              if (activeNote) renameNote(activeNote.id, title);
+            }
+            setShowTemplates(false);
+          }}
+        />
+      )}
     </div>
   );
 }

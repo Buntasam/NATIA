@@ -30,6 +30,15 @@ export interface Settings {
   translate_prompt: string;
   continue_prompt: string;
   temperature: number;
+  ai_provider: "ollama" | "claude" | "openai" | "gemini" | "mistral";
+  claude_api_key: string;
+  claude_model: string;
+  openai_api_key: string;
+  openai_model: string;
+  gemini_api_key: string;
+  gemini_model: string;
+  mistral_api_key: string;
+  mistral_model: string;
 }
 
 export interface PromptVersion {
@@ -37,6 +46,15 @@ export interface PromptVersion {
   prompt_key: string;
   value: string;
   saved_at: string;
+}
+
+export interface TrashItem {
+  id: string;
+  title: string;
+  item_type: "note" | "folder";
+  folder: string | null;
+  deleted_at: string;
+  note_count: number | null;
 }
 
 export type AiOperation = "correct" | "summarize" | "rename" | "sort";

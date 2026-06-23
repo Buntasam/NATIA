@@ -1,20 +1,21 @@
 import { useEffect, useRef, useState } from "react";
-import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import {
   CheckCheck, ChevronRight, FileText, Loader2,
   MessagesSquare, Send, Sparkles, Tag, X,
 } from "lucide-react";
 import { useStore } from "../store";
+import { aiStream } from "../lib/aiInvoke";
 import AiPanel from "./AiPanel";
 import Editor from "./Editor";
 import Settings from "./Settings";
 import Sidebar from "./Sidebar";
+import TrashPanel from "./TrashPanel";
 import VersionTree from "./VersionTree";
 
 export default function Layout() {
   const {
-    showAiPanel, showVersionPanel, showSettings,
+    showAiPanel, showVersionPanel, showSettings, showTrash,
     createNote, toggleSettings, toggleAiPanel, toggleVersionPanel,
   } = useStore();
 
@@ -80,6 +81,7 @@ export default function Layout() {
       </div>
 
       {showSettings && <Settings />}
+      {showTrash && <TrashPanel />}
     </div>
   );
 }
@@ -153,13 +155,7 @@ function ConvPanel({ onClose }: { onClose: () => void }) {
     });
 
     try {
-      await invoke("ollama_stream", {
-        baseUrl: settings.ollama_url,
-        model: settings.default_model,
-        system: buildSystem(),
-        message: msg,
-        history,
-      });
+      await aiStream(settings, buildSystem(), msg, history);
     } catch (e: unknown) {
       setMessages((prev) => [...prev, { role: "ai", content: `Erreur : ${e instanceof Error ? e.message : String(e)}` }]);
       setStreamText("");

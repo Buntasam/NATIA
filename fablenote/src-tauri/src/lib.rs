@@ -76,9 +76,32 @@ pub struct Settings {
     pub continue_prompt: String,
     #[serde(default = "default_temperature")]
     pub temperature: f64,
+    #[serde(default = "default_ai_provider")]
+    pub ai_provider: String,
+    #[serde(default)]
+    pub claude_api_key: String,
+    #[serde(default = "default_claude_model")]
+    pub claude_model: String,
+    #[serde(default)]
+    pub openai_api_key: String,
+    #[serde(default = "default_openai_model")]
+    pub openai_model: String,
+    #[serde(default)]
+    pub gemini_api_key: String,
+    #[serde(default = "default_gemini_model")]
+    pub gemini_model: String,
+    #[serde(default)]
+    pub mistral_api_key: String,
+    #[serde(default = "default_mistral_model")]
+    pub mistral_model: String,
 }
 
 fn default_temperature() -> f64 { 0.7 }
+fn default_ai_provider() -> String { "ollama".to_string() }
+fn default_claude_model() -> String { "claude-haiku-4-5-20251001".to_string() }
+fn default_openai_model() -> String { "gpt-4o-mini".to_string() }
+fn default_gemini_model() -> String { "gemini-2.0-flash".to_string() }
+fn default_mistral_model() -> String { "mistral-small-latest".to_string() }
 
 impl Default for Settings {
     fn default() -> Self {
@@ -94,6 +117,15 @@ impl Default for Settings {
             translate_prompt: "Réponds uniquement avec la traduction, sans commentaires ni explications :".to_string(),
             continue_prompt: "Continue ce texte de manière cohérente, en respectant le style et le ton de l'auteur. Écris entre 80 et 150 mots supplémentaires. Réponds uniquement avec le texte à ajouter :".to_string(),
             temperature: 0.7,
+            ai_provider: "ollama".to_string(),
+            claude_api_key: String::new(),
+            claude_model: "claude-haiku-4-5-20251001".to_string(),
+            openai_api_key: String::new(),
+            openai_model: "gpt-4o-mini".to_string(),
+            gemini_api_key: String::new(),
+            gemini_model: "gemini-2.0-flash".to_string(),
+            mistral_api_key: String::new(),
+            mistral_model: "mistral-small-latest".to_string(),
         }
     }
 }
@@ -104,6 +136,16 @@ pub struct PromptVersion {
     pub prompt_key: String,
     pub value: String,
     pub saved_at: String,
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug)]
+pub struct TrashItem {
+    pub id: String,
+    pub title: String,
+    pub item_type: String, // "note" | "folder"
+    pub folder: Option<String>,
+    pub deleted_at: String,
+    pub note_count: Option<u32>,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
@@ -166,6 +208,9 @@ fn init_db(db: &Connection) -> SqlResult<()> {
         CREATE INDEX IF NOT EXISTS idx_nv_note ON note_versions(note_id, created_at DESC);
         ",
     )?;
+    // Migrations: add deleted_at columns if not present (ignored if already exist)
+    let _ = db.execute("ALTER TABLE notes ADD COLUMN deleted_at TEXT", []);
+    let _ = db.execute("ALTER TABLE folders ADD COLUMN deleted_at TEXT", []);
     Ok(())
 }
 
@@ -803,7 +848,7 @@ fn get_all_notes(state: State<AppState>) -> Result<Vec<NoteMetadata>, String> {
     let db = state.db.lock().map_err(|e| e.to_string())?;
 
     let mut stmt = db
-        .prepare("SELECT id, title, tags, folder, created_at, updated_at FROM notes ORDER BY updated_at DESC")
+        .prepare("SELECT id, title, tags, folder, created_at, updated_at FROM notes WHERE deleted_at IS NULL ORDER BY updated_at DESC")
         .map_err(|e| e.to_string())?;
 
     let rows = stmt
@@ -964,16 +1009,10 @@ fn rename_note(id: String, title: String, state: State<AppState>) -> Result<(), 
 
 #[tauri::command]
 fn delete_note(id: String, state: State<AppState>) -> Result<(), String> {
-    {
-        let db = state.db.lock().map_err(|e| e.to_string())?;
-        db.execute("DELETE FROM notes WHERE id=?1", [&id]).map_err(|e| e.to_string())?;
-        db.execute("DELETE FROM item_colors WHERE item_key=?1", [&format!("note:{}", id)])
-            .map_err(|e| e.to_string())?;
-    }
-    let fp = state.notes_dir.join(format!("{}.html", id));
-    if fp.exists() {
-        std::fs::remove_file(&fp).map_err(|e| e.to_string())?;
-    }
+    let now = Utc::now().to_rfc3339();
+    let db = state.db.lock().map_err(|e| e.to_string())?;
+    db.execute("UPDATE notes SET deleted_at=?1 WHERE id=?2", params![now, id])
+        .map_err(|e| e.to_string())?;
     Ok(())
 }
 
@@ -1089,6 +1128,15 @@ fn get_settings(state: State<AppState>) -> Result<Settings, String> {
         translate_prompt: get("translate_prompt", defaults.translate_prompt),
         continue_prompt: get("continue_prompt", defaults.continue_prompt),
         temperature,
+        ai_provider: get("ai_provider", defaults.ai_provider),
+        claude_api_key: get("claude_api_key", defaults.claude_api_key),
+        claude_model: get("claude_model", defaults.claude_model),
+        openai_api_key: get("openai_api_key", defaults.openai_api_key),
+        openai_model: get("openai_model", defaults.openai_model),
+        gemini_api_key: get("gemini_api_key", defaults.gemini_api_key),
+        gemini_model: get("gemini_model", defaults.gemini_model),
+        mistral_api_key: get("mistral_api_key", defaults.mistral_api_key),
+        mistral_model: get("mistral_model", defaults.mistral_model),
     })
 }
 
@@ -1138,6 +1186,15 @@ fn update_settings(settings: Settings, state: State<AppState>) -> Result<(), Str
         ("translate_prompt",     settings.translate_prompt.as_str()),
         ("continue_prompt",      settings.continue_prompt.as_str()),
         ("temperature",          temp_str.as_str()),
+        ("ai_provider",          settings.ai_provider.as_str()),
+        ("claude_api_key",       settings.claude_api_key.as_str()),
+        ("claude_model",         settings.claude_model.as_str()),
+        ("openai_api_key",       settings.openai_api_key.as_str()),
+        ("openai_model",         settings.openai_model.as_str()),
+        ("gemini_api_key",       settings.gemini_api_key.as_str()),
+        ("gemini_model",         settings.gemini_model.as_str()),
+        ("mistral_api_key",      settings.mistral_api_key.as_str()),
+        ("mistral_model",        settings.mistral_model.as_str()),
     ];
     for &(k, v) in &all {
         db.execute(
@@ -1155,7 +1212,7 @@ fn update_settings(settings: Settings, state: State<AppState>) -> Result<(), Str
 #[tauri::command]
 fn get_folders(state: State<AppState>) -> Result<Vec<String>, String> {
     let db = state.db.lock().map_err(|e| e.to_string())?;
-    let mut stmt = db.prepare("SELECT path FROM folders ORDER BY path").map_err(|e| e.to_string())?;
+    let mut stmt = db.prepare("SELECT path FROM folders WHERE deleted_at IS NULL ORDER BY path").map_err(|e| e.to_string())?;
     let folders = stmt
         .query_map([], |row| row.get::<_, String>(0))
         .map_err(|e| e.to_string())?
@@ -1173,14 +1230,174 @@ fn create_folder(path: String, state: State<AppState>) -> Result<(), String> {
 
 #[tauri::command]
 fn delete_folder(path: String, state: State<AppState>) -> Result<(), String> {
+    let now = Utc::now().to_rfc3339();
     let db = state.db.lock().map_err(|e| e.to_string())?;
     let prefix = format!("{}/%", path);
-    db.execute("DELETE FROM folders WHERE path=?1 OR path LIKE ?2", params![path, prefix]).map_err(|e| e.to_string())?;
-    db.execute("UPDATE notes SET folder=NULL WHERE folder=?1 OR folder LIKE ?2", params![path, prefix]).map_err(|e| e.to_string())?;
-    let ck = format!("folder:{}", path);
-    let cp = format!("folder:{}/%", path);
-    db.execute("DELETE FROM item_colors WHERE item_key=?1 OR item_key LIKE ?2", params![ck, cp]).map_err(|e| e.to_string())?;
+    db.execute(
+        "UPDATE folders SET deleted_at=?1 WHERE (path=?2 OR path LIKE ?3) AND deleted_at IS NULL",
+        params![now, path, prefix],
+    ).map_err(|e| e.to_string())?;
+    db.execute(
+        "UPDATE notes SET deleted_at=?1 WHERE (folder=?2 OR folder LIKE ?3) AND deleted_at IS NULL",
+        params![now, path, prefix],
+    ).map_err(|e| e.to_string())?;
     Ok(())
+}
+
+// ─── Trash commands ───────────────────────────────────────────────────────────
+
+#[tauri::command]
+fn get_trash(state: State<AppState>) -> Result<Vec<TrashItem>, String> {
+    let key = state.enc_key.lock().map_err(|e| e.to_string())?.clone();
+    let db = state.db.lock().map_err(|e| e.to_string())?;
+    let mut items: Vec<TrashItem> = Vec::new();
+
+    // Trashed folders (top-level only — sub-folders are implicit)
+    let mut stmt = db.prepare(
+        "SELECT path, deleted_at FROM folders WHERE deleted_at IS NOT NULL ORDER BY deleted_at DESC"
+    ).map_err(|e| e.to_string())?;
+    let folder_rows = stmt.query_map([], |row| {
+        Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?))
+    }).map_err(|e| e.to_string())?
+      .collect::<SqlResult<Vec<_>>>()
+      .map_err(|e| e.to_string())?;
+
+    // Collect top-level trashed folder paths
+    let deleted_folder_paths: Vec<String> = folder_rows.iter()
+        .filter(|(p, _)| !folder_rows.iter().any(|(df, _)| df != p && p.starts_with(&format!("{}/", df))))
+        .map(|(p, _)| p.clone())
+        .collect();
+
+    for (path, deleted_at) in &folder_rows {
+        // Only surface top-level deleted folders
+        let is_child = folder_rows.iter().any(|(df, _)| df != path && path.starts_with(&format!("{}/", df)));
+        if is_child { continue; }
+        let note_count: i64 = db.query_row(
+            "SELECT COUNT(*) FROM notes WHERE (folder=?1 OR folder LIKE ?2) AND deleted_at IS NOT NULL",
+            params![path, format!("{}/%", path)],
+            |r| r.get(0),
+        ).unwrap_or(0);
+        items.push(TrashItem {
+            id: path.clone(),
+            title: path.split('/').last().unwrap_or(path).to_string(),
+            item_type: "folder".to_string(),
+            folder: None,
+            deleted_at: deleted_at.clone(),
+            note_count: Some(note_count as u32),
+        });
+    }
+
+    // Trashed notes NOT belonging to a trashed folder
+    let mut stmt2 = db.prepare(
+        "SELECT id, title, folder, deleted_at FROM notes WHERE deleted_at IS NOT NULL ORDER BY deleted_at DESC"
+    ).map_err(|e| e.to_string())?;
+    let note_rows = stmt2.query_map([], |row| {
+        Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?, row.get::<_, Option<String>>(2)?, row.get::<_, String>(3)?))
+    }).map_err(|e| e.to_string())?
+      .collect::<SqlResult<Vec<_>>>()
+      .map_err(|e| e.to_string())?;
+
+    for (id, raw_title, folder, deleted_at) in note_rows {
+        let in_deleted_folder = folder.as_ref().map(|f| {
+            deleted_folder_paths.iter().any(|df| f == df || f.starts_with(&format!("{}/", df)))
+        }).unwrap_or(false);
+        if in_deleted_folder { continue; }
+        let title = maybe_dec(&key, &raw_title);
+        items.push(TrashItem { id, title, item_type: "note".to_string(), folder, deleted_at, note_count: None });
+    }
+
+    items.sort_by(|a, b| b.deleted_at.cmp(&a.deleted_at));
+    Ok(items)
+}
+
+#[tauri::command]
+fn restore_from_trash(id: String, item_type: String, state: State<AppState>) -> Result<(), String> {
+    let db = state.db.lock().map_err(|e| e.to_string())?;
+    if item_type == "note" {
+        db.execute("UPDATE notes SET deleted_at=NULL WHERE id=?1", [&id])
+            .map_err(|e| e.to_string())?;
+    } else {
+        let prefix = format!("{}/%", id);
+        db.execute("UPDATE folders SET deleted_at=NULL WHERE path=?1 OR path LIKE ?2", params![id, prefix])
+            .map_err(|e| e.to_string())?;
+        db.execute("UPDATE notes SET deleted_at=NULL WHERE folder=?1 OR folder LIKE ?2", params![id, prefix])
+            .map_err(|e| e.to_string())?;
+    }
+    Ok(())
+}
+
+#[tauri::command]
+fn permanent_delete_item(id: String, item_type: String, state: State<AppState>) -> Result<(), String> {
+    if item_type == "note" {
+        {
+            let db = state.db.lock().map_err(|e| e.to_string())?;
+            db.execute("DELETE FROM notes WHERE id=?1", [&id]).map_err(|e| e.to_string())?;
+            db.execute("DELETE FROM item_colors WHERE item_key=?1", [&format!("note:{}", id)])
+                .map_err(|e| e.to_string())?;
+            db.execute("DELETE FROM note_versions WHERE note_id=?1", [&id])
+                .map_err(|e| e.to_string())?;
+        }
+        let fp = state.notes_dir.join(format!("{}.html", id));
+        if fp.exists() { let _ = std::fs::remove_file(&fp); }
+    } else {
+        let prefix = format!("{}/%", id);
+        let note_ids: Vec<String> = {
+            let db = state.db.lock().map_err(|e| e.to_string())?;
+            let mut stmt = db.prepare(
+                "SELECT id FROM notes WHERE (folder=?1 OR folder LIKE ?2) AND deleted_at IS NOT NULL"
+            ).map_err(|e| e.to_string())?;
+            let result = stmt.query_map(params![id, prefix], |row| row.get::<_, String>(0))
+                .map_err(|e| e.to_string())?
+                .collect::<SqlResult<Vec<_>>>()
+                .map_err(|e| e.to_string())?;
+            result
+        };
+        for note_id in &note_ids {
+            let fp = state.notes_dir.join(format!("{}.html", note_id));
+            if fp.exists() { let _ = std::fs::remove_file(&fp); }
+        }
+        let db = state.db.lock().map_err(|e| e.to_string())?;
+        db.execute("DELETE FROM notes WHERE (folder=?1 OR folder LIKE ?2) AND deleted_at IS NOT NULL", params![id, prefix])
+            .map_err(|e| e.to_string())?;
+        db.execute("DELETE FROM folders WHERE (path=?1 OR path LIKE ?2) AND deleted_at IS NOT NULL", params![id, prefix])
+            .map_err(|e| e.to_string())?;
+        let ck = format!("folder:{}", id);
+        let cp = format!("folder:{}/%", id);
+        db.execute("DELETE FROM item_colors WHERE item_key=?1 OR item_key LIKE ?2", params![ck, cp])
+            .map_err(|e| e.to_string())?;
+    }
+    Ok(())
+}
+
+#[tauri::command]
+fn empty_trash(state: State<AppState>) -> Result<(), String> {
+    let note_ids: Vec<String> = {
+        let db = state.db.lock().map_err(|e| e.to_string())?;
+        let mut stmt = db.prepare("SELECT id FROM notes WHERE deleted_at IS NOT NULL")
+            .map_err(|e| e.to_string())?;
+        let result = stmt.query_map([], |row| row.get::<_, String>(0))
+            .map_err(|e| e.to_string())?
+            .collect::<SqlResult<Vec<_>>>()
+            .map_err(|e| e.to_string())?;
+        result
+    };
+    for id in &note_ids {
+        let fp = state.notes_dir.join(format!("{}.html", id));
+        if fp.exists() { let _ = std::fs::remove_file(&fp); }
+    }
+    let db = state.db.lock().map_err(|e| e.to_string())?;
+    db.execute("DELETE FROM notes WHERE deleted_at IS NOT NULL", []).map_err(|e| e.to_string())?;
+    db.execute("DELETE FROM folders WHERE deleted_at IS NOT NULL", []).map_err(|e| e.to_string())?;
+    Ok(())
+}
+
+#[tauri::command]
+fn reveal_data_dir(state: State<AppState>) -> Result<String, String> {
+    let path = state.notes_dir.parent()
+        .map(|p| p.to_string_lossy().to_string())
+        .unwrap_or_else(|| state.notes_dir.to_string_lossy().to_string());
+    let _ = Command::new("explorer").arg(&path).spawn();
+    Ok(path)
 }
 
 #[tauri::command]
@@ -1482,6 +1699,414 @@ async fn ollama_stream(
     Ok(())
 }
 
+// ─── Claude API commands ──────────────────────────────────────────────────────
+
+#[tauri::command]
+async fn claude_chat(
+    api_key: String,
+    model: String,
+    system: String,
+    message: String,
+) -> Result<String, String> {
+    let client = reqwest::Client::builder()
+        .timeout(std::time::Duration::from_secs(120))
+        .build()
+        .map_err(|e| e.to_string())?;
+    let payload = serde_json::json!({
+        "model": model,
+        "max_tokens": 4096,
+        "system": system,
+        "messages": [{"role": "user", "content": message}],
+    });
+    let resp = client
+        .post("https://api.anthropic.com/v1/messages")
+        .header("x-api-key", &api_key)
+        .header("anthropic-version", "2023-06-01")
+        .header("content-type", "application/json")
+        .json(&payload)
+        .send()
+        .await
+        .map_err(|e| format!("Erreur Claude API : {}", e))?;
+    if !resp.status().is_success() {
+        let status = resp.status();
+        let body = resp.text().await.unwrap_or_default();
+        return Err(format!("Claude {} : {}", status, body));
+    }
+    let json: serde_json::Value = resp.json().await.map_err(|e| e.to_string())?;
+    Ok(json["content"][0]["text"].as_str().unwrap_or("").to_string())
+}
+
+#[tauri::command]
+async fn claude_stream(
+    app: tauri::AppHandle,
+    api_key: String,
+    model: String,
+    system: String,
+    message: String,
+    history: Option<Vec<serde_json::Value>>,
+) -> Result<(), String> {
+    let client = reqwest::Client::new();
+    let mut messages: Vec<serde_json::Value> = vec![];
+    if let Some(hist) = history { messages.extend(hist); }
+    messages.push(serde_json::json!({"role": "user", "content": message}));
+    let payload = serde_json::json!({
+        "model": model,
+        "max_tokens": 4096,
+        "system": system,
+        "messages": messages,
+        "stream": true,
+    });
+    let mut resp = client
+        .post("https://api.anthropic.com/v1/messages")
+        .header("x-api-key", &api_key)
+        .header("anthropic-version", "2023-06-01")
+        .header("content-type", "application/json")
+        .json(&payload)
+        .send()
+        .await
+        .map_err(|e| format!("Erreur Claude API : {}", e))?;
+    if !resp.status().is_success() {
+        let status = resp.status();
+        let body = resp.text().await.unwrap_or_default();
+        return Err(format!("Claude {} : {}", status, body));
+    }
+    let mut buf = String::new();
+    while let Some(chunk) = resp.chunk().await.map_err(|e| e.to_string())? {
+        buf.push_str(&String::from_utf8_lossy(&chunk));
+        while let Some(pos) = buf.find('\n') {
+            let line = buf[..pos].trim().to_string();
+            buf = buf[pos + 1..].to_string();
+            if line.is_empty() || !line.starts_with("data:") { continue; }
+            let data = line["data:".len()..].trim();
+            if let Ok(json) = serde_json::from_str::<serde_json::Value>(data) {
+                match json["type"].as_str().unwrap_or("") {
+                    "content_block_delta" => {
+                        if let Some(text) = json["delta"]["text"].as_str() {
+                            if !text.is_empty() { let _ = app.emit("ollama-token", text.to_string()); }
+                        }
+                    }
+                    "message_stop" => {
+                        let _ = app.emit("ollama-done", "");
+                        return Ok(());
+                    }
+                    _ => {}
+                }
+            }
+        }
+    }
+    let _ = app.emit("ollama-done", "");
+    Ok(())
+}
+
+// ─── Image generation ─────────────────────────────────────────────────────────
+
+#[tauri::command]
+async fn generate_image(api_key: String, prompt: String, size: String) -> Result<String, String> {
+    let client = reqwest::Client::new();
+    let body = serde_json::json!({
+        "model": "dall-e-3",
+        "prompt": prompt,
+        "n": 1,
+        "size": size,
+        "response_format": "b64_json"
+    });
+    let resp = client
+        .post("https://api.openai.com/v1/images/generations")
+        .header("Authorization", format!("Bearer {}", api_key))
+        .header("Content-Type", "application/json")
+        .json(&body)
+        .send()
+        .await
+        .map_err(|e| e.to_string())?;
+    if !resp.status().is_success() {
+        let text = resp.text().await.unwrap_or_default();
+        return Err(text);
+    }
+    let json: serde_json::Value = resp.json().await.map_err(|e| e.to_string())?;
+    let b64 = json["data"][0]["b64_json"].as_str().unwrap_or("").to_string();
+    Ok(format!("data:image/png;base64,{}", b64))
+}
+
+// ─── OpenAI API commands ──────────────────────────────────────────────────────
+
+#[tauri::command]
+async fn openai_chat(
+    api_key: String,
+    model: String,
+    system: String,
+    message: String,
+) -> Result<String, String> {
+    let client = reqwest::Client::builder()
+        .timeout(std::time::Duration::from_secs(120))
+        .build()
+        .map_err(|e| e.to_string())?;
+    let payload = serde_json::json!({
+        "model": model,
+        "messages": [
+            {"role": "system", "content": system},
+            {"role": "user", "content": message},
+        ],
+    });
+    let resp = client
+        .post("https://api.openai.com/v1/chat/completions")
+        .header("Authorization", format!("Bearer {}", api_key))
+        .header("Content-Type", "application/json")
+        .json(&payload)
+        .send()
+        .await
+        .map_err(|e| format!("Erreur OpenAI : {}", e))?;
+    if !resp.status().is_success() {
+        let status = resp.status();
+        let body = resp.text().await.unwrap_or_default();
+        return Err(format!("OpenAI {} : {}", status, body));
+    }
+    let json: serde_json::Value = resp.json().await.map_err(|e| e.to_string())?;
+    Ok(json["choices"][0]["message"]["content"].as_str().unwrap_or("").to_string())
+}
+
+#[tauri::command]
+async fn openai_stream(
+    app: tauri::AppHandle,
+    api_key: String,
+    model: String,
+    system: String,
+    message: String,
+    history: Option<Vec<serde_json::Value>>,
+) -> Result<(), String> {
+    let client = reqwest::Client::new();
+    let mut messages: Vec<serde_json::Value> = vec![
+        serde_json::json!({"role": "system", "content": system}),
+    ];
+    if let Some(hist) = history { messages.extend(hist); }
+    messages.push(serde_json::json!({"role": "user", "content": message}));
+    let payload = serde_json::json!({
+        "model": model,
+        "messages": messages,
+        "stream": true,
+    });
+    let mut resp = client
+        .post("https://api.openai.com/v1/chat/completions")
+        .header("Authorization", format!("Bearer {}", api_key))
+        .header("Content-Type", "application/json")
+        .json(&payload)
+        .send()
+        .await
+        .map_err(|e| format!("Erreur OpenAI : {}", e))?;
+    if !resp.status().is_success() {
+        let status = resp.status();
+        let body = resp.text().await.unwrap_or_default();
+        return Err(format!("OpenAI {} : {}", status, body));
+    }
+    let mut buf = String::new();
+    while let Some(chunk) = resp.chunk().await.map_err(|e| e.to_string())? {
+        buf.push_str(&String::from_utf8_lossy(&chunk));
+        while let Some(pos) = buf.find('\n') {
+            let line = buf[..pos].trim().to_string();
+            buf = buf[pos + 1..].to_string();
+            if line.is_empty() || !line.starts_with("data:") { continue; }
+            let data = line["data:".len()..].trim();
+            if data == "[DONE]" {
+                let _ = app.emit("ollama-done", "");
+                return Ok(());
+            }
+            if let Ok(json) = serde_json::from_str::<serde_json::Value>(data) {
+                if let Some(content) = json["choices"][0]["delta"]["content"].as_str() {
+                    if !content.is_empty() { let _ = app.emit("ollama-token", content.to_string()); }
+                }
+            }
+        }
+    }
+    let _ = app.emit("ollama-done", "");
+    Ok(())
+}
+
+// ─── Gemini API commands ──────────────────────────────────────────────────────
+
+#[tauri::command]
+async fn gemini_chat(
+    api_key: String,
+    model: String,
+    system: String,
+    message: String,
+) -> Result<String, String> {
+    let client = reqwest::Client::builder()
+        .timeout(std::time::Duration::from_secs(120))
+        .build()
+        .map_err(|e| e.to_string())?;
+    let url = format!(
+        "https://generativelanguage.googleapis.com/v1beta/models/{}:generateContent?key={}",
+        model, api_key
+    );
+    let payload = serde_json::json!({
+        "system_instruction": { "parts": [{ "text": system }] },
+        "contents": [{ "role": "user", "parts": [{ "text": message }] }],
+    });
+    let resp = client
+        .post(&url)
+        .header("Content-Type", "application/json")
+        .json(&payload)
+        .send()
+        .await
+        .map_err(|e| format!("Erreur Gemini API : {}", e))?;
+    if !resp.status().is_success() {
+        let status = resp.status();
+        let body = resp.text().await.unwrap_or_default();
+        return Err(format!("Gemini {} : {}", status, body));
+    }
+    let json: serde_json::Value = resp.json().await.map_err(|e| e.to_string())?;
+    Ok(json["candidates"][0]["content"]["parts"][0]["text"].as_str().unwrap_or("").to_string())
+}
+
+#[tauri::command]
+async fn gemini_stream(
+    app: tauri::AppHandle,
+    api_key: String,
+    model: String,
+    system: String,
+    message: String,
+    history: Option<Vec<serde_json::Value>>,
+) -> Result<(), String> {
+    let client = reqwest::Client::new();
+    let url = format!(
+        "https://generativelanguage.googleapis.com/v1beta/models/{}:streamGenerateContent?alt=sse&key={}",
+        model, api_key
+    );
+    let mut contents: Vec<serde_json::Value> = vec![];
+    if let Some(hist) = history {
+        for h in hist {
+            let role = if h["role"].as_str().unwrap_or("") == "assistant" { "model" } else { "user" };
+            contents.push(serde_json::json!({ "role": role, "parts": [{ "text": h["content"].as_str().unwrap_or("") }] }));
+        }
+    }
+    contents.push(serde_json::json!({ "role": "user", "parts": [{ "text": message }] }));
+    let payload = serde_json::json!({
+        "system_instruction": { "parts": [{ "text": system }] },
+        "contents": contents,
+    });
+    let mut resp = client
+        .post(&url)
+        .header("Content-Type", "application/json")
+        .json(&payload)
+        .send()
+        .await
+        .map_err(|e| format!("Erreur Gemini API : {}", e))?;
+    if !resp.status().is_success() {
+        let status = resp.status();
+        let body = resp.text().await.unwrap_or_default();
+        return Err(format!("Gemini {} : {}", status, body));
+    }
+    let mut buf = String::new();
+    while let Some(chunk) = resp.chunk().await.map_err(|e| e.to_string())? {
+        buf.push_str(&String::from_utf8_lossy(&chunk));
+        while let Some(pos) = buf.find('\n') {
+            let line = buf[..pos].trim().to_string();
+            buf = buf[pos + 1..].to_string();
+            if line.is_empty() || !line.starts_with("data:") { continue; }
+            let data = line["data:".len()..].trim();
+            if let Ok(json) = serde_json::from_str::<serde_json::Value>(data) {
+                if let Some(text) = json["candidates"][0]["content"]["parts"][0]["text"].as_str() {
+                    if !text.is_empty() { let _ = app.emit("ollama-token", text.to_string()); }
+                }
+            }
+        }
+    }
+    let _ = app.emit("ollama-done", "");
+    Ok(())
+}
+
+// ─── Mistral API commands (OpenAI-compatible) ─────────────────────────────────
+
+#[tauri::command]
+async fn mistral_chat(
+    api_key: String,
+    model: String,
+    system: String,
+    message: String,
+) -> Result<String, String> {
+    let client = reqwest::Client::builder()
+        .timeout(std::time::Duration::from_secs(120))
+        .build()
+        .map_err(|e| e.to_string())?;
+    let payload = serde_json::json!({
+        "model": model,
+        "messages": [
+            {"role": "system", "content": system},
+            {"role": "user", "content": message},
+        ],
+    });
+    let resp = client
+        .post("https://api.mistral.ai/v1/chat/completions")
+        .header("Authorization", format!("Bearer {}", api_key))
+        .header("Content-Type", "application/json")
+        .json(&payload)
+        .send()
+        .await
+        .map_err(|e| format!("Erreur Mistral : {}", e))?;
+    if !resp.status().is_success() {
+        let status = resp.status();
+        let body = resp.text().await.unwrap_or_default();
+        return Err(format!("Mistral {} : {}", status, body));
+    }
+    let json: serde_json::Value = resp.json().await.map_err(|e| e.to_string())?;
+    Ok(json["choices"][0]["message"]["content"].as_str().unwrap_or("").to_string())
+}
+
+#[tauri::command]
+async fn mistral_stream(
+    app: tauri::AppHandle,
+    api_key: String,
+    model: String,
+    system: String,
+    message: String,
+    history: Option<Vec<serde_json::Value>>,
+) -> Result<(), String> {
+    let client = reqwest::Client::new();
+    let mut messages: Vec<serde_json::Value> = vec![
+        serde_json::json!({"role": "system", "content": system}),
+    ];
+    if let Some(hist) = history { messages.extend(hist); }
+    messages.push(serde_json::json!({"role": "user", "content": message}));
+    let payload = serde_json::json!({
+        "model": model,
+        "messages": messages,
+        "stream": true,
+    });
+    let mut resp = client
+        .post("https://api.mistral.ai/v1/chat/completions")
+        .header("Authorization", format!("Bearer {}", api_key))
+        .header("Content-Type", "application/json")
+        .json(&payload)
+        .send()
+        .await
+        .map_err(|e| format!("Erreur Mistral : {}", e))?;
+    if !resp.status().is_success() {
+        let status = resp.status();
+        let body = resp.text().await.unwrap_or_default();
+        return Err(format!("Mistral {} : {}", status, body));
+    }
+    let mut buf = String::new();
+    while let Some(chunk) = resp.chunk().await.map_err(|e| e.to_string())? {
+        buf.push_str(&String::from_utf8_lossy(&chunk));
+        while let Some(pos) = buf.find('\n') {
+            let line = buf[..pos].trim().to_string();
+            buf = buf[pos + 1..].to_string();
+            if line.is_empty() || !line.starts_with("data:") { continue; }
+            let data = line["data:".len()..].trim();
+            if data == "[DONE]" {
+                let _ = app.emit("ollama-done", "");
+                return Ok(());
+            }
+            if let Ok(json) = serde_json::from_str::<serde_json::Value>(data) {
+                if let Some(content) = json["choices"][0]["delta"]["content"].as_str() {
+                    if !content.is_empty() { let _ = app.emit("ollama-token", content.to_string()); }
+                }
+            }
+        }
+    }
+    let _ = app.emit("ollama-done", "");
+    Ok(())
+}
+
 #[tauri::command]
 async fn ollama_pull(app: tauri::AppHandle, base_url: String, model: String) -> Result<(), String> {
     let client = reqwest::Client::builder()
@@ -1529,6 +2154,82 @@ fn set_window_theme(window: tauri::Window, dark: bool) -> Result<(), String> {
         .map_err(|e| e.to_string())
 }
 
+// ─── Search ───────────────────────────────────────────────────────────────────
+
+#[derive(Serialize, Deserialize, Clone, Debug)]
+pub struct SearchResult {
+    pub id: String,
+    pub title: String,
+    pub folder: Option<String>,
+    pub updated_at: String,
+    pub snippet: String,
+}
+
+fn strip_html(html: &str) -> String {
+    let mut out = String::with_capacity(html.len());
+    let mut in_tag = false;
+    for c in html.chars() {
+        match c {
+            '<' => in_tag = true,
+            '>' => in_tag = false,
+            _ if !in_tag => out.push(c),
+            _ => {}
+        }
+    }
+    // collapse whitespace
+    out.split_whitespace().collect::<Vec<_>>().join(" ")
+}
+
+fn make_snippet(text: &str, query: &str, window: usize) -> String {
+    let lower = text.to_lowercase();
+    let lower_q = query.to_lowercase();
+    if let Some(pos) = lower.find(&lower_q) {
+        let start = pos.saturating_sub(window);
+        let end = (pos + query.len() + window).min(text.len());
+        let prefix = if start > 0 { "…" } else { "" };
+        let suffix = if end < text.len() { "…" } else { "" };
+        format!("{}{}{}", prefix, &text[start..end], suffix)
+    } else {
+        text.chars().take(120).collect::<String>() + if text.len() > 120 { "…" } else { "" }
+    }
+}
+
+#[tauri::command]
+fn search_notes(state: State<AppState>, query: String) -> Result<Vec<SearchResult>, String> {
+    if query.trim().is_empty() {
+        return Ok(vec![]);
+    }
+    let key = state.enc_key.lock().map_err(|e| e.to_string())?.clone();
+    let db = state.db.lock().map_err(|e| e.to_string())?;
+    let mut stmt = db
+        .prepare("SELECT id, title, content, folder, updated_at FROM notes WHERE deleted_at IS NULL ORDER BY updated_at DESC")
+        .map_err(|e| e.to_string())?;
+    let lower_q = query.to_lowercase();
+    let mut results = Vec::new();
+    let rows = stmt.query_map([], |row| {
+        Ok((
+            row.get::<_, String>(0)?,
+            row.get::<_, String>(1)?,
+            row.get::<_, String>(2)?,
+            row.get::<_, Option<String>>(3)?,
+            row.get::<_, String>(4)?,
+        ))
+    }).map_err(|e| e.to_string())?;
+    for row in rows {
+        let (id, enc_title, enc_content, folder, updated_at) = row.map_err(|e| e.to_string())?;
+        let title = if let Some(k) = &key { decrypt_value(k, &enc_title).unwrap_or(enc_title) } else { enc_title };
+        let content_raw = if let Some(k) = &key { decrypt_value(k, &enc_content).unwrap_or(enc_content) } else { enc_content };
+        let plain = strip_html(&content_raw);
+        let t_lower = title.to_lowercase();
+        let p_lower = plain.to_lowercase();
+        if t_lower.contains(&lower_q) || p_lower.contains(&lower_q) {
+            let snippet = make_snippet(&plain, &query, 80);
+            results.push(SearchResult { id, title, folder, updated_at, snippet });
+        }
+    }
+    Ok(results)
+}
+
 // ─── Entry point ──────────────────────────────────────────────────────────────
 
 pub fn run() {
@@ -1574,6 +2275,14 @@ pub fn run() {
             ollama_models,
             ollama_stream,
             ollama_pull,
+            claude_chat,
+            claude_stream,
+            openai_chat,
+            openai_stream,
+            gemini_chat,
+            gemini_stream,
+            mistral_chat,
+            mistral_stream,
             set_window_theme,
             get_colors,
             set_color,
@@ -1594,6 +2303,13 @@ pub fn run() {
             save_zip_to_path,
             export_note_to_path,
             trim_note_versions,
+            get_trash,
+            restore_from_trash,
+            permanent_delete_item,
+            empty_trash,
+            reveal_data_dir,
+            search_notes,
+            generate_image,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

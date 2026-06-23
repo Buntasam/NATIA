@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import {
+  CalendarDays,
   ChevronRight,
   Download,
   FilePlus,
@@ -25,6 +26,8 @@ import {
 import { invoke } from "@tauri-apps/api/core";
 import { save } from "@tauri-apps/plugin-dialog";
 import TreeMapPanel from "./TreeMapPanel";
+import CalendarPanel from "./CalendarPanel";
+import GraphPanel from "./GraphPanel";
 import { useStore } from "../store";
 import { chat } from "../hooks/useOllama";
 import { NoteMetadata } from "../types";
@@ -135,6 +138,7 @@ export default function Sidebar() {
     deleteFolder,
     renameFolder,
     toggleSettings,
+    toggleTrash,
     isLoading,
     itemColors,
     setItemColor,
@@ -177,7 +181,25 @@ export default function Sidebar() {
   };
 
   const [showTreeMap, setShowTreeMap] = useState(false);
+  const [showCalendar, setShowCalendar] = useState(false);
+  const [showGraph, setShowGraph] = useState(false);
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
+
+  // Full-text search
+  interface SearchResult { id: string; title: string; folder: string | null; updated_at: string; snippet: string; }
+  const [ftResults, setFtResults] = useState<SearchResult[]>([]);
+  const [ftLoading, setFtLoading] = useState(false);
+  useEffect(() => {
+    if (!searchQuery.trim()) { setFtResults([]); return; }
+    setFtLoading(true);
+    const timer = setTimeout(() => {
+      invoke<SearchResult[]>("search_notes", { query: searchQuery })
+        .then((r) => setFtResults(r))
+        .catch(() => setFtResults([]))
+        .finally(() => setFtLoading(false));
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [searchQuery]);
   const [menu, setMenu] = useState<MenuAction | null>(null);
   const [creatingIn, setCreatingIn] = useState<string | null>(null);
   const [newFolderName, setNewFolderName] = useState("");
@@ -307,13 +329,25 @@ export default function Sidebar() {
               <MessageCircle size={14} />
             </button>
             {sidebarView === "notes" && (
-              <button
-                onClick={() => setShowTreeMap(true)}
-                title="Arborescence"
-                className="p-1 rounded text-muted hover:text-primary hover:bg-hover transition-colors"
-              >
-                <Network size={14} />
-              </button>
+              <>
+                <button
+                  onClick={() => setShowTreeMap(true)}
+                  title="Arborescence"
+                  className="p-1 rounded text-muted hover:text-primary hover:bg-hover transition-colors"
+                >
+                  <Network size={14} />
+                </button>
+                <button
+                  onClick={() => setShowGraph(true)}
+                  title="Vue graphe"
+                  className="p-1 rounded text-muted hover:text-primary hover:bg-hover transition-colors"
+                >
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <circle cx="6" cy="6" r="3"/><circle cx="18" cy="6" r="3"/><circle cx="12" cy="18" r="3"/>
+                    <line x1="6" y1="9" x2="12" y2="15"/><line x1="18" y1="9" x2="12" y2="15"/>
+                  </svg>
+                </button>
+              </>
             )}
           </div>
         </div>
@@ -439,13 +473,40 @@ export default function Sidebar() {
             {isLoading && (
               <p className="text-muted text-xs text-center py-4">Chargement…</p>
             )}
-            {!isLoading && notes.length === 0 && folders.length === 0 && (
+            {/* Full-text search results */}
+            {searchQuery.trim() && (
+              <div className="pb-1">
+                {ftLoading && <p className="text-xs text-muted text-center py-3">Recherche…</p>}
+                {!ftLoading && ftResults.length === 0 && (
+                  <p className="text-xs text-muted text-center py-3">Aucun résultat</p>
+                )}
+                {!ftLoading && ftResults.map((r) => (
+                  <button
+                    key={r.id}
+                    onClick={() => selectNote(r.id)}
+                    className={`w-full text-left px-3 py-2 rounded-lg mb-0.5 transition-colors ${
+                      activeNote?.id === r.id ? "bg-active" : "hover:bg-hover"
+                    }`}
+                  >
+                    <p className="text-sm font-medium text-primary truncate">{r.title || "Sans titre"}</p>
+                    {r.snippet && (
+                      <p className="text-xs text-muted mt-0.5 line-clamp-2 leading-snug">{r.snippet}</p>
+                    )}
+                    {r.folder && (
+                      <p className="text-xs text-muted/70 mt-0.5 truncate">📁 {r.folder}</p>
+                    )}
+                  </button>
+                ))}
+              </div>
+            )}
+
+            {!searchQuery.trim() && !isLoading && notes.length === 0 && folders.length === 0 && (
               <div className="text-center py-8 px-4">
                 <p className="text-muted text-sm">Aucune note</p>
                 <p className="text-muted text-xs mt-1">Crée ta première note</p>
               </div>
             )}
-            {root.children.map((folder) => (
+            {!searchQuery.trim() && root.children.map((folder) => (
               <FolderNode
                 key={folder.path}
                 folder={folder}
@@ -475,12 +536,12 @@ export default function Sidebar() {
                 onFolderDrop={handleFolderDrop}
               />
             ))}
-            {rootDragOver && (
+            {!searchQuery.trim() && rootDragOver && (
               <p className="text-xs text-accent text-center py-1 select-none">
                 Déposer ici → racine
               </p>
             )}
-            {rootNotes.map((note) => (
+            {!searchQuery.trim() && rootNotes.map((note) => (
               <NoteItem
                 key={note.id}
                 note={note}
@@ -517,6 +578,20 @@ export default function Sidebar() {
             <Settings size={15} />
             Paramètres
           </button>
+          <button
+            onClick={() => setShowCalendar(true)}
+            title="Vue calendrier"
+            className="p-1.5 rounded text-muted hover:text-primary hover:bg-hover transition-colors"
+          >
+            <CalendarDays size={15} />
+          </button>
+          <button
+            onClick={toggleTrash}
+            title="Corbeille"
+            className="p-1.5 rounded text-muted hover:text-primary hover:bg-hover transition-colors"
+          >
+            <Trash2 size={15} />
+          </button>
           {hasPassword && (
             <button
               onClick={() => lock()}
@@ -538,6 +613,8 @@ export default function Sidebar() {
 
       {/* Tree map overlay */}
       {showTreeMap && <TreeMapPanel onClose={() => setShowTreeMap(false)} />}
+      {showCalendar && <CalendarPanel onClose={() => setShowCalendar(false)} />}
+      {showGraph && <GraphPanel onClose={() => setShowGraph(false)} />}
 
       {/* Context menus */}
       {menu && (
