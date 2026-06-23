@@ -16,6 +16,9 @@ const PROMPT_FIELDS: { key: keyof SettingsType; label: string; rows: number }[] 
   { key: "summary_prompt",       label: "Résumé",                                      rows: 2 },
   { key: "rename_prompt",        label: "Renommage automatique",                       rows: 2 },
   { key: "sort_prompt",          label: "Tri des notes (instructions JSON)",            rows: 3 },
+  { key: "formalize_prompt",     label: "Formalisation (email professionnel)",          rows: 3 },
+  { key: "translate_prompt",     label: "Traduction (instructions de style)",           rows: 2 },
+  { key: "continue_prompt",      label: "Continuation de texte",                       rows: 2 },
 ];
 
 // Maps temperature range → preset label for each prompt
@@ -154,7 +157,7 @@ export default function Settings() {
   // Badge shows only when there are unsaved changes vs. what's stored
   const isUnsaved = (key: keyof SettingsType) => form[key] !== settings[key];
 
-  const save = async () => {
+  const handleSave = async () => {
     await saveSettings(form);
     toggleSettings();
   };
@@ -166,7 +169,7 @@ export default function Settings() {
   };
 
   const resetPrompt = (key: keyof SettingsType) => {
-    set(key, DEFAULT_SETTINGS[key]);
+    set(key, DEFAULT_SETTINGS[key] as string);
     setOpenDefault(null);
   };
 
@@ -686,7 +689,7 @@ export default function Settings() {
             Annuler
           </button>
           <button
-            onClick={save}
+            onClick={handleSave}
             className="px-4 py-2 rounded-lg text-sm bg-accent hover:bg-accent-hover text-white transition-colors"
           >
             Sauvegarder

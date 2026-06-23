@@ -10,8 +10,11 @@ import {
   Download,
   Eye,
   FileText,
+  Languages,
   Loader2,
+  Mail,
   MessagesSquare,
+  PenLine,
   Plus,
   RefreshCw,
   Send,
@@ -67,12 +70,21 @@ export default function AiPanel({ onOpenConv }: { onOpenConv: () => void }) {
   const [appliedMsg, setAppliedMsg] = useState("");
   const [sortProposals, setSortProposals] = useState<SortProposal[]>([]);
 
-  // Correction modal
+  // Correction / Formalize modals
   const [pendingCorrection, setPendingCorrection] = useState<{
     original: string;
     proposed: string;
     html: string;
   } | null>(null);
+  const [pendingFormalize, setPendingFormalize] = useState<{
+    original: string;
+    proposed: string;
+    html: string;
+  } | null>(null);
+
+  // Translate lang & continue tracking
+  const [translateLang, setTranslateLang] = useState("anglais");
+  const [responseOp, setResponseOp] = useState<string | null>(null);
 
   // Quick message
   const [quickInput, setQuickInput] = useState("");
@@ -455,6 +467,94 @@ Réponds UNIQUEMENT avec ce JSON (rien d'autre, pas de texte, pas de \`\`\`) :
     }
   };
 
+  const handleFormalize = async () => {
+    if (!activeNote || isRunning) return;
+    setError(""); setResponse(""); setAppliedMsg("");
+    setIsRunning(true); setActiveOp("Formaliser");
+    const plainText = getPlainText();
+    const fullMessage = `${settings.formalize_prompt}\n\n${plainText}`;
+    const traceBase: TraceEntry = {
+      operation: "Formaliser", model: selectedModel, system: shadowPrompt,
+      user: fullMessage.slice(0, 600), response: "", elapsed: 0, status: "running", error: "",
+    };
+    setLastTrace(traceBase); startTimeRef.current = Date.now(); startTimer();
+    try {
+      const result = await chat(settings.ollama_url, selectedModel, shadowPrompt, fullMessage);
+      stopTimer();
+      const elapsed = Math.round((Date.now() - startTimeRef.current) / 100) / 10;
+      setLastTrace({ ...traceBase, response: result.slice(0, 600), elapsed, status: "done" });
+      const html = result.split(/\n{2,}/).map((p) => `<p>${p.replace(/\n/g, "<br>")}</p>`).join("");
+      setPendingFormalize({ original: plainText, proposed: result, html });
+    } catch (e: unknown) {
+      stopTimer();
+      const msg = e instanceof Error ? e.message : String(e);
+      setLastTrace({ ...traceBase, error: msg, elapsed: Math.round((Date.now() - startTimeRef.current) / 100) / 10, status: "error" });
+      setError(`Erreur : ${msg}`);
+    } finally { setIsRunning(false); setActiveOp(null); }
+  };
+
+  const handleTranslate = async () => {
+    if (!activeNote || isRunning) return;
+    setError(""); setResponse(""); setAppliedMsg(""); setResponseOp(null);
+    setIsRunning(true); setActiveOp("Traduire");
+    const plainText = getPlainText();
+    const fullMessage = `Traduis le texte suivant en ${translateLang}. ${settings.translate_prompt}\n\n${plainText}`;
+    const traceBase: TraceEntry = {
+      operation: "Traduire", model: selectedModel, system: shadowPrompt,
+      user: fullMessage.slice(0, 600), response: "", elapsed: 0, status: "running", error: "",
+    };
+    setLastTrace(traceBase); startTimeRef.current = Date.now(); startTimer();
+    try {
+      const result = await chat(settings.ollama_url, selectedModel, shadowPrompt, fullMessage);
+      stopTimer();
+      const elapsed = Math.round((Date.now() - startTimeRef.current) / 100) / 10;
+      setLastTrace({ ...traceBase, response: result.slice(0, 600), elapsed, status: "done" });
+      setResponse(result);
+      setResponseOp("translate");
+    } catch (e: unknown) {
+      stopTimer();
+      const msg = e instanceof Error ? e.message : String(e);
+      setLastTrace({ ...traceBase, error: msg, elapsed: Math.round((Date.now() - startTimeRef.current) / 100) / 10, status: "error" });
+      setError(`Erreur : ${msg}`);
+    } finally { setIsRunning(false); setActiveOp(null); }
+  };
+
+  const handleContinue = async () => {
+    if (!activeNote || isRunning) return;
+    setError(""); setResponse(""); setAppliedMsg(""); setResponseOp(null);
+    setIsRunning(true); setActiveOp("Continuer");
+    const plainText = getPlainText();
+    const fullMessage = `${settings.continue_prompt}\n\n${plainText}`;
+    const traceBase: TraceEntry = {
+      operation: "Continuer", model: selectedModel, system: shadowPrompt,
+      user: fullMessage.slice(0, 600), response: "", elapsed: 0, status: "running", error: "",
+    };
+    setLastTrace(traceBase); startTimeRef.current = Date.now(); startTimer();
+    try {
+      const result = await chat(settings.ollama_url, selectedModel, shadowPrompt, fullMessage);
+      stopTimer();
+      const elapsed = Math.round((Date.now() - startTimeRef.current) / 100) / 10;
+      setLastTrace({ ...traceBase, response: result.slice(0, 600), elapsed, status: "done" });
+      setResponse(result);
+      setResponseOp("continue");
+    } catch (e: unknown) {
+      stopTimer();
+      const msg = e instanceof Error ? e.message : String(e);
+      setLastTrace({ ...traceBase, error: msg, elapsed: Math.round((Date.now() - startTimeRef.current) / 100) / 10, status: "error" });
+      setError(`Erreur : ${msg}`);
+    } finally { setIsRunning(false); setActiveOp(null); }
+  };
+
+  const insertContinuation = async () => {
+    if (!activeNote || !response) return;
+    const added = response.split(/\n{2,}/).map((p) => `<p>${p.replace(/\n/g, "<br>")}</p>`).join("");
+    const newContent = activeNote.content + added;
+    await updateNote(activeNote.id, activeNote.title, newContent, activeNote.tags, activeNote.folder, "Continuation IA");
+    setResponse(""); setResponseOp(null);
+    setAppliedMsg("✓ Texte inséré à la fin");
+    setTimeout(() => setAppliedMsg(""), 2500);
+  };
+
   const startPull = async () => {
     const name = pullModel.trim();
     if (!name || isPulling) return;
@@ -524,9 +624,12 @@ Réponds UNIQUEMENT avec ce JSON (rien d'autre, pas de texte, pas de \`\`\`) :
     <>
     {pendingCorrection && (
       <CorrectionModal
+        title="Correction proposée par l'IA"
+        subtitle="Modifications surlignées — vert : ajouts · rouge barré : suppressions"
         original={pendingCorrection.original}
         proposed={pendingCorrection.proposed}
         html={pendingCorrection.html}
+        applyLabel="Appliquer la correction"
         onApply={async (html) => {
           if (!activeNote) return;
           await updateNote(activeNote.id, activeNote.title, html, activeNote.tags, activeNote.folder, "Correction IA");
@@ -535,6 +638,24 @@ Réponds UNIQUEMENT avec ce JSON (rien d'autre, pas de texte, pas de \`\`\`) :
           setTimeout(() => setAppliedMsg(""), 2500);
         }}
         onCancel={() => setPendingCorrection(null)}
+      />
+    )}
+    {pendingFormalize && (
+      <CorrectionModal
+        title="Email formalisé par l'IA"
+        subtitle="Aperçu de la version formelle — cliquez Appliquer pour remplacer la note"
+        original={pendingFormalize.original}
+        proposed={pendingFormalize.proposed}
+        html={pendingFormalize.html}
+        applyLabel="Remplacer la note"
+        onApply={async (html) => {
+          if (!activeNote) return;
+          await updateNote(activeNote.id, activeNote.title, html, activeNote.tags, activeNote.folder, "Formalisation IA");
+          setPendingFormalize(null);
+          setAppliedMsg("✓ Note formalisée");
+          setTimeout(() => setAppliedMsg(""), 2500);
+        }}
+        onCancel={() => setPendingFormalize(null)}
       />
     )}
     <div className="flex flex-col h-full">
@@ -755,6 +876,47 @@ Réponds UNIQUEMENT avec ce JSON (rien d'autre, pas de texte, pas de \`\`\`) :
                 onClick={handleSort}
                 badge="bêta"
               />
+              <OpButton
+                icon={<Mail size={14} />}
+                label="Formaliser"
+                description="Reformule en email professionnel"
+                active={activeOp === "Formaliser"}
+                loading={isRunning && activeOp === "Formaliser"}
+                onClick={handleFormalize}
+              />
+              <div className="flex flex-col gap-1">
+                <OpButton
+                  icon={<Languages size={14} />}
+                  label="Traduire"
+                  description={`Traduit la note en ${translateLang}`}
+                  active={activeOp === "Traduire"}
+                  loading={isRunning && activeOp === "Traduire"}
+                  onClick={handleTranslate}
+                />
+                <div className="flex gap-1 px-1 flex-wrap">
+                  {(["anglais", "espagnol", "allemand", "italien", "portugais", "japonais"] as const).map((lang) => (
+                    <button
+                      key={lang}
+                      onClick={() => setTranslateLang(lang)}
+                      className={`px-2 py-0.5 rounded-full text-[10px] border transition-colors ${
+                        translateLang === lang
+                          ? "bg-accent/15 border-accent/40 text-accent"
+                          : "bg-hover border-border text-muted hover:text-primary"
+                      }`}
+                    >
+                      {lang.charAt(0).toUpperCase() + lang.slice(1)}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              <OpButton
+                icon={<PenLine size={14} />}
+                label="Continuer"
+                description="L'IA prolonge le texte de la note"
+                active={activeOp === "Continuer"}
+                loading={isRunning && activeOp === "Continuer"}
+                onClick={handleContinue}
+              />
             </div>
 
             {/* Applied feedback */}
@@ -844,12 +1006,22 @@ Réponds UNIQUEMENT avec ce JSON (rien d'autre, pas de texte, pas de \`\`\`) :
                   </div>
                 )}
                 {!isRunning && response && (
-                  <button
-                    onClick={() => { setResponse(""); setError(""); }}
-                    className="text-xs py-1.5 rounded-lg bg-hover hover:bg-active text-muted hover:text-primary transition-colors w-full"
-                  >
-                    Fermer
-                  </button>
+                  <div className="flex gap-2">
+                    {responseOp === "continue" && (
+                      <button
+                        onClick={insertContinuation}
+                        className="flex-1 text-xs py-1.5 rounded-lg bg-accent hover:bg-accent-hover text-white transition-colors"
+                      >
+                        Insérer à la fin
+                      </button>
+                    )}
+                    <button
+                      onClick={() => { setResponse(""); setError(""); setResponseOp(null); }}
+                      className={`text-xs py-1.5 rounded-lg bg-hover hover:bg-active text-muted hover:text-primary transition-colors ${responseOp === "continue" ? "px-4" : "w-full"}`}
+                    >
+                      Fermer
+                    </button>
+                  </div>
                 )}
               </div>
             )}
@@ -1037,8 +1209,11 @@ function OpButton({
 // ─── Correction modal ─────────────────────────────────────────────────────────
 
 function CorrectionModal({
-  original, proposed, html, onApply, onCancel,
+  title, subtitle, applyLabel, original, proposed, html, onApply, onCancel,
 }: {
+  title: string;
+  subtitle: string;
+  applyLabel: string;
   original: string;
   proposed: string;
   html: string;
@@ -1058,11 +1233,9 @@ function CorrectionModal({
             <CheckCheck size={16} className="text-accent" />
           </div>
           <div>
-            <h2 className="text-sm font-semibold text-primary">Correction proposée par l'IA</h2>
+            <h2 className="text-sm font-semibold text-primary">{title}</h2>
             <p className="text-xs text-muted mt-0.5">
-              {hasChanges
-                ? "Modifications surlignées — vert : ajouts · rouge barré : suppressions"
-                : "Aucune modification détectée dans le texte"}
+              {hasChanges ? subtitle : "Aucune modification détectée dans le texte"}
             </p>
           </div>
         </div>
@@ -1106,7 +1279,7 @@ function CorrectionModal({
               disabled={!hasChanges}
               className="px-4 py-2 rounded-lg bg-accent hover:bg-accent-hover text-white text-sm font-medium transition-colors disabled:opacity-40"
             >
-              Appliquer la correction
+              {applyLabel}
             </button>
           </div>
         </div>

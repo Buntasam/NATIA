@@ -1,9 +1,32 @@
-import { useState, useEffect } from "react";
-import { Lock, Delete } from "lucide-react";
+import React, { useState, useEffect, useRef } from "react";
+import { Delete, Lock, Plus } from "lucide-react";
 import { useStore } from "../store";
 
 const PIN_DOTS = 8;
 const MAX_ATTEMPTS = 10;
+
+// ─── Lock-screen post-its ─────────────────────────────────────────────────────
+
+interface LockPostIt {
+  id: string;
+  text: string;
+  x: number;
+  y: number;
+  color: string;
+}
+
+const POSTIT_COLORS = ["#fef08a", "#fbcfe8", "#bbf7d0", "#bae6fd", "#e9d5ff"];
+const POSTIT_KEY = "natia_lock_postits";
+
+function loadPostIts(): LockPostIt[] {
+  try {
+    return JSON.parse(localStorage.getItem(POSTIT_KEY) ?? "[]");
+  } catch {
+    return [];
+  }
+}
+
+// ─── LockScreen ──────────────────────────────────────────────────────────────
 
 export default function LockScreen() {
   const { unlock, passwordType } = useStore();
@@ -11,8 +34,24 @@ export default function LockScreen() {
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const [attempts, setAttempts] = useState(0);
+  const [postIts, setPostIts] = useState<LockPostIt[]>(loadPostIts);
 
   const locked = attempts >= MAX_ATTEMPTS;
+
+  const addPostIt = () => {
+    const note: LockPostIt = {
+      id: crypto.randomUUID(),
+      text: "",
+      x: 40 + Math.random() * Math.max(window.innerWidth - 260, 100),
+      y: 40 + Math.random() * Math.max(window.innerHeight - 260, 100),
+      color: POSTIT_COLORS[Math.floor(Math.random() * POSTIT_COLORS.length)],
+    };
+    setPostIts((prev) => {
+      const updated = [...prev, note];
+      localStorage.setItem(POSTIT_KEY, JSON.stringify(updated));
+      return updated;
+    });
+  };
 
   const handleSubmit = async (pw?: string) => {
     const password = pw ?? value;
@@ -51,7 +90,6 @@ export default function LockScreen() {
     if (value.length >= 4) handleSubmit(value);
   };
 
-  // Keyboard support for PIN mode (numpad + top-row digits)
   useEffect(() => {
     if (passwordType !== "pin") return;
     const onKey = (e: KeyboardEvent) => {
@@ -73,23 +111,70 @@ export default function LockScreen() {
 
   const handleBackspace = () => setValue((v) => v.slice(0, -1));
 
+  // ── Post-its layer (partagé entre les deux modes) ────────────────────────────
+
+  const postItsLayer = (
+    <>
+      {postIts.map((p) => (
+        <DraggablePostIt
+          key={p.id}
+          note={p}
+          onMove={(x, y) =>
+            setPostIts((prev) => prev.map((n) => (n.id === p.id ? { ...n, x, y } : n)))
+          }
+          onMoveEnd={(x, y) => {
+            setPostIts((prev) => {
+              const updated = prev.map((n) => (n.id === p.id ? { ...n, x, y } : n));
+              localStorage.setItem(POSTIT_KEY, JSON.stringify(updated));
+              return updated;
+            });
+          }}
+          onUpdate={(updates) => {
+            setPostIts((prev) => {
+              const updated = prev.map((n) => (n.id === p.id ? { ...n, ...updates } : n));
+              localStorage.setItem(POSTIT_KEY, JSON.stringify(updated));
+              return updated;
+            });
+          }}
+          onDelete={() => {
+            setPostIts((prev) => {
+              const updated = prev.filter((n) => n.id !== p.id);
+              localStorage.setItem(POSTIT_KEY, JSON.stringify(updated));
+              return updated;
+            });
+          }}
+        />
+      ))}
+      <button
+        onClick={addPostIt}
+        style={{ position: "absolute", bottom: 20, right: 20, zIndex: 220 }}
+        className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-white/5 hover:bg-white/10 border border-white/10 text-white/30 hover:text-white/60 text-xs transition-colors"
+        title="Ajouter un post-it"
+      >
+        <Plus size={12} />
+        Post-it
+      </button>
+    </>
+  );
+
+  // ── PIN mode UI ──────────────────────────────────────────────────────────────
+
   if (passwordType === "pin") {
     return (
       <div className="fixed inset-0 z-[200] flex flex-col items-center justify-center bg-panel">
-        {/* Logo */}
         <span className="text-accent font-bold text-3xl tracking-tight mb-2 select-none">NATIA</span>
         <div className="flex items-center gap-2 mb-10 text-muted text-sm">
           <Lock size={13} />
           <span>Application verrouillée</span>
         </div>
 
-        {/* Entry indicator — uniform dots, ne révèle pas le nombre saisi */}
+        {/* Un dot par chiffre saisi */}
         <div className="flex gap-3 mb-8">
           {Array.from({ length: PIN_DOTS }).map((_, i) => (
             <div
               key={i}
               className={`w-3 h-3 rounded-full border-2 transition-colors ${
-                value.length > 0
+                i < value.length
                   ? "bg-accent border-accent"
                   : "border-border bg-transparent"
               }`}
@@ -97,14 +182,12 @@ export default function LockScreen() {
           ))}
         </div>
 
-        {/* Error */}
         {error && (
           <p className="text-red-400 text-xs mb-4 animate-pulse">{error}</p>
         )}
 
-        {/* Keypad */}
         <div className="grid grid-cols-3 gap-3 mb-6">
-          {["1","2","3","4","5","6","7","8","9"].map((d) => (
+          {["1", "2", "3", "4", "5", "6", "7", "8", "9"].map((d) => (
             <button
               key={d}
               onClick={() => handlePin(d)}
@@ -114,7 +197,6 @@ export default function LockScreen() {
               {d}
             </button>
           ))}
-          {/* Bottom row */}
           <button
             onClick={handleConfirm}
             disabled={loading || value.length < 4 || locked}
@@ -139,22 +221,22 @@ export default function LockScreen() {
         </div>
 
         {loading && <p className="text-muted text-xs">Vérification…</p>}
+
+        {postItsLayer}
       </div>
     );
   }
 
-  // ── Alphanumeric mode ────────────────────────────────────────────────────────
+  // ── Alphanumeric mode UI ─────────────────────────────────────────────────────
 
   return (
     <div className="fixed inset-0 z-[200] flex flex-col items-center justify-center bg-panel">
-      {/* Logo */}
       <span className="text-accent font-bold text-3xl tracking-tight mb-2 select-none">NATIA</span>
       <div className="flex items-center gap-2 mb-10 text-muted text-sm">
         <Lock size={13} />
         <span>Application verrouillée</span>
       </div>
 
-      {/* Input */}
       <div className="w-72 flex flex-col gap-3">
         <input
           type="password"
@@ -177,6 +259,114 @@ export default function LockScreen() {
           {loading ? "Vérification…" : "Déverrouiller"}
         </button>
       </div>
+
+      {postItsLayer}
+    </div>
+  );
+}
+
+// ─── DraggablePostIt ─────────────────────────────────────────────────────────
+
+function DraggablePostIt({
+  note,
+  onMove,
+  onMoveEnd,
+  onUpdate,
+  onDelete,
+}: {
+  note: LockPostIt;
+  onMove: (x: number, y: number) => void;
+  onMoveEnd: (x: number, y: number) => void;
+  onUpdate: (updates: Partial<Omit<LockPostIt, "id">>) => void;
+  onDelete: () => void;
+}) {
+  const startRef = useRef<{ mx: number; my: number; nx: number; ny: number } | null>(null);
+
+  const onMouseDown = (e: React.MouseEvent<HTMLDivElement>) => {
+    const tag = (e.target as HTMLElement).tagName;
+    if (tag === "TEXTAREA" || tag === "BUTTON") return;
+    e.preventDefault();
+    startRef.current = { mx: e.clientX, my: e.clientY, nx: note.x, ny: note.y };
+
+    const onMM = (ev: MouseEvent) => {
+      if (!startRef.current) return;
+      onMove(
+        startRef.current.nx + ev.clientX - startRef.current.mx,
+        startRef.current.ny + ev.clientY - startRef.current.my,
+      );
+    };
+
+    const onMU = (ev: MouseEvent) => {
+      if (!startRef.current) return;
+      onMoveEnd(
+        startRef.current.nx + ev.clientX - startRef.current.mx,
+        startRef.current.ny + ev.clientY - startRef.current.my,
+      );
+      startRef.current = null;
+      window.removeEventListener("mousemove", onMM);
+      window.removeEventListener("mouseup", onMU);
+    };
+
+    window.addEventListener("mousemove", onMM);
+    window.addEventListener("mouseup", onMU);
+  };
+
+  return (
+    <div
+      onMouseDown={onMouseDown}
+      style={{ position: "absolute", left: note.x, top: note.y, width: 180, zIndex: 210 }}
+      className="rounded-lg shadow-xl overflow-hidden"
+    >
+      {/* Barre de titre / drag handle */}
+      <div
+        style={{ backgroundColor: note.color }}
+        className="flex items-center justify-between px-2 py-1.5 cursor-grab active:cursor-grabbing"
+      >
+        <div className="flex gap-1.5 items-center">
+          {POSTIT_COLORS.map((c) => (
+            <button
+              key={c}
+              onMouseDown={(e) => e.stopPropagation()}
+              onClick={() => onUpdate({ color: c })}
+              style={{
+                backgroundColor: c,
+                width: 10,
+                height: 10,
+                borderRadius: "50%",
+                border: note.color === c ? "2px solid rgba(0,0,0,0.45)" : "1px solid rgba(0,0,0,0.15)",
+                flexShrink: 0,
+                cursor: "pointer",
+              }}
+            />
+          ))}
+        </div>
+        <button
+          onMouseDown={(e) => e.stopPropagation()}
+          onClick={onDelete}
+          style={{
+            fontSize: 16,
+            lineHeight: 1,
+            color: "rgba(0,0,0,0.35)",
+            background: "none",
+            border: "none",
+            cursor: "pointer",
+            padding: "0 2px",
+          }}
+        >
+          ×
+        </button>
+      </div>
+
+      {/* Corps texte */}
+      <textarea
+        value={note.text}
+        onChange={(e) => onUpdate({ text: e.target.value })}
+        onMouseDown={(e) => e.stopPropagation()}
+        placeholder="..."
+        rows={4}
+        style={{ backgroundColor: note.color, color: "rgba(0,0,0,0.75)", resize: "none" }}
+        className="w-full px-2.5 py-2 text-xs placeholder:text-black/25 outline-none border-0 leading-relaxed"
+      />
     </div>
   );
 }

@@ -26,6 +26,9 @@ export interface Settings {
   summary_prompt: string;
   rename_prompt: string;
   sort_prompt: string;
+  formalize_prompt: string;
+  translate_prompt: string;
+  continue_prompt: string;
   temperature: number;
 }
 

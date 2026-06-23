@@ -71,6 +71,9 @@ pub struct Settings {
     pub summary_prompt: String,
     pub rename_prompt: String,
     pub sort_prompt: String,
+    pub formalize_prompt: String,
+    pub translate_prompt: String,
+    pub continue_prompt: String,
     #[serde(default = "default_temperature")]
     pub temperature: f64,
 }
@@ -87,6 +90,9 @@ impl Default for Settings {
             summary_prompt: "Résume en 2-3 phrases en français :".to_string(),
             rename_prompt: "Propose un titre court (5 mots max) en français. Réponds uniquement avec le titre :".to_string(),
             sort_prompt: "Organise ces notes par sujet. Utilise des sous-dossiers avec / si utile (ex: Travail/Projets). Réponds UNIQUEMENT avec du JSON valide, sans texte autour : [{\"id\":\"...\",\"folder\":\"NomDossier\"}]".to_string(),
+            formalize_prompt: "Réécris ce texte sous forme d'email professionnel en français. Commence par \"Bonjour,\" et termine par \"Cordialement,\". Réponds uniquement avec l'email reformulé, sans commentaires :".to_string(),
+            translate_prompt: "Réponds uniquement avec la traduction, sans commentaires ni explications :".to_string(),
+            continue_prompt: "Continue ce texte de manière cohérente, en respectant le style et le ton de l'auteur. Écris entre 80 et 150 mots supplémentaires. Réponds uniquement avec le texte à ajouter :".to_string(),
             temperature: 0.7,
         }
     }
@@ -402,6 +408,40 @@ fn save_zip_to_path(path: String, state: State<AppState>) -> Result<(), String> 
 
     let finished = zip.finish().map_err(|e| e.to_string())?;
     std::fs::write(&path, finished.into_inner()).map_err(|e| e.to_string())?;
+    Ok(())
+}
+
+#[tauri::command]
+fn export_note_to_path(note_id: String, path: String, state: State<AppState>) -> Result<(), String> {
+    let key = state.enc_key.lock().map_err(|e| e.to_string())?.clone();
+    let db = state.db.lock().map_err(|e| e.to_string())?;
+
+    let raw_title = db
+        .query_row(
+            "SELECT title FROM notes WHERE id=?1",
+            [&note_id],
+            |row| row.get::<_, String>(0),
+        )
+        .map_err(|e| e.to_string())?;
+    let title = maybe_dec(&key, &raw_title);
+    drop(db);
+
+    let file_path = state.notes_dir.join(format!("{}.html", note_id));
+    let raw_content = if file_path.exists() {
+        std::fs::read_to_string(&file_path).map_err(|e| e.to_string())?
+    } else {
+        String::new()
+    };
+    let content = maybe_dec(&key, &raw_content);
+
+    let title_esc = title.replace('&', "&amp;").replace('<', "&lt;").replace('>', "&gt;");
+    let html = format!(
+        "<!DOCTYPE html>\n<html lang=\"fr\">\n<head>\n  <meta charset=\"utf-8\">\n  <title>{t}</title>\n  <style>body{{font-family:sans-serif;max-width:800px;margin:40px auto;padding:0 20px;line-height:1.6}}</style>\n</head>\n<body>\n<h1>{t}</h1>\n{c}\n</body>\n</html>",
+        t = title_esc,
+        c = content,
+    );
+
+    std::fs::write(&path, html.as_bytes()).map_err(|e| e.to_string())?;
     Ok(())
 }
 
@@ -1045,6 +1085,9 @@ fn get_settings(state: State<AppState>) -> Result<Settings, String> {
         summary_prompt: get("summary_prompt", defaults.summary_prompt),
         rename_prompt: get("rename_prompt", defaults.rename_prompt),
         sort_prompt: get("sort_prompt", defaults.sort_prompt),
+        formalize_prompt: get("formalize_prompt", defaults.formalize_prompt),
+        translate_prompt: get("translate_prompt", defaults.translate_prompt),
+        continue_prompt: get("continue_prompt", defaults.continue_prompt),
         temperature,
     })
 }
@@ -1062,6 +1105,9 @@ fn update_settings(settings: Settings, state: State<AppState>) -> Result<(), Str
         ("summary_prompt",       settings.summary_prompt.as_str()),
         ("rename_prompt",        settings.rename_prompt.as_str()),
         ("sort_prompt",          settings.sort_prompt.as_str()),
+        ("formalize_prompt",     settings.formalize_prompt.as_str()),
+        ("translate_prompt",     settings.translate_prompt.as_str()),
+        ("continue_prompt",      settings.continue_prompt.as_str()),
     ];
     for &(pk, new_val) in &prompts {
         let last_raw: Option<String> = db.query_row(
@@ -1088,6 +1134,9 @@ fn update_settings(settings: Settings, state: State<AppState>) -> Result<(), Str
         ("summary_prompt",       settings.summary_prompt.as_str()),
         ("rename_prompt",        settings.rename_prompt.as_str()),
         ("sort_prompt",          settings.sort_prompt.as_str()),
+        ("formalize_prompt",     settings.formalize_prompt.as_str()),
+        ("translate_prompt",     settings.translate_prompt.as_str()),
+        ("continue_prompt",      settings.continue_prompt.as_str()),
         ("temperature",          temp_str.as_str()),
     ];
     for &(k, v) in &all {
@@ -1383,14 +1432,19 @@ async fn ollama_stream(
     model: String,
     system: String,
     message: String,
+    history: Option<Vec<serde_json::Value>>,
 ) -> Result<(), String> {
     let client = reqwest::Client::new();
+    let mut messages: Vec<serde_json::Value> = vec![
+        serde_json::json!({"role": "system", "content": system}),
+    ];
+    if let Some(hist) = history {
+        messages.extend(hist);
+    }
+    messages.push(serde_json::json!({"role": "user", "content": message}));
     let payload = serde_json::json!({
         "model": model,
-        "messages": [
-            {"role": "system", "content": system},
-            {"role": "user", "content": message}
-        ],
+        "messages": messages,
         "stream": true
     });
     let mut resp = client
@@ -1538,6 +1592,7 @@ pub fn run() {
             lock_app,
             export_zip,
             save_zip_to_path,
+            export_note_to_path,
             trim_note_versions,
         ])
         .run(tauri::generate_context!())

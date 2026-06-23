@@ -1,8 +1,10 @@
 import React, { useState } from "react";
-import { AlertTriangle, Bug, Copy, Lightbulb, Mail, Terminal } from "lucide-react";
+import { AlertTriangle, Bug, Copy, ExternalLink, Github, Lightbulb, Mail, Star, Terminal } from "lucide-react";
 
 const KEY = "natia_disclaimer_v1";
 const CONTACT_EMAIL = "email@test.fr";
+const GITHUB_URL = "https://github.com/Buntasam/NATIA";
+
 
 const REPORT_TEMPLATE = (date: string) =>
 `À : ${CONTACT_EMAIL}
@@ -65,9 +67,12 @@ export default function Disclaimer() {
 
   return (
     <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/70 backdrop-blur-sm">
-      <div className="bg-panel border border-border rounded-xl w-[780px] max-h-[90vh] overflow-hidden shadow-2xl flex">
+      <div className="bg-panel border border-border rounded-xl w-[780px] max-h-[90vh] overflow-hidden shadow-2xl flex flex-col">
 
-        {/* ── Colonne gauche : disclaimer ────────────────────────────────────── */}
+        {/* ── Ligne du haut : deux colonnes ──────────────────────────────────── */}
+        <div className="flex flex-1 min-h-0 overflow-hidden">
+
+        {/* ── Colonne gauche : disclaimer ──────────────────────────────────── */}
         <div className="flex-1 flex flex-col overflow-y-auto">
           {/* Header */}
           <div className="px-6 pt-6 pb-4 flex items-start gap-4 shrink-0">
@@ -186,6 +191,35 @@ export default function Disclaimer() {
               </a>
             </div>
           </div>
+        </div>
+
+        </div>{/* fin ligne du haut */}
+
+        {/* ── Bande GitHub ───────────────────────────────────────────────────── */}
+        <div className="border-t border-border bg-black/20 px-5 py-3 flex items-center gap-4 shrink-0">
+          <a
+            href={GITHUB_URL}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="flex items-center gap-2 px-3 py-1.5 rounded-lg border border-border bg-hover hover:bg-active text-xs text-secondary hover:text-primary transition-colors shrink-0"
+          >
+            <Github size={13} />
+            <span className="font-medium">Buntasam/NATIA</span>
+            <ExternalLink size={10} className="text-muted" />
+          </a>
+          <p className="text-xs text-muted">
+            Si NATIA te plaît, n'hésite pas à laisser une{" "}
+            <a
+              href={GITHUB_URL}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-1 text-amber-400 hover:text-amber-300 transition-colors font-medium"
+            >
+              <Star size={11} className="fill-amber-400" />
+              étoile sur GitHub
+            </a>
+            {" "}— ça m'aide vraiment beaucoup !
+          </p>
         </div>
 
       </div>

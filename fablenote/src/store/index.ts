@@ -81,6 +81,9 @@ export const DEFAULT_SETTINGS: Settings = {
   summary_prompt: "Résume en 2-3 phrases en français :",
   rename_prompt: "Propose un titre court (5 mots max) en français. Réponds uniquement avec le titre :",
   sort_prompt: "Organise ces notes par sujet. Utilise des sous-dossiers avec / si utile (ex: Travail/Projets). Réponds UNIQUEMENT avec du JSON valide, sans texte autour : [{\"id\":\"...\",\"folder\":\"NomDossier\"}]",
+  formalize_prompt: "Réécris ce texte sous forme d'email professionnel en français. Commence par \"Bonjour,\" et termine par \"Cordialement,\". Réponds uniquement avec l'email reformulé, sans commentaires :",
+  translate_prompt: "Réponds uniquement avec la traduction, sans commentaires ni explications :",
+  continue_prompt: "Continue ce texte de manière cohérente, en respectant le style et le ton de l'auteur. Écris entre 80 et 150 mots supplémentaires. Réponds uniquement avec le texte à ajouter :",
   temperature: 0.7,
 };
 

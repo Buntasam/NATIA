@@ -87,7 +87,7 @@ export default function Layout() {
 // ─── Conversation panel ───────────────────────────────────────────────────────
 
 function ConvPanel({ onClose }: { onClose: () => void }) {
-  const { settings } = useStore();
+  const { settings, activeNote } = useStore();
   const [messages, setMessages] = useState<{ role: "user" | "ai"; content: string }[]>([]);
   const [input, setInput] = useState("");
   const [isStreaming, setIsStreaming] = useState(false);
@@ -107,9 +107,26 @@ function ConvPanel({ onClose }: { onClose: () => void }) {
     };
   }, []);
 
+  const buildSystem = () => {
+    let sys = settings.global_shadow_prompt;
+    if (activeNote) {
+      const div = document.createElement("div");
+      div.innerHTML = activeNote.content;
+      const text = (div.textContent ?? "").trim();
+      if (text) {
+        sys += `\n\n---\nNote active (titre : "${activeNote.title}") :\n${text.slice(0, 3000)}`;
+      }
+    }
+    return sys;
+  };
+
   const send = async () => {
     const msg = input.trim();
     if (!msg || isStreaming) return;
+    const history = messages.map((m) => ({
+      role: m.role === "user" ? "user" : "assistant",
+      content: m.content,
+    }));
     setMessages((prev) => [...prev, { role: "user", content: msg }]);
     setInput("");
     setIsStreaming(true);
@@ -139,8 +156,9 @@ function ConvPanel({ onClose }: { onClose: () => void }) {
       await invoke("ollama_stream", {
         baseUrl: settings.ollama_url,
         model: settings.default_model,
-        system: settings.global_shadow_prompt,
+        system: buildSystem(),
         message: msg,
+        history,
       });
     } catch (e: unknown) {
       setMessages((prev) => [...prev, { role: "ai", content: `Erreur : ${e instanceof Error ? e.message : String(e)}` }]);
@@ -158,11 +176,21 @@ function ConvPanel({ onClose }: { onClose: () => void }) {
           <X size={14} />
         </button>
       </div>
+      {activeNote && (
+        <div className="shrink-0 flex items-center gap-1.5 px-3 py-1.5 bg-accent/5 border-b border-border/50 text-[10px] text-muted">
+          <FileText size={9} className="text-accent shrink-0" />
+          <span className="truncate text-secondary">{activeNote.title}</span>
+          <span className="text-accent shrink-0">· en contexte</span>
+        </div>
+      )}
       <div className="flex-1 overflow-y-auto p-3 flex flex-col gap-2">
         {messages.length === 0 && !isStreaming && (
           <div className="flex flex-col items-center justify-center h-full text-center py-8">
             <MessagesSquare size={24} className="text-muted mb-2" />
             <p className="text-xs text-muted">Commence une conversation avec l'IA</p>
+            {activeNote && (
+              <p className="text-[10px] text-muted/70 mt-1">L'IA a accès au contenu de ta note</p>
+            )}
           </div>
         )}
         {messages.map((m, i) => (

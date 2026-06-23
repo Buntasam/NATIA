@@ -17,7 +17,7 @@ export default function App() {
         loadFolders();
         loadColors();
       }
-    });
+    }).catch(console.error);
   }, []);
 
   // Load data once unlocked

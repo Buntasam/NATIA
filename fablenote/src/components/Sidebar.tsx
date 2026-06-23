@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import {
   ChevronRight,
+  Download,
   FilePlus,
   Folder,
   FolderOpen,
@@ -21,6 +22,8 @@ import {
   Pencil,
   Undo2,
 } from "lucide-react";
+import { invoke } from "@tauri-apps/api/core";
+import { save } from "@tauri-apps/plugin-dialog";
 import TreeMapPanel from "./TreeMapPanel";
 import { useStore } from "../store";
 import { chat } from "../hooks/useOllama";
@@ -609,6 +612,25 @@ export default function Sidebar() {
                   </div>
                 </div>
 
+                <button
+                  className="w-full flex items-center gap-2 px-3 py-2 text-sm text-secondary hover:text-primary hover:bg-hover transition-colors"
+                  onClick={async () => {
+                    const filePath = await save({
+                      defaultPath: `${menu.note.title}.html`,
+                      filters: [{ name: "Page HTML", extensions: ["html"] }],
+                    });
+                    closeMenu();
+                    if (!filePath) return;
+                    try {
+                      await invoke("export_note_to_path", { noteId: menu.note.id, path: filePath });
+                    } catch (e) {
+                      console.error("export_note_to_path:", e);
+                    }
+                  }}
+                >
+                  <Download size={13} />
+                  Exporter (.html)
+                </button>
                 <div className="border-t border-border my-1" />
                 <button
                   className="w-full flex items-center gap-2 px-3 py-2 text-sm text-red-400 hover:bg-hover transition-colors"
