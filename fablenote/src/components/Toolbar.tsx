@@ -388,7 +388,14 @@ export default function Toolbar({ editor }: { editor: Editor | null }) {
         <TablePicker
           pos={tablePicker}
           inTable={editor.isActive("table")}
-          onInsert={(r, c) => editor.chain().focus().insertTable({ rows: r, cols: c, withHeaderRow: true }).run()}
+          onInsert={(r, c) => {
+            editor.chain().focus().insertTable({ rows: r, cols: c, withHeaderRow: true }).run();
+            if (editor.state.doc.lastChild?.type.name === "table") {
+              const cursorPos = editor.state.selection.anchor;
+              editor.commands.insertContentAt(editor.state.doc.content.size, { type: "paragraph" });
+              editor.commands.setTextSelection(cursorPos);
+            }
+          }}
           onAddColBefore={() => editor.chain().focus().addColumnBefore().run()}
           onAddColAfter={() => editor.chain().focus().addColumnAfter().run()}
           onAddRowBefore={() => editor.chain().focus().addRowBefore().run()}
