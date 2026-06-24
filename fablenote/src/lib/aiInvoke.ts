@@ -41,6 +41,9 @@ export async function aiChat(
       message,
     });
   }
+  if (settings.ai_provider === "claude_cli") {
+    return invoke<string>("claude_cli_chat", { system, message });
+  }
   return invoke<string>("ollama_chat", {
     baseUrl: settings.ollama_url,
     model: ollamaModel ?? settings.default_model,
@@ -92,6 +95,9 @@ export async function aiStream(
       history,
     });
   }
+  if (settings.ai_provider === "claude_cli") {
+    return invoke<void>("claude_cli_stream", { system, message, history });
+  }
   return invoke<void>("ollama_stream", {
     baseUrl: settings.ollama_url,
     model: ollamaModel ?? settings.default_model,
@@ -106,5 +112,6 @@ export function activeModel(settings: Settings, ollamaModel?: string): string {
   if (settings.ai_provider === "openai") return settings.openai_model;
   if (settings.ai_provider === "gemini") return settings.gemini_model;
   if (settings.ai_provider === "mistral") return settings.mistral_model;
+  if (settings.ai_provider === "claude_cli") return "claude (CLI)";
   return ollamaModel ?? settings.default_model;
 }

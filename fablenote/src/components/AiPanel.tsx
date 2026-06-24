@@ -63,6 +63,8 @@ export default function AiPanel({ onOpenConv }: { onOpenConv: () => void }) {
   const [models, setModels] = useState<string[]>([]);
   const [selectedModel, setSelectedModel] = useState(settings.default_model);
   const [shadowPrompt, setShadowPrompt] = useState(settings.global_shadow_prompt);
+  const [localProvider, setLocalProvider] = useState(settings.ai_provider);
+  const effectiveSettings = { ...settings, ai_provider: localProvider };
   const [showShadow, setShowShadow] = useState(false);
   const [response, setResponse] = useState("");
   const [isRunning, setIsRunning] = useState(false);
@@ -98,7 +100,7 @@ export default function AiPanel({ onOpenConv }: { onOpenConv: () => void }) {
     setQuickLoading(true);
     setQuickResponse("");
     try {
-      const result = await aiChat(settings, shadowPrompt, msg, selectedModel);
+      const result = await aiChat(effectiveSettings,shadowPrompt, msg, selectedModel);
       setQuickResponse(result);
       setQuickInput("");
     } catch (e: unknown) {
@@ -200,7 +202,7 @@ export default function AiPanel({ onOpenConv }: { onOpenConv: () => void }) {
 
     const traceBase: TraceEntry = {
       operation: opLabel,
-      model: selectedModel,
+      model: activeModel(effectiveSettings, selectedModel),
       system: shadowPrompt,
       user: truncatedUser,
       response: "",
@@ -213,7 +215,7 @@ export default function AiPanel({ onOpenConv }: { onOpenConv: () => void }) {
     startTimer();
 
     try {
-      const result = await aiChat(settings, shadowPrompt, fullMessage, selectedModel);
+      const result = await aiChat(effectiveSettings,shadowPrompt, fullMessage, selectedModel);
       stopTimer();
       const elapsed = Math.round((Date.now() - startTimeRef.current) / 100) / 10;
       const truncatedResp = result.length > 600 ? result.substring(0, 600) + "…" : result;
@@ -259,7 +261,7 @@ export default function AiPanel({ onOpenConv }: { onOpenConv: () => void }) {
 
     const traceBase: TraceEntry = {
       operation: "Corriger",
-      model: selectedModel,
+      model: activeModel(effectiveSettings, selectedModel),
       system: shadowPrompt,
       user: truncatedUser,
       response: "",
@@ -272,7 +274,7 @@ export default function AiPanel({ onOpenConv }: { onOpenConv: () => void }) {
     startTimer();
 
     try {
-      const result = await aiChat(settings, shadowPrompt, fullMessage, selectedModel);
+      const result = await aiChat(effectiveSettings,shadowPrompt, fullMessage, selectedModel);
       stopTimer();
       const elapsed = Math.round((Date.now() - startTimeRef.current) / 100) / 10;
       const truncatedResp = result.length > 600 ? result.substring(0, 600) + "…" : result;
@@ -413,7 +415,7 @@ Réponds UNIQUEMENT avec ce JSON (rien d'autre, pas de texte, pas de \`\`\`) :
 
     const traceBase: TraceEntry = {
       operation: "Trier",
-      model: selectedModel,
+      model: activeModel(effectiveSettings, selectedModel),
       system: sortSystem,
       user: truncatedUser,
       response: "",
@@ -426,7 +428,7 @@ Réponds UNIQUEMENT avec ce JSON (rien d'autre, pas de texte, pas de \`\`\`) :
     startTimer();
 
     try {
-      const result = await aiChat(settings, sortSystem, fullMessage, selectedModel);
+      const result = await aiChat(effectiveSettings,sortSystem, fullMessage, selectedModel);
       stopTimer();
       const elapsed = Math.round((Date.now() - startTimeRef.current) / 100) / 10;
       const truncatedResp = result.length > 600 ? result.substring(0, 600) + "…" : result;
@@ -475,12 +477,12 @@ Réponds UNIQUEMENT avec ce JSON (rien d'autre, pas de texte, pas de \`\`\`) :
     const plainText = getPlainText();
     const fullMessage = `${settings.formalize_prompt}\n\n${plainText}`;
     const traceBase: TraceEntry = {
-      operation: "Formaliser", model: selectedModel, system: shadowPrompt,
+      operation: "Formaliser", model: activeModel(effectiveSettings, selectedModel), system: shadowPrompt,
       user: fullMessage.slice(0, 600), response: "", elapsed: 0, status: "running", error: "",
     };
     setLastTrace(traceBase); startTimeRef.current = Date.now(); startTimer();
     try {
-      const result = await aiChat(settings, shadowPrompt, fullMessage, selectedModel);
+      const result = await aiChat(effectiveSettings,shadowPrompt, fullMessage, selectedModel);
       stopTimer();
       const elapsed = Math.round((Date.now() - startTimeRef.current) / 100) / 10;
       setLastTrace({ ...traceBase, response: result.slice(0, 600), elapsed, status: "done" });
@@ -501,12 +503,12 @@ Réponds UNIQUEMENT avec ce JSON (rien d'autre, pas de texte, pas de \`\`\`) :
     const plainText = getPlainText();
     const fullMessage = `Traduis le texte suivant en ${translateLang}. ${settings.translate_prompt}\n\n${plainText}`;
     const traceBase: TraceEntry = {
-      operation: "Traduire", model: selectedModel, system: shadowPrompt,
+      operation: "Traduire", model: activeModel(effectiveSettings, selectedModel), system: shadowPrompt,
       user: fullMessage.slice(0, 600), response: "", elapsed: 0, status: "running", error: "",
     };
     setLastTrace(traceBase); startTimeRef.current = Date.now(); startTimer();
     try {
-      const result = await aiChat(settings, shadowPrompt, fullMessage, selectedModel);
+      const result = await aiChat(effectiveSettings,shadowPrompt, fullMessage, selectedModel);
       stopTimer();
       const elapsed = Math.round((Date.now() - startTimeRef.current) / 100) / 10;
       setLastTrace({ ...traceBase, response: result.slice(0, 600), elapsed, status: "done" });
@@ -527,12 +529,12 @@ Réponds UNIQUEMENT avec ce JSON (rien d'autre, pas de texte, pas de \`\`\`) :
     const plainText = getPlainText();
     const fullMessage = `${settings.continue_prompt}\n\n${plainText}`;
     const traceBase: TraceEntry = {
-      operation: "Continuer", model: selectedModel, system: shadowPrompt,
+      operation: "Continuer", model: activeModel(effectiveSettings, selectedModel), system: shadowPrompt,
       user: fullMessage.slice(0, 600), response: "", elapsed: 0, status: "running", error: "",
     };
     setLastTrace(traceBase); startTimeRef.current = Date.now(); startTimer();
     try {
-      const result = await aiChat(settings, shadowPrompt, fullMessage, selectedModel);
+      const result = await aiChat(effectiveSettings,shadowPrompt, fullMessage, selectedModel);
       stopTimer();
       const elapsed = Math.round((Date.now() - startTimeRef.current) / 100) / 10;
       setLastTrace({ ...traceBase, response: result.slice(0, 600), elapsed, status: "done" });
@@ -608,7 +610,7 @@ Réponds UNIQUEMENT avec ce JSON (rien d'autre, pas de texte, pas de \`\`\`) :
     });
 
     try {
-      await aiStream(settings, shadowPrompt, msg, [], selectedModel);
+      await aiStream(effectiveSettings,shadowPrompt, msg, [], selectedModel);
     } catch (e: unknown) {
       const errMsg = e instanceof Error ? e.message : String(e);
       setTraceResponse(`Erreur : ${errMsg}`);
@@ -695,9 +697,36 @@ Réponds UNIQUEMENT avec ce JSON (rien d'autre, pas de texte, pas de \`\`\`) :
         {/* ── OPERATIONS TAB ──────────────────────────────────────────────────── */}
         {activeTab === "ops" && (
           <>
+            {/* ── Provider switcher ── */}
+            <div className="flex flex-col gap-1.5">
+              <p className="text-[10px] text-muted uppercase tracking-wider">Fournisseur</p>
+              <div className="flex flex-wrap gap-1">
+                {([
+                  { id: "ollama",     label: "Local" },
+                  { id: "claude_cli", label: "CLI" },
+                  { id: "claude",     label: "Anthropic" },
+                  { id: "openai",     label: "OpenAI" },
+                  { id: "gemini",     label: "Gemini" },
+                  { id: "mistral",    label: "Mistral" },
+                ] as const).map(({ id, label }) => (
+                  <button
+                    key={id}
+                    onClick={() => setLocalProvider(id)}
+                    className={`px-2.5 py-1 rounded-lg text-[11px] font-medium border transition-colors ${
+                      localProvider === id
+                        ? "bg-accent/15 border-accent/40 text-accent"
+                        : "bg-hover border-border text-muted hover:text-secondary"
+                    }`}
+                  >
+                    {label}
+                  </button>
+                ))}
+              </div>
+            </div>
+
             {/* Model selector */}
             <div>
-              {settings.ai_provider === "ollama" ? (
+              {localProvider === "ollama" ? (
                 <>
                   <div className="flex items-center justify-between mb-1">
                     <label className="text-xs text-muted">Modèle Ollama</label>
@@ -779,9 +808,9 @@ Réponds UNIQUEMENT avec ce JSON (rien d'autre, pas de texte, pas de \`\`\`) :
                   <Zap size={12} className="text-accent shrink-0" />
                   <div className="flex flex-col min-w-0">
                     <span className="text-[10px] text-muted uppercase tracking-wide">
-                      {settings.ai_provider === "claude" ? "Anthropic Claude" : settings.ai_provider === "openai" ? "OpenAI" : settings.ai_provider === "gemini" ? "Google Gemini" : "Mistral AI"}
+                      {localProvider === "claude" ? "Anthropic Claude" : localProvider === "openai" ? "OpenAI" : localProvider === "gemini" ? "Google Gemini" : localProvider === "claude_cli" ? "Claude Code CLI" : "Mistral AI"}
                     </span>
-                    <span className="text-xs text-primary truncate">{activeModel(settings)}</span>
+                    <span className="text-xs text-primary truncate">{activeModel(effectiveSettings)}</span>
                   </div>
                 </div>
               )}
@@ -1045,27 +1074,41 @@ Réponds UNIQUEMENT avec ce JSON (rien d'autre, pas de texte, pas de \`\`\`) :
               <div className="flex items-center gap-1.5 mb-0.5">
                 <Activity size={11} className="text-accent" />
                 <span className="text-xs font-medium text-secondary">Connexion</span>
-                <button
-                  onClick={refreshModels}
-                  disabled={isRefreshing}
-                  className="ml-auto p-0.5 rounded text-muted hover:text-primary transition-colors disabled:opacity-40"
-                >
-                  <RefreshCw size={10} className={isRefreshing ? "animate-spin" : ""} />
-                </button>
+                {localProvider === "ollama" && (
+                  <button
+                    onClick={refreshModels}
+                    disabled={isRefreshing}
+                    className="ml-auto p-0.5 rounded text-muted hover:text-primary transition-colors disabled:opacity-40"
+                  >
+                    <RefreshCw size={10} className={isRefreshing ? "animate-spin" : ""} />
+                  </button>
+                )}
               </div>
-              <TraceRow label="url" value={settings.ollama_url} />
-              <TraceRow label="modèle" value={selectedModel} />
-              <TraceRow
-                label="modèles"
-                value={
-                  isRefreshing
-                    ? "rafraîchissement…"
-                    : models.length > 0
-                    ? `${models.length} disponible(s) : ${models.slice(0, 3).join(", ")}${models.length > 3 ? "…" : ""}`
-                    : "aucun — ollama serve ?"
-                }
-                dim={models.length === 0 && !isRefreshing}
-              />
+              <TraceRow label="fournisseur" value={
+                localProvider === "ollama" ? "Ollama (local)"
+                : localProvider === "claude" ? "Claude API"
+                : localProvider === "claude_cli" ? "Claude Code CLI"
+                : localProvider === "openai" ? "OpenAI"
+                : localProvider === "gemini" ? "Google Gemini"
+                : "Mistral"
+              } />
+              <TraceRow label="modèle" value={activeModel(effectiveSettings, selectedModel)} />
+              {localProvider === "ollama" && (
+                <TraceRow
+                  label="modèles"
+                  value={
+                    isRefreshing
+                      ? "rafraîchissement…"
+                      : models.length > 0
+                      ? `${models.length} disponible(s) : ${models.slice(0, 3).join(", ")}${models.length > 3 ? "…" : ""}`
+                      : "aucun — ollama serve ?"
+                  }
+                  dim={models.length === 0 && !isRefreshing}
+                />
+              )}
+              {localProvider === "ollama" && (
+                <TraceRow label="url" value={settings.ollama_url} />
+              )}
             </div>
 
             {/* Direct streaming chat */}

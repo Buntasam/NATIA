@@ -349,6 +349,13 @@ export default function Sidebar() {
                 </button>
               </>
             )}
+            <button
+              onClick={() => setShowCalendar(true)}
+              title="Vue calendrier"
+              className="p-1 rounded text-muted hover:text-primary hover:bg-hover transition-colors"
+            >
+              <CalendarDays size={14} />
+            </button>
           </div>
         </div>
 
@@ -577,13 +584,6 @@ export default function Sidebar() {
           >
             <Settings size={15} />
             Paramètres
-          </button>
-          <button
-            onClick={() => setShowCalendar(true)}
-            title="Vue calendrier"
-            className="p-1.5 rounded text-muted hover:text-primary hover:bg-hover transition-colors"
-          >
-            <CalendarDays size={15} />
           </button>
           <button
             onClick={toggleTrash}

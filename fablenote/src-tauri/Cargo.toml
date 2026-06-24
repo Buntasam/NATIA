@@ -20,6 +20,7 @@ rusqlite = { version = "0.31", features = ["bundled"] }
 chrono = { version = "0.4", features = ["serde"] }
 uuid = { version = "1", features = ["v4"] }
 reqwest = { version = "0.12", features = ["json"] }
+tokio = { version = "1", features = ["process", "io-util"] }
 argon2 = "0.5"
 aes-gcm = { version = "0.10", features = ["aes"] }
 rand = "0.8"

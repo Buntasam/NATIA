@@ -340,6 +340,10 @@ fn maybe_enc(key: &Option<[u8; 32]>, s: &str) -> String {
 
 // ─── Migration helpers ────────────────────────────────────────────────────────
 
+fn is_valid_uuid(s: &str) -> bool {
+    Uuid::parse_str(s).is_ok()
+}
+
 fn sanitize_name(s: &str) -> String {
     s.chars()
         .map(|c| match c {
@@ -458,6 +462,7 @@ fn save_zip_to_path(path: String, state: State<AppState>) -> Result<(), String> 
 
 #[tauri::command]
 fn export_note_to_path(note_id: String, path: String, state: State<AppState>) -> Result<(), String> {
+    if !is_valid_uuid(&note_id) { return Err("ID invalide".to_string()); }
     let key = state.enc_key.lock().map_err(|e| e.to_string())?.clone();
     let db = state.db.lock().map_err(|e| e.to_string())?;
 
@@ -881,6 +886,7 @@ fn get_all_notes(state: State<AppState>) -> Result<Vec<NoteMetadata>, String> {
 
 #[tauri::command]
 fn get_note(id: String, state: State<AppState>) -> Result<Note, String> {
+    if !is_valid_uuid(&id) { return Err("ID invalide".to_string()); }
     let key = state.enc_key.lock().map_err(|e| e.to_string())?.clone();
     let db = state.db.lock().map_err(|e| e.to_string())?;
 
@@ -963,6 +969,7 @@ fn update_note(
     label: Option<String>,
     state: State<AppState>,
 ) -> Result<Note, String> {
+    if !is_valid_uuid(&id) { return Err("ID invalide".to_string()); }
     let key = state.enc_key.lock().map_err(|e| e.to_string())?.clone();
     let now = Utc::now().to_rfc3339();
     let tags_json = serde_json::to_string(&tags).map_err(|e| e.to_string())?;
@@ -1068,6 +1075,7 @@ fn get_version_content(note_id: String, hash: String, state: State<AppState>) ->
 
 #[tauri::command]
 fn restore_version(note_id: String, hash: String, state: State<AppState>) -> Result<Note, String> {
+    if !is_valid_uuid(&note_id) || !is_valid_uuid(&hash) { return Err("ID invalide".to_string()); }
     let key = state.enc_key.lock().map_err(|e| e.to_string())?.clone();
 
     let plain_content = {
@@ -1328,6 +1336,7 @@ fn restore_from_trash(id: String, item_type: String, state: State<AppState>) -> 
 
 #[tauri::command]
 fn permanent_delete_item(id: String, item_type: String, state: State<AppState>) -> Result<(), String> {
+    if item_type == "note" && !is_valid_uuid(&id) { return Err("ID invalide".to_string()); }
     if item_type == "note" {
         {
             let db = state.db.lock().map_err(|e| e.to_string())?;
@@ -2107,6 +2116,123 @@ async fn mistral_stream(
     Ok(())
 }
 
+// ─── Claude CLI (claude Code CLI, no API key) ─────────────────────────────────
+
+fn build_claude_cli_prompt(system: &str, history: &[serde_json::Value], message: &str) -> String {
+    let mut p = String::new();
+    if !system.trim().is_empty() {
+        p.push_str("[Instructions]\n");
+        p.push_str(system.trim());
+        p.push_str("\n\n");
+    }
+    let hist: Vec<_> = history.iter().filter_map(|m| {
+        let role = m.get("role")?.as_str()?;
+        let content = m.get("content")?.as_str()?;
+        Some((role.to_string(), content.to_string()))
+    }).collect();
+    if !hist.is_empty() {
+        p.push_str("[Conversation]\n");
+        for (role, content) in &hist {
+            let label = if role == "user" { "Utilisateur" } else { "Assistant" };
+            p.push_str(&format!("{} : {}\n\n", label, content));
+        }
+    }
+    p.push_str(message.trim());
+    p
+}
+
+#[tauri::command]
+async fn check_claude_cli() -> Result<String, String> {
+    use tokio::process::Command;
+    #[cfg(windows)]
+    let output = Command::new("cmd")
+        .args(["/C", "claude", "--version"])
+        .output()
+        .await
+        .map_err(|_| "claude CLI introuvable".to_string())?;
+    #[cfg(not(windows))]
+    let output = Command::new("claude")
+        .arg("--version")
+        .output()
+        .await
+        .map_err(|_| "claude CLI introuvable".to_string())?;
+    if output.status.success() {
+        Ok(String::from_utf8_lossy(&output.stdout).trim().to_string())
+    } else {
+        Err("claude CLI non trouvé ou non authentifié".to_string())
+    }
+}
+
+#[tauri::command]
+async fn claude_cli_chat(
+    system: String,
+    message: String,
+) -> Result<String, String> {
+    use tokio::process::Command;
+    let prompt = build_claude_cli_prompt(&system, &[], &message);
+    #[cfg(windows)]
+    let output = Command::new("cmd")
+        .args(["/C", "claude", "-p", &prompt])
+        .output()
+        .await
+        .map_err(|e| format!("Impossible de lancer claude CLI : {e}"))?;
+    #[cfg(not(windows))]
+    let output = Command::new("claude")
+        .args(["-p", &prompt])
+        .output()
+        .await
+        .map_err(|e| format!("Impossible de lancer claude CLI : {e}"))?;
+    if !output.status.success() {
+        let err = String::from_utf8_lossy(&output.stderr).trim().to_string();
+        return Err(format!("claude CLI : {err}"));
+    }
+    Ok(String::from_utf8_lossy(&output.stdout).trim().to_string())
+}
+
+#[tauri::command]
+async fn claude_cli_stream(
+    app: tauri::AppHandle,
+    system: String,
+    message: String,
+    history: Option<Vec<serde_json::Value>>,
+) -> Result<(), String> {
+    use tokio::io::AsyncReadExt;
+    use tokio::process::Command;
+    use std::process::Stdio;
+    let hist = history.unwrap_or_default();
+    let prompt = build_claude_cli_prompt(&system, &hist, &message);
+    #[cfg(windows)]
+    let mut child = Command::new("cmd")
+        .args(["/C", "claude", "-p", &prompt])
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .map_err(|e| format!("Impossible de lancer claude CLI : {e}"))?;
+    #[cfg(not(windows))]
+    let mut child = Command::new("claude")
+        .args(["-p", &prompt])
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .map_err(|e| format!("Impossible de lancer claude CLI : {e}"))?;
+    if let Some(mut stdout) = child.stdout.take() {
+        let mut buf = vec![0u8; 512];
+        loop {
+            match stdout.read(&mut buf).await {
+                Ok(0) => break,
+                Ok(n) => {
+                    let chunk = String::from_utf8_lossy(&buf[..n]).to_string();
+                    let _ = app.emit("ollama-token", chunk);
+                }
+                Err(_) => break,
+            }
+        }
+    }
+    child.wait().await.map_err(|e| e.to_string())?;
+    let _ = app.emit("ollama-done", "");
+    Ok(())
+}
+
 #[tauri::command]
 async fn ollama_pull(app: tauri::AppHandle, base_url: String, model: String) -> Result<(), String> {
     let client = reqwest::Client::builder()
@@ -2230,6 +2356,30 @@ fn search_notes(state: State<AppState>, query: String) -> Result<Vec<SearchResul
     Ok(results)
 }
 
+// ─── Global stats ─────────────────────────────────────────────────────────────
+
+#[derive(Serialize)]
+struct GlobalStats {
+    trash_count: i64,
+    version_count: i64,
+}
+
+#[tauri::command]
+fn get_global_stats(state: State<AppState>) -> Result<GlobalStats, String> {
+    let db = state.db.lock().map_err(|e| e.to_string())?;
+    let trash_count: i64 = db.query_row(
+        "SELECT (SELECT COUNT(*) FROM notes WHERE deleted_at IS NOT NULL) + (SELECT COUNT(*) FROM folders WHERE deleted_at IS NOT NULL)",
+        [],
+        |r| r.get(0),
+    ).unwrap_or(0);
+    let version_count: i64 = db.query_row(
+        "SELECT COUNT(*) FROM note_versions",
+        [],
+        |r| r.get(0),
+    ).unwrap_or(0);
+    Ok(GlobalStats { trash_count, version_count })
+}
+
 // ─── Entry point ──────────────────────────────────────────────────────────────
 
 pub fn run() {
@@ -2277,6 +2427,9 @@ pub fn run() {
             ollama_pull,
             claude_chat,
             claude_stream,
+            check_claude_cli,
+            claude_cli_chat,
+            claude_cli_stream,
             openai_chat,
             openai_stream,
             gemini_chat,
@@ -2310,6 +2463,7 @@ pub fn run() {
             reveal_data_dir,
             search_notes,
             generate_image,
+            get_global_stats,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

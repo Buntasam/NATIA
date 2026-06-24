@@ -7,6 +7,7 @@ import {
 import { useStore } from "../store";
 import { aiStream } from "../lib/aiInvoke";
 import AiPanel from "./AiPanel";
+import D20Roller from "./D20Roller";
 import Editor from "./Editor";
 import Settings from "./Settings";
 import Sidebar from "./Sidebar";
@@ -82,6 +83,7 @@ export default function Layout() {
 
       {showSettings && <Settings />}
       {showTrash && <TrashPanel />}
+      <D20Roller />
     </div>
   );
 }

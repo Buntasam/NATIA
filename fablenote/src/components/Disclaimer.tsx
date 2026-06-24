@@ -1,5 +1,6 @@
 import React, { useState } from "react";
-import { AlertTriangle, Bug, Copy, ExternalLink, Github, Lightbulb, Mail, Star, Terminal } from "lucide-react";
+import { AlertTriangle, Bug, Copy, ExternalLink, Github, Lightbulb, Lock, Mail, ShieldAlert, Star, Terminal } from "lucide-react";
+import { useStore } from "../store";
 
 const KEY = "natia_disclaimer_v1";
 const CONTACT_EMAIL = "email@test.fr";
@@ -37,6 +38,7 @@ const ASCII_WAVE = [
 
 
 export default function Disclaimer() {
+  const { toggleSettings } = useStore();
   const [dontShow, setDontShow] = useState(false);
   const [visible] = useState(() => !localStorage.getItem(KEY));
   const [closed, setClosed] = useState(false);
@@ -97,11 +99,38 @@ export default function Disclaimer() {
               Vos notes sont stockées <strong className="text-primary">localement</strong> sur votre machine. Il est fortement recommandé de sauvegarder régulièrement vos données. L'auteur ne saurait être tenu responsable d'une perte de données.
             </p>
             <p>
-              Les clés API enregistrées sont stockées en clair dans la base de données locale. Ne partagez pas cette base de données avec des tiers.
+              L'utilisation <strong className="text-primary">hors ligne</strong> (via Ollama) requiert un ordinateur performant avec suffisamment de RAM et, idéalement, une carte graphique dédiée — les performances peuvent être très dégradées sur du matériel standard.
             </p>
-            <p>
-              L'utilisation <strong className="text-primary">hors ligne</strong> (via Ollama) requiert un ordinateur performant avec suffisamment de RAM et, idéalement, une carte graphique dédiée — les performances peuvent être très dégradées sur du matériel standard. Il est <strong className="text-primary">fortement recommandé</strong> de configurer une clé API (Google Gemini, OpenAI, etc.) dans les paramètres pour une expérience optimale.
-            </p>
+
+            {/* ── Encart Claude CLI ──────────────────────────────────────────── */}
+            <div className="flex flex-col gap-2 rounded-xl border border-accent/25 bg-accent/5 px-4 py-3">
+              <div className="flex items-center gap-2">
+                <Terminal size={13} className="text-accent shrink-0" />
+                <span className="text-xs font-semibold text-accent">Alternative sans clé API : Claude Code CLI</span>
+              </div>
+              <p className="text-xs text-secondary/80 leading-relaxed">
+                Si vous avez un abonnement Claude, vous pouvez utiliser <strong className="text-primary">Claude Code CLI</strong> directement dans NATIA — sans clé API, en utilisant vos crédits Claude. Activez-le dans <strong className="text-primary">Paramètres → IA → Claude CLI</strong>.
+              </p>
+            </div>
+
+            {/* ── Encart chiffrement ─────────────────────────────────────────── */}
+            <div className="flex flex-col gap-2.5 rounded-xl border border-amber-600/30 bg-amber-500/8 px-4 py-3.5">
+              <div className="flex items-center gap-2">
+                <ShieldAlert size={14} className="text-amber-600 dark:text-amber-400 shrink-0" />
+                <span className="text-xs font-semibold text-amber-700 dark:text-amber-300">Vos notes ne sont pas chiffrées par défaut</span>
+              </div>
+              <p className="text-xs text-secondary/80 leading-relaxed">
+                Sans mot de passe activé, les notes, titres, tags et clés API sont stockés <strong className="text-primary">en clair</strong> dans la base locale. Si vous souhaitez protéger vos données, activez un mot de passe dans les paramètres — NATIA utilise alors <strong className="text-primary">AES-256-GCM</strong> avec dérivation Argon2id pour chiffrer l'intégralité de vos contenus.
+              </p>
+              <button
+                onClick={() => { close(); toggleSettings(); }}
+                className="self-start flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-amber-500/15 hover:bg-amber-500/25 border border-amber-600/30 text-amber-700 dark:text-amber-300 hover:text-amber-800 dark:hover:text-amber-200 text-xs font-medium transition-colors"
+              >
+                <Lock size={11} />
+                Activer un mot de passe
+              </button>
+            </div>
+
             <p className="text-xs text-muted border-t border-border pt-3">
               En continuant, vous acceptez que cette application est fournie « en l'état » (as-is), sans garantie d'aucune sorte. L'auteur décline toute responsabilité pour tout dommage résultant de son utilisation.
             </p>

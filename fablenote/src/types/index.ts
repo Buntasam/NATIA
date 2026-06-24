@@ -30,7 +30,7 @@ export interface Settings {
   translate_prompt: string;
   continue_prompt: string;
   temperature: number;
-  ai_provider: "ollama" | "claude" | "openai" | "gemini" | "mistral";
+  ai_provider: "ollama" | "claude" | "openai" | "gemini" | "mistral" | "claude_cli";
   claude_api_key: string;
   claude_model: string;
   openai_api_key: string;

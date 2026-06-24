@@ -1,9 +1,26 @@
 import React, { useState, useEffect, useRef } from "react";
 import { Delete, Lock, Plus } from "lucide-react";
 import { useStore } from "../store";
+import D20Roller from "./D20Roller";
 
 const PIN_DOTS = 8;
 const MAX_ATTEMPTS = 10;
+const LOCKOUT_DURATION_MS = 15 * 60 * 1000; // 15 min avant réinitialisation
+const ATTEMPTS_KEY = "natia_failed_attempts";
+
+interface PersistedLockout {
+  count: number;
+  lockedAt?: number;
+}
+
+function loadAttempts(): PersistedLockout {
+  try { return JSON.parse(localStorage.getItem(ATTEMPTS_KEY) ?? "{}"); }
+  catch { return { count: 0 }; }
+}
+
+function saveAttempts(data: PersistedLockout) {
+  localStorage.setItem(ATTEMPTS_KEY, JSON.stringify(data));
+}
 
 // ─── Lock-screen post-its ─────────────────────────────────────────────────────
 
@@ -33,10 +50,37 @@ export default function LockScreen() {
   const [value, setValue] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
-  const [attempts, setAttempts] = useState(0);
   const [postIts, setPostIts] = useState<LockPostIt[]>(loadPostIts);
 
+  // Attempts persisted in localStorage to survive app restarts
+  const [lockout, setLockout] = useState<PersistedLockout>(() => {
+    const data = loadAttempts();
+    // Auto-clear lockout after LOCKOUT_DURATION_MS
+    if (data.lockedAt && Date.now() - data.lockedAt > LOCKOUT_DURATION_MS) {
+      const reset = { count: 0 };
+      saveAttempts(reset);
+      return reset;
+    }
+    return data;
+  });
+
+  const attempts = lockout.count;
   const locked = attempts >= MAX_ATTEMPTS;
+
+  const bumpAttempts = () => {
+    const next = attempts + 1;
+    const data: PersistedLockout = next >= MAX_ATTEMPTS
+      ? { count: next, lockedAt: Date.now() }
+      : { count: next };
+    saveAttempts(data);
+    setLockout(data);
+    return next;
+  };
+
+  const clearAttempts = () => {
+    saveAttempts({ count: 0 });
+    setLockout({ count: 0 });
+  };
 
   const addPostIt = () => {
     const note: LockPostIt = {
@@ -61,15 +105,16 @@ export default function LockScreen() {
     try {
       const ok = await unlock(password);
       if (!ok) {
-        const next = attempts + 1;
-        setAttempts(next);
+        const next = bumpAttempts();
         if (next >= MAX_ATTEMPTS) {
-          setError("Trop de tentatives — application bloquée.");
+          setError("Trop de tentatives — application bloquée 15 min.");
         } else {
           const remaining = MAX_ATTEMPTS - next;
           setError(`Mot de passe incorrect${remaining <= 5 ? ` — ${remaining} essai(s) restant(s)` : ""}`);
         }
         setValue("");
+      } else {
+        clearAttempts();
       }
     } catch (e: unknown) {
       setError(String(e));
@@ -223,6 +268,7 @@ export default function LockScreen() {
         {loading && <p className="text-muted text-xs">Vérification…</p>}
 
         {postItsLayer}
+        <D20Roller />
       </div>
     );
   }
@@ -261,6 +307,7 @@ export default function LockScreen() {
       </div>
 
       {postItsLayer}
+      <D20Roller />
     </div>
   );
 }

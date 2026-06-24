@@ -2,14 +2,15 @@ import { useState, useEffect, useRef } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { save } from "@tauri-apps/plugin-dialog";
 import { getCurrentWindow } from "@tauri-apps/api/window";
-import { BookMarked, Download, Eye, EyeOff, FolderOpen, Lock, LogOut, Moon, Plus, RotateCcw, Shield, ShieldOff, Sun, Trash2 as TrashIcon, X, ChevronDown, Clock, Trash2 } from "lucide-react";
+import { BarChart2, BookMarked, CheckCircle2, Download, Eye, EyeOff, FolderOpen, Lock, LogOut, Moon, Plus, RotateCcw, Shield, ShieldOff, Sun, Terminal, Trash2 as TrashIcon, X, ChevronDown, Clock, Trash2, XCircle } from "lucide-react";
 import { useStore } from "../store";
 import { DEFAULT_SETTINGS } from "../store";
 import { Settings as SettingsType, PromptVersion } from "../types";
 import ApiKeysPanel from "./ApiKeysPanel";
+import StatsPanel from "./StatsPanel";
 import React from "react";
 
-type Tab = "general" | "advanced";
+type Tab = "general" | "advanced" | "stats";
 
 const PROMPT_FIELDS: { key: keyof SettingsType; label: string; rows: number }[] = [
   { key: "global_shadow_prompt", label: "Prompt global (injecté dans chaque requête)", rows: 3 },
@@ -119,7 +120,24 @@ export default function Settings() {
   const [showGeminiKey, setShowGeminiKey] = useState(false);
   const [showMistralKey, setShowMistralKey] = useState(false);
 
+  // Claude CLI check
+  const [claudeCliStatus, setClaudeCliStatus] = useState<{ ok: boolean; msg: string } | null>(null);
+  const [claudeCliChecking, setClaudeCliChecking] = useState(false);
+  const checkClaudeCli = async () => {
+    setClaudeCliChecking(true);
+    setClaudeCliStatus(null);
+    try {
+      const v = await invoke<string>("check_claude_cli");
+      setClaudeCliStatus({ ok: true, msg: v || "Installé ✓" });
+    } catch (e) {
+      setClaudeCliStatus({ ok: false, msg: String(e) });
+    } finally {
+      setClaudeCliChecking(false);
+    }
+  };
+
   // Uninstall
+  const [diceEnabled, setDiceEnabled] = useState(() => localStorage.getItem("natia_dice_enabled") === "1");
   const [uninstallConfirm, setUninstallConfirm] = useState(false);
   const uninstallTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const handleRevealData = async () => {
@@ -349,7 +367,7 @@ export default function Settings() {
         <div className="flex flex-col gap-1.5">
           <label className="text-xs text-muted">Fournisseur</label>
           <div className="flex flex-wrap gap-1.5">
-            {(["ollama", "claude", "openai", "gemini", "mistral"] as const).map((p) => (
+            {(["ollama", "claude", "openai", "gemini", "mistral", "claude_cli"] as const).map((p) => (
               <button
                 key={p}
                 onClick={() => set("ai_provider", p)}
@@ -359,7 +377,7 @@ export default function Settings() {
                     : "bg-hover border-border text-muted hover:text-primary"
                 }`}
               >
-                {p === "ollama" ? "Ollama" : p === "claude" ? "Claude" : p === "openai" ? "OpenAI" : p === "gemini" ? "Gemini" : "Mistral"}
+                {p === "ollama" ? "Ollama" : p === "claude" ? "Claude API" : p === "openai" ? "OpenAI" : p === "gemini" ? "Gemini" : p === "mistral" ? "Mistral" : "Claude CLI"}
               </button>
             ))}
           </div>
@@ -483,6 +501,44 @@ export default function Settings() {
           </>
         )}
 
+        {/* Claude CLI fields */}
+        {form.ai_provider === "claude_cli" && (
+          <div className="flex flex-col gap-3">
+            <div className="rounded-xl border border-accent/25 bg-accent/5 px-4 py-3.5 flex flex-col gap-2">
+              <div className="flex items-center gap-2">
+                <Terminal size={13} className="text-accent shrink-0" />
+                <span className="text-xs font-semibold text-accent">Claude Code CLI</span>
+              </div>
+              <p className="text-[11px] text-secondary/80 leading-relaxed">
+                Utilise le binaire <strong className="text-primary">claude</strong> installé sur ta machine via npm.
+                Aucune clé API requise — utilise directement tes crédits Claude.
+              </p>
+            </div>
+            <div className="flex items-center gap-3 flex-wrap">
+              <button
+                onClick={checkClaudeCli}
+                disabled={claudeCliChecking}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-hover hover:bg-active border border-border text-xs text-secondary transition-colors disabled:opacity-50"
+              >
+                <RotateCcw size={11} className={claudeCliChecking ? "animate-spin" : ""} />
+                {claudeCliChecking ? "Vérification…" : "Vérifier l'installation"}
+              </button>
+              {claudeCliStatus && (
+                <span className={`flex items-center gap-1 text-[11px] font-medium ${claudeCliStatus.ok ? "text-green-500" : "text-red-400"}`}>
+                  {claudeCliStatus.ok ? <CheckCircle2 size={11} /> : <XCircle size={11} />}
+                  {claudeCliStatus.msg}
+                </span>
+              )}
+            </div>
+            {claudeCliStatus && !claudeCliStatus.ok && (
+              <p className="text-[10px] text-muted leading-relaxed">
+                Installe Claude Code : <strong className="text-secondary font-mono">npm install -g @anthropic-ai/claude-code</strong><br />
+                Puis connecte-toi avec : <strong className="text-secondary font-mono">claude</strong>
+              </p>
+            )}
+          </div>
+        )}
+
         {/* Temperature (all providers) */}
         <div>
           <div className="flex items-center justify-between mb-2">
@@ -549,6 +605,24 @@ export default function Settings() {
           <button onClick={toggleTheme} className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-hover border border-border text-sm text-secondary hover:text-primary hover:border-accent/40 transition-colors">
             {isDark ? <Moon size={13} className="text-accent" /> : <Sun size={13} className="text-amber-400" />}
             {isDark ? "Sombre" : "Clair"}
+          </button>
+        </div>
+        <div className="flex items-center justify-between">
+          <div>
+            <p className="text-sm text-secondary">Dé à 20 faces</p>
+            <p className="text-[10px] text-muted mt-0.5">Panneau flottant draggable — écran de verrouillage et app</p>
+          </div>
+          <button
+            role="switch"
+            aria-checked={diceEnabled}
+            onClick={() => {
+              const next = !diceEnabled;
+              setDiceEnabled(next);
+              localStorage.setItem("natia_dice_enabled", next ? "1" : "0");
+            }}
+            className={`relative w-9 h-5 rounded-full transition-colors shrink-0 ${diceEnabled ? "bg-accent" : "bg-border"}`}
+          >
+            <span className={`absolute top-0.5 w-4 h-4 rounded-full bg-white shadow-sm transition-transform ${diceEnabled ? "left-[18px]" : "left-0.5"}`} />
           </button>
         </div>
       </Section>
@@ -773,6 +847,12 @@ export default function Settings() {
     </>
   );
 
+  const statsContent = (
+    <Section title="Vue d'ensemble">
+      <StatsPanel />
+    </Section>
+  );
+
   // ── Footer (shared) ─────────────────────────────────────────────────────────
   const footer = (
     <div className="flex justify-end gap-2 px-5 py-3 border-t border-border shrink-0">
@@ -798,7 +878,7 @@ export default function Settings() {
 
             {/* Left — Général */}
             <div className="flex-1 flex flex-col min-h-0 border-r border-border">
-              <div className="px-6 py-2 border-b border-border/60 shrink-0">
+              <div className="px-6 h-9 flex items-center border-b border-border/60 shrink-0">
                 <span className="text-[10px] text-muted uppercase tracking-wider font-semibold">Général</span>
               </div>
               <div className="flex-1 overflow-y-auto px-6 py-4 flex flex-col gap-5">
@@ -806,13 +886,24 @@ export default function Settings() {
               </div>
             </div>
 
-            {/* Right — Avancé */}
-            <div className="flex-1 flex flex-col min-h-0">
-              <div className="px-6 py-2 border-b border-border/60 shrink-0">
+            {/* Center — Avancé */}
+            <div className="flex-1 flex flex-col min-h-0 border-r border-border">
+              <div className="px-6 h-9 flex items-center border-b border-border/60 shrink-0">
                 <span className="text-[10px] text-muted uppercase tracking-wider font-semibold">Avancé</span>
               </div>
               <div className="flex-1 overflow-y-auto px-6 py-4 flex flex-col gap-5">
                 {advancedContent}
+              </div>
+            </div>
+
+            {/* Right — Statistiques */}
+            <div className="flex-1 flex flex-col min-h-0">
+              <div className="px-6 h-9 flex items-center gap-1.5 border-b border-border/60 shrink-0">
+                <BarChart2 size={11} className="text-muted" />
+                <span className="text-[10px] text-muted uppercase tracking-wider font-semibold">Statistiques</span>
+              </div>
+              <div className="flex-1 overflow-y-auto px-6 py-4 flex flex-col gap-5">
+                <StatsPanel />
               </div>
             </div>
 
@@ -839,12 +930,16 @@ export default function Settings() {
         <div className="flex gap-0.5 px-5 pt-3 pb-0 shrink-0 border-b border-border">
           <TabBtn active={tab === "general"} onClick={() => setTab("general")}>Général</TabBtn>
           <TabBtn active={tab === "advanced"} onClick={() => setTab("advanced")}>Avancé</TabBtn>
+          <TabBtn active={tab === "stats"} onClick={() => setTab("stats")}>
+            <span className="flex items-center gap-1"><BarChart2 size={11} />Statistiques</span>
+          </TabBtn>
         </div>
 
         {/* Body */}
         <div className="flex-1 overflow-y-auto px-5 py-4 flex flex-col gap-5">
           {tab === "general" && generalContent}
           {tab === "advanced" && advancedContent}
+          {tab === "stats" && statsContent}
         </div>
 
         {footer}
