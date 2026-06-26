@@ -31,6 +31,11 @@ interface AppStore {
   isLoading: boolean;
   isSaving: boolean;
 
+  // Pinned & recent
+  pinnedNoteIds: string[];
+  recentNoteIds: string[];
+  togglePinNote: (id: string) => void;
+
   // Note actions
   loadNotes: () => Promise<void>;
   selectNote: (id: string) => Promise<void>;
@@ -64,12 +69,16 @@ interface AppStore {
   isDark: boolean;
   versionLimit: number | null;
   saveMode: "manual" | "balanced" | "auto";
+  focusMode: boolean;
+  showGraph: boolean;
   toggleTheme: () => void;
   setSearchQuery: (q: string) => void;
   toggleAiPanel: () => void;
   toggleVersionPanel: () => void;
   toggleSettings: () => void;
   toggleTrash: () => void;
+  toggleFocusMode: () => void;
+  toggleGraph: () => void;
 
   // Trash actions
   getTrash: () => Promise<TrashItem[]>;
@@ -161,6 +170,24 @@ export const useStore = create<AppStore>((set, get) => ({
   isLoading: false,
   isSaving: false,
 
+  pinnedNoteIds: (() => {
+    try { return JSON.parse(localStorage.getItem("natia_pinned") ?? "[]") as string[]; }
+    catch { return []; }
+  })(),
+  recentNoteIds: (() => {
+    try { return JSON.parse(localStorage.getItem("natia_recent") ?? "[]") as string[]; }
+    catch { return []; }
+  })(),
+  togglePinNote: (id: string) => {
+    set((s) => {
+      const pinned = s.pinnedNoteIds.includes(id)
+        ? s.pinnedNoteIds.filter((p) => p !== id)
+        : [id, ...s.pinnedNoteIds];
+      localStorage.setItem("natia_pinned", JSON.stringify(pinned));
+      return { pinnedNoteIds: pinned };
+    });
+  },
+
   loadNotes: async () => {
     set({ isLoading: true });
     try {
@@ -175,7 +202,11 @@ export const useStore = create<AppStore>((set, get) => ({
   selectNote: async (id: string) => {
     try {
       const note = await invoke<Note>("get_note", { id });
-      set({ activeNote: note });
+      set((s) => {
+        const recent = [id, ...s.recentNoteIds.filter((r) => r !== id)].slice(0, 10);
+        localStorage.setItem("natia_recent", JSON.stringify(recent));
+        return { activeNote: note, recentNoteIds: recent };
+      });
     } catch (e) {
       console.error(e);
     }
@@ -319,6 +350,11 @@ export const useStore = create<AppStore>((set, get) => ({
     await invoke("update_settings", { settings });
     set({ settings });
   },
+
+  focusMode: false,
+  showGraph: false,
+  toggleFocusMode: () => set((s) => ({ focusMode: !s.focusMode })),
+  toggleGraph: () => set((s) => ({ showGraph: !s.showGraph })),
 
   isDark: localStorage.getItem("theme") === "dark",
   versionLimit: (() => {

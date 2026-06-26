@@ -14,6 +14,8 @@ import {
   MoreHorizontal,
   Network,
   NotebookPen,
+  Pin,
+  PinOff,
   Search,
   Send,
   Settings,
@@ -146,6 +148,8 @@ export default function Sidebar() {
     hasPassword,
     lock,
     settings,
+    pinnedNoteIds,
+    togglePinNote,
   } = useStore();
 
   const [sidebarView, setSidebarView] = useState<"notes" | "chat">("notes");
@@ -182,7 +186,7 @@ export default function Sidebar() {
 
   const [showTreeMap, setShowTreeMap] = useState(false);
   const [showCalendar, setShowCalendar] = useState(false);
-  const [showGraph, setShowGraph] = useState(false);
+  const { showGraph, toggleGraph } = useStore();
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
 
   // Full-text search
@@ -338,8 +342,8 @@ export default function Sidebar() {
                   <Network size={14} />
                 </button>
                 <button
-                  onClick={() => setShowGraph(true)}
-                  title="Vue graphe"
+                  onClick={toggleGraph}
+                  title="Vue graphe (Ctrl+G)"
                   className="p-1 rounded text-muted hover:text-primary hover:bg-hover transition-colors"
                 >
                   <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -513,6 +517,32 @@ export default function Sidebar() {
                 <p className="text-muted text-xs mt-1">Crée ta première note</p>
               </div>
             )}
+
+            {/* Pinned notes section */}
+            {!searchQuery.trim() && pinnedNoteIds.length > 0 && (() => {
+              const pinned = pinnedNoteIds.map((id) => notes.find((n) => n.id === id)).filter(Boolean) as NoteMetadata[];
+              if (pinned.length === 0) return null;
+              return (
+                <div className="mb-1">
+                  <div className="flex items-center gap-1 px-2 py-1">
+                    <Pin size={9} className="text-muted" />
+                    <span className="text-[10px] text-muted uppercase tracking-wider">Épinglées</span>
+                  </div>
+                  {pinned.map((note) => (
+                    <NoteItem
+                      key={note.id}
+                      note={note}
+                      active={activeNote?.id === note.id}
+                      color={itemColors[`note:${note.id}`]}
+                      onSelect={() => selectNote(note.id)}
+                      onMenu={(e) => openMenu(e, { kind: "note", note, x: e.clientX, y: e.clientY })}
+                    />
+                  ))}
+                  <div className="mx-2 my-1 h-px bg-border" />
+                </div>
+              );
+            })()}
+
             {!searchQuery.trim() && root.children.map((folder) => (
               <FolderNode
                 key={folder.path}
@@ -614,7 +644,7 @@ export default function Sidebar() {
       {/* Tree map overlay */}
       {showTreeMap && <TreeMapPanel onClose={() => setShowTreeMap(false)} />}
       {showCalendar && <CalendarPanel onClose={() => setShowCalendar(false)} />}
-      {showGraph && <GraphPanel onClose={() => setShowGraph(false)} />}
+      {showGraph && <GraphPanel onClose={toggleGraph} />}
 
       {/* Context menus */}
       {menu && (
@@ -628,6 +658,15 @@ export default function Sidebar() {
             {menu.kind === "note" && (
               <>
                 <p className="px-3 py-1 text-xs text-muted truncate max-w-48">{menu.note.title}</p>
+                <div className="border-t border-border my-1" />
+                <button
+                  className="w-full flex items-center gap-2 px-3 py-2 text-sm text-secondary hover:text-primary hover:bg-hover transition-colors"
+                  onClick={() => { togglePinNote(menu.note.id); closeMenu(); }}
+                >
+                  {pinnedNoteIds.includes(menu.note.id)
+                    ? <><PinOff size={13} />Désépingler</>
+                    : <><Pin size={13} />Épingler</>}
+                </button>
                 <div className="border-t border-border my-1" />
 
                 {/* Color picker */}

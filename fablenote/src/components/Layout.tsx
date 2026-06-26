@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { listen } from "@tauri-apps/api/event";
 import {
   CheckCheck, ChevronRight, FileText, Loader2,
-  MessagesSquare, Send, Sparkles, Tag, X,
+  MessagesSquare, Search, Send, Sparkles, Tag, X,
 } from "lucide-react";
 import { useStore } from "../store";
 import { aiStream } from "../lib/aiInvoke";
@@ -14,13 +14,18 @@ import Sidebar from "./Sidebar";
 import TrashPanel from "./TrashPanel";
 import VersionTree from "./VersionTree";
 
+type ConvMessage = { role: "user" | "ai"; content: string };
+
 export default function Layout() {
   const {
     showAiPanel, showVersionPanel, showSettings, showTrash,
     createNote, toggleSettings, toggleAiPanel, toggleVersionPanel,
+    focusMode, toggleGraph, notes, selectNote, recentNoteIds,
   } = useStore();
 
   const [convOpen, setConvOpen] = useState(false);
+  const [quickOpen, setQuickOpen] = useState(false);
+  const convHistoryRef = useRef(new Map<string, ConvMessage[]>());
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -39,6 +44,14 @@ export default function Layout() {
         e.preventDefault();
         toggleSettings();
       }
+      if (e.key === "p" || e.key === "P") {
+        e.preventDefault();
+        setQuickOpen((s) => !s);
+      }
+      if (e.key === "g" || e.key === "G") {
+        e.preventDefault();
+        toggleGraph();
+      }
       if (e.shiftKey && e.key === "A") {
         e.preventDefault();
         toggleAiPanel();
@@ -50,11 +63,12 @@ export default function Layout() {
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [createNote, toggleSettings, toggleAiPanel, toggleVersionPanel]);
+  }, [createNote, toggleSettings, toggleAiPanel, toggleVersionPanel, toggleGraph]);
 
   return (
     <div className="flex h-screen overflow-hidden bg-base">
-      <Sidebar />
+      {/* Sidebar hidden in focus mode */}
+      {!focusMode && <Sidebar />}
 
       <div className="flex flex-1 overflow-hidden">
         <main className="flex flex-col flex-1 overflow-hidden bg-base">
@@ -69,7 +83,10 @@ export default function Layout() {
 
         {showAiPanel && convOpen && (
           <>
-            <ConvPanel onClose={() => setConvOpen(false)} />
+            <ConvPanel
+              onClose={() => setConvOpen(false)}
+              historyRef={convHistoryRef}
+            />
             <NarrowOpsStrip onExpand={() => setConvOpen(false)} />
           </>
         )}
@@ -84,21 +101,166 @@ export default function Layout() {
       {showSettings && <Settings />}
       {showTrash && <TrashPanel />}
       <D20Roller />
+
+      {/* Quick open modal */}
+      {quickOpen && (
+        <QuickOpen
+          notes={notes}
+          recentIds={recentNoteIds}
+          onSelect={(id) => { selectNote(id); setQuickOpen(false); }}
+          onClose={() => setQuickOpen(false)}
+        />
+      )}
+    </div>
+  );
+}
+
+// ─── Quick open modal ─────────────────────────────────────────────────────────
+
+import React from "react";
+import { NoteMetadata } from "../types";
+
+function QuickOpen({
+  notes,
+  recentIds,
+  onSelect,
+  onClose,
+}: {
+  notes: NoteMetadata[];
+  recentIds: string[];
+  onSelect: (id: string) => void;
+  onClose: () => void;
+}) {
+  const [query, setQuery] = useState("");
+  const [idx, setIdx] = useState(0);
+  const inputRef = useRef<HTMLInputElement>(null);
+  const listRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    inputRef.current?.focus();
+  }, []);
+
+  const filtered = query.trim()
+    ? notes.filter((n) =>
+        n.title.toLowerCase().includes(query.toLowerCase()) ||
+        (n.folder ?? "").toLowerCase().includes(query.toLowerCase())
+      ).slice(0, 8)
+    : (() => {
+        // Show recent notes first when no query
+        const recentNotes = recentIds
+          .map((id) => notes.find((n) => n.id === id))
+          .filter(Boolean) as NoteMetadata[];
+        const recentSet = new Set(recentIds);
+        const others = notes.filter((n) => !recentSet.has(n.id));
+        return [...recentNotes, ...others].slice(0, 8);
+      })();
+
+  useEffect(() => { setIdx(0); }, [query]);
+
+  useEffect(() => {
+    const el = listRef.current?.children[idx] as HTMLElement | undefined;
+    el?.scrollIntoView({ block: "nearest" });
+  }, [idx]);
+
+  const onKey = (e: React.KeyboardEvent) => {
+    if (e.key === "Escape") { onClose(); return; }
+    if (e.key === "ArrowDown") { e.preventDefault(); setIdx((i) => Math.min(i + 1, filtered.length - 1)); return; }
+    if (e.key === "ArrowUp") { e.preventDefault(); setIdx((i) => Math.max(i - 1, 0)); return; }
+    if (e.key === "Enter" && filtered[idx]) { onSelect(filtered[idx].id); }
+  };
+
+  return (
+    <div className="fixed inset-0 z-[500] flex items-start justify-center pt-[15vh]">
+      <div className="fixed inset-0 bg-black/40" onClick={onClose} />
+      <div className="relative z-10 bg-panel border border-border rounded-xl shadow-2xl w-[520px] overflow-hidden">
+        {/* Search input */}
+        <div className="flex items-center gap-3 px-4 py-3 border-b border-border">
+          <Search size={15} className="text-muted shrink-0" />
+          <input
+            ref={inputRef}
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            onKeyDown={onKey}
+            placeholder="Ouvrir une note…"
+            className="flex-1 bg-transparent text-sm text-primary placeholder-muted outline-none"
+          />
+          {query && (
+            <button onClick={() => setQuery("")} className="text-muted hover:text-primary transition-colors">
+              <X size={13} />
+            </button>
+          )}
+        </div>
+
+        {/* Results */}
+        <div ref={listRef} className="max-h-72 overflow-y-auto">
+          {!query.trim() && recentIds.length > 0 && (
+            <div className="flex items-center gap-2 px-4 pt-2 pb-1">
+              <span className="text-[10px] text-muted uppercase tracking-wider">Récentes</span>
+            </div>
+          )}
+          {filtered.length === 0 ? (
+            <p className="px-4 py-6 text-sm text-muted text-center">Aucune note trouvée</p>
+          ) : (
+            filtered.map((note, i) => (
+              <button
+                key={note.id}
+                onClick={() => onSelect(note.id)}
+                className={`flex items-center gap-3 w-full px-4 py-2.5 text-left transition-colors ${
+                  i === idx ? "bg-accent/10 text-accent" : "text-secondary hover:bg-hover hover:text-primary"
+                }`}
+              >
+                <FileText size={13} className={i === idx ? "text-accent shrink-0" : "text-muted shrink-0"} />
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-medium truncate">{note.title || "Sans titre"}</p>
+                  {note.folder && (
+                    <p className="text-[10px] text-muted truncate">{note.folder}</p>
+                  )}
+                </div>
+              </button>
+            ))
+          )}
+        </div>
+
+        {/* Footer hint */}
+        <div className="flex items-center gap-3 px-4 py-2 border-t border-border bg-hover/30">
+          <span className="text-[10px] text-muted">↑↓ naviguer · Entrée ouvrir · Échap fermer</span>
+          <span className="ml-auto text-[10px] text-muted">Ctrl+P</span>
+        </div>
+      </div>
     </div>
   );
 }
 
 // ─── Conversation panel ───────────────────────────────────────────────────────
 
-function ConvPanel({ onClose }: { onClose: () => void }) {
+function ConvPanel({
+  onClose,
+  historyRef,
+}: {
+  onClose: () => void;
+  historyRef: React.MutableRefObject<Map<string, ConvMessage[]>>;
+}) {
   const { settings, activeNote } = useStore();
-  const [messages, setMessages] = useState<{ role: "user" | "ai"; content: string }[]>([]);
+  const [messages, setMessages] = useState<ConvMessage[]>([]);
   const [input, setInput] = useState("");
   const [isStreaming, setIsStreaming] = useState(false);
   const [streamText, setStreamText] = useState("");
   const endRef = useRef<HTMLDivElement>(null);
   const tokenRef = useRef<(() => void) | null>(null);
   const doneRef = useRef<(() => void) | null>(null);
+
+  // Load & save conversation history per note
+  useEffect(() => {
+    if (!activeNote) { setMessages([]); return; }
+    const saved = historyRef.current.get(activeNote.id) ?? [];
+    setMessages(saved);
+  }, [activeNote?.id]);
+
+  useEffect(() => {
+    if (activeNote && messages.length > 0) {
+      historyRef.current.set(activeNote.id, messages);
+    }
+  }, [messages]);
 
   useEffect(() => {
     endRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -170,6 +332,18 @@ function ConvPanel({ onClose }: { onClose: () => void }) {
       <div className="shrink-0 border-b border-border px-3 py-2.5 flex items-center gap-2">
         <MessagesSquare size={14} className="text-accent" />
         <span className="text-xs font-medium text-primary flex-1">Conversation IA</span>
+        {messages.length > 0 && (
+          <button
+            onClick={() => {
+              setMessages([]);
+              if (activeNote) historyRef.current.delete(activeNote.id);
+            }}
+            className="text-[10px] text-muted hover:text-primary transition-colors px-1.5 py-0.5 rounded hover:bg-hover"
+            title="Effacer la conversation"
+          >
+            Réinitialiser
+          </button>
+        )}
         <button onClick={onClose} className="text-muted hover:text-primary transition-colors p-1">
           <X size={14} />
         </button>

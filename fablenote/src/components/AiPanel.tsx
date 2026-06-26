@@ -7,6 +7,7 @@ import {
   CheckCheck,
   ChevronDown,
   Circle,
+  Clipboard,
   Download,
   Eye,
   FileText,
@@ -89,6 +90,42 @@ export default function AiPanel({ onOpenConv }: { onOpenConv: () => void }) {
   const [translateLang, setTranslateLang] = useState("anglais");
   const [responseOp, setResponseOp] = useState<string | null>(null);
 
+  const handleSummarize = async () => {
+    if (!activeNote || isRunning) return;
+    setError(""); setResponse(""); setAppliedMsg(""); setResponseOp(null);
+    setIsRunning(true); setActiveOp("Résumer");
+    const plainText = getPlainText();
+    const fullMessage = `${settings.summary_prompt}\n\n${plainText}`;
+    const traceBase: TraceEntry = {
+      operation: "Résumer", model: activeModel(effectiveSettings, selectedModel), system: shadowPrompt,
+      user: fullMessage.slice(0, 600), response: "", elapsed: 0, status: "running", error: "",
+    };
+    setLastTrace(traceBase); startTimeRef.current = Date.now(); startTimer();
+    try {
+      const result = await aiChat(effectiveSettings, shadowPrompt, fullMessage, selectedModel);
+      stopTimer();
+      const elapsed = Math.round((Date.now() - startTimeRef.current) / 100) / 10;
+      setLastTrace({ ...traceBase, response: result.slice(0, 600), elapsed, status: "done" });
+      setResponse(result);
+      setResponseOp("summarize");
+    } catch (e: unknown) {
+      stopTimer();
+      const msg = e instanceof Error ? e.message : String(e);
+      setLastTrace({ ...traceBase, error: msg, elapsed: Math.round((Date.now() - startTimeRef.current) / 100) / 10, status: "error" });
+      setError(`Erreur : ${msg}`);
+    } finally { setIsRunning(false); setActiveOp(null); }
+  };
+
+  const insertSummary = async () => {
+    if (!activeNote || !response) return;
+    const summaryHtml = `<blockquote><p><strong>Résumé :</strong> ${response.trim()}</p></blockquote>`;
+    const newContent = summaryHtml + (activeNote.content || "");
+    await updateNote(activeNote.id, activeNote.title, newContent, activeNote.tags, activeNote.folder, "Résumé IA");
+    setResponse(""); setResponseOp(null);
+    setAppliedMsg("✓ Résumé inséré en début de note");
+    setTimeout(() => setAppliedMsg(""), 2500);
+  };
+
   // Quick message
   const [quickInput, setQuickInput] = useState("");
   const [quickResponse, setQuickResponse] = useState("");
@@ -125,6 +162,8 @@ export default function AiPanel({ onOpenConv }: { onOpenConv: () => void }) {
   const [traceResponse, setTraceResponse] = useState("");
   const [isTracing, setIsTracing] = useState(false);
   const [lastTrace, setLastTrace] = useState<TraceEntry | null>(null);
+  const [traceHistory, setTraceHistory] = useState<TraceEntry[]>([]);
+  const lastFinalizedRef = useRef<TraceEntry | null>(null);
 
   const responseRef = useRef<HTMLDivElement>(null);
   const traceResponseRef = useRef<HTMLDivElement>(null);
@@ -133,6 +172,13 @@ export default function AiPanel({ onOpenConv }: { onOpenConv: () => void }) {
   const pullUnlistenRef = useRef<(() => void) | null>(null);
   const traceTokenRef = useRef<(() => void) | null>(null);
   const traceDoneRef = useRef<(() => void) | null>(null);
+
+  useEffect(() => {
+    if (!lastTrace || lastTrace.status === "running") return;
+    if (lastFinalizedRef.current === lastTrace) return;
+    lastFinalizedRef.current = lastTrace;
+    setTraceHistory((prev) => [lastTrace, ...prev].slice(0, 6));
+  }, [lastTrace]);
 
   useEffect(() => {
     if (settings.ai_provider === "ollama") refreshModels();
@@ -892,10 +938,10 @@ Réponds UNIQUEMENT avec ce JSON (rien d'autre, pas de texte, pas de \`\`\`) :
               <OpButton
                 icon={<FileText size={14} />}
                 label="Résumer"
-                description="Résumé en 2-3 phrases"
+                description="Résumé · insérable en début de note"
                 active={activeOp === "Résumer"}
                 loading={isRunning && activeOp === "Résumer"}
-                onClick={() => runOperation("summary_prompt", getPlainText(), "Résumer")}
+                onClick={handleSummarize}
               />
               <OpButton
                 icon={<Tag size={14} />}
@@ -1053,9 +1099,17 @@ Réponds UNIQUEMENT avec ce JSON (rien d'autre, pas de texte, pas de \`\`\`) :
                         Insérer à la fin
                       </button>
                     )}
+                    {responseOp === "summarize" && (
+                      <button
+                        onClick={insertSummary}
+                        className="flex-1 text-xs py-1.5 rounded-lg bg-accent hover:bg-accent-hover text-white transition-colors"
+                      >
+                        Insérer en début de note
+                      </button>
+                    )}
                     <button
                       onClick={() => { setResponse(""); setError(""); setResponseOp(null); }}
-                      className={`text-xs py-1.5 rounded-lg bg-hover hover:bg-active text-muted hover:text-primary transition-colors ${responseOp === "continue" ? "px-4" : "w-full"}`}
+                      className={`text-xs py-1.5 rounded-lg bg-hover hover:bg-active text-muted hover:text-primary transition-colors ${(responseOp === "continue" || responseOp === "summarize") ? "px-4" : "w-full"}`}
                     >
                       Fermer
                     </button>
@@ -1146,7 +1200,7 @@ Réponds UNIQUEMENT avec ce JSON (rien d'autre, pas de texte, pas de \`\`\`) :
             {lastTrace && (
               <div className="flex flex-col gap-1.5">
                 <div className="flex items-center gap-2">
-                  <p className="text-xs text-muted">Dernière opération</p>
+                  <p className="text-xs text-muted">Opération en cours</p>
                   {lastTrace.status === "running" && (
                     <Loader2 size={10} className="text-accent animate-spin" />
                   )}
@@ -1156,6 +1210,9 @@ Réponds UNIQUEMENT avec ce JSON (rien d'autre, pas de texte, pas de \`\`\`) :
                   {lastTrace.status === "error" && (
                     <span className="text-[10px] text-red-400">✗ erreur</span>
                   )}
+                  <span className="text-[9px] text-muted/60 ml-auto">
+                    ~{Math.round((lastTrace.system.length + lastTrace.user.length) / 4)} tokens
+                  </span>
                 </div>
                 <div className="bg-panel border border-border rounded-lg p-3 font-mono text-[10px] flex flex-col gap-2 leading-relaxed">
                   <div className="flex gap-2 items-center">
@@ -1193,10 +1250,61 @@ Réponds UNIQUEMENT avec ce JSON (rien d'autre, pas de texte, pas de \`\`\`) :
               </div>
             )}
 
-            {!lastTrace && (
+            {!lastTrace && traceHistory.length === 0 && (
               <div className="text-center py-6">
                 <Zap size={20} className="text-muted mx-auto mb-2" />
                 <p className="text-xs text-muted">Lance une opération pour voir la trace</p>
+              </div>
+            )}
+
+            {/* Trace history */}
+            {traceHistory.length > 0 && (
+              <div className="flex flex-col gap-1.5">
+                <div className="flex items-center justify-between">
+                  <p className="text-xs text-muted">Historique</p>
+                  <button
+                    onClick={() => { setTraceHistory([]); lastFinalizedRef.current = null; }}
+                    className="text-[10px] text-muted hover:text-primary transition-colors"
+                  >
+                    Effacer
+                  </button>
+                </div>
+                <div className="flex flex-col gap-1">
+                  {traceHistory.map((t, i) => {
+                    const tokens = Math.round((t.system.length + t.user.length) / 4);
+                    return (
+                      <div key={i} className="flex items-center gap-2 px-2.5 py-1.5 bg-panel rounded-lg border border-border/50 text-[10px] group">
+                        <span className={t.status === "done" ? "text-accent shrink-0" : "text-red-400 shrink-0"}>
+                          {t.status === "done" ? "✓" : "✗"}
+                        </span>
+                        <span className="text-secondary font-mono flex-1 min-w-0 truncate">
+                          {t.operation} · {t.model.split(":")[0]} · {t.elapsed}s · ~{tokens}tk
+                        </span>
+                        <button
+                          onClick={() => {
+                            const text = [
+                              `op: ${t.operation}`,
+                              `modèle: ${t.model}`,
+                              `statut: ${t.status} (${t.elapsed}s)`,
+                              `~${tokens} tokens`,
+                              t.error ? `erreur: ${t.error}` : null,
+                              `\n--- prompt système ---`,
+                              t.system,
+                              `\n--- message ---`,
+                              t.user,
+                              t.response ? `\n--- réponse ---\n${t.response}` : null,
+                            ].filter(Boolean).join("\n");
+                            navigator.clipboard.writeText(text).catch(() => {});
+                          }}
+                          className="text-muted hover:text-primary transition-colors opacity-0 group-hover:opacity-100 shrink-0"
+                          title="Copier la trace"
+                        >
+                          <Clipboard size={10} />
+                        </button>
+                      </div>
+                    );
+                  })}
+                </div>
               </div>
             )}
           </>

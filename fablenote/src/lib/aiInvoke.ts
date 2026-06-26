@@ -9,12 +9,14 @@ export async function aiChat(
   message: string,
   ollamaModel?: string,
 ): Promise<string> {
+  const temperature = settings.temperature ?? 0.7;
   if (settings.ai_provider === "claude") {
     return invoke<string>("claude_chat", {
       apiKey: settings.claude_api_key,
       model: settings.claude_model,
       system,
       message,
+      temperature,
     });
   }
   if (settings.ai_provider === "openai") {
@@ -23,6 +25,7 @@ export async function aiChat(
       model: settings.openai_model,
       system,
       message,
+      temperature,
     });
   }
   if (settings.ai_provider === "gemini") {
@@ -31,6 +34,7 @@ export async function aiChat(
       model: settings.gemini_model,
       system,
       message,
+      temperature,
     });
   }
   if (settings.ai_provider === "mistral") {
@@ -39,6 +43,7 @@ export async function aiChat(
       model: settings.mistral_model,
       system,
       message,
+      temperature,
     });
   }
   if (settings.ai_provider === "claude_cli") {
@@ -49,6 +54,7 @@ export async function aiChat(
     model: ollamaModel ?? settings.default_model,
     system,
     message,
+    temperature,
   });
 }
 
@@ -59,12 +65,14 @@ export async function aiStream(
   history: History = [],
   ollamaModel?: string,
 ): Promise<void> {
+  const temperature = settings.temperature ?? 0.7;
   if (settings.ai_provider === "claude") {
     return invoke<void>("claude_stream", {
       apiKey: settings.claude_api_key,
       model: settings.claude_model,
       system,
       message,
+      temperature,
       history,
     });
   }
@@ -74,6 +82,7 @@ export async function aiStream(
       model: settings.openai_model,
       system,
       message,
+      temperature,
       history,
     });
   }
@@ -83,6 +92,7 @@ export async function aiStream(
       model: settings.gemini_model,
       system,
       message,
+      temperature,
       history,
     });
   }
@@ -92,6 +102,7 @@ export async function aiStream(
       model: settings.mistral_model,
       system,
       message,
+      temperature,
       history,
     });
   }
@@ -103,6 +114,7 @@ export async function aiStream(
     model: ollamaModel ?? settings.default_model,
     system,
     message,
+    temperature,
     history,
   });
 }

@@ -1605,7 +1605,7 @@ async fn ollama_test_simple(base_url: String, model: String) -> Result<String, S
 }
 
 #[tauri::command]
-async fn ollama_chat(base_url: String, model: String, system: String, message: String) -> Result<String, String> {
+async fn ollama_chat(base_url: String, model: String, system: String, message: String, temperature: f64) -> Result<String, String> {
     let client = reqwest::Client::builder()
         .timeout(std::time::Duration::from_secs(300))
         .build()
@@ -1616,7 +1616,8 @@ async fn ollama_chat(base_url: String, model: String, system: String, message: S
             {"role": "system", "content": system},
             {"role": "user", "content": message}
         ],
-        "stream": false
+        "stream": false,
+        "options": { "temperature": temperature }
     });
     let resp = client
         .post(format!("{}/api/chat", base_url))
@@ -1658,6 +1659,7 @@ async fn ollama_stream(
     model: String,
     system: String,
     message: String,
+    temperature: f64,
     history: Option<Vec<serde_json::Value>>,
 ) -> Result<(), String> {
     let client = reqwest::Client::new();
@@ -1671,7 +1673,8 @@ async fn ollama_stream(
     let payload = serde_json::json!({
         "model": model,
         "messages": messages,
-        "stream": true
+        "stream": true,
+        "options": { "temperature": temperature }
     });
     let mut resp = client
         .post(format!("{}/api/chat", base_url))
@@ -1716,6 +1719,7 @@ async fn claude_chat(
     model: String,
     system: String,
     message: String,
+    temperature: f64,
 ) -> Result<String, String> {
     let client = reqwest::Client::builder()
         .timeout(std::time::Duration::from_secs(120))
@@ -1725,6 +1729,7 @@ async fn claude_chat(
         "model": model,
         "max_tokens": 4096,
         "system": system,
+        "temperature": temperature.clamp(0.0, 1.0),
         "messages": [{"role": "user", "content": message}],
     });
     let resp = client
@@ -1752,6 +1757,7 @@ async fn claude_stream(
     model: String,
     system: String,
     message: String,
+    temperature: f64,
     history: Option<Vec<serde_json::Value>>,
 ) -> Result<(), String> {
     let client = reqwest::Client::new();
@@ -1762,6 +1768,7 @@ async fn claude_stream(
         "model": model,
         "max_tokens": 4096,
         "system": system,
+        "temperature": temperature.clamp(0.0, 1.0),
         "messages": messages,
         "stream": true,
     });
@@ -1844,6 +1851,7 @@ async fn openai_chat(
     model: String,
     system: String,
     message: String,
+    temperature: f64,
 ) -> Result<String, String> {
     let client = reqwest::Client::builder()
         .timeout(std::time::Duration::from_secs(120))
@@ -1851,6 +1859,7 @@ async fn openai_chat(
         .map_err(|e| e.to_string())?;
     let payload = serde_json::json!({
         "model": model,
+        "temperature": temperature,
         "messages": [
             {"role": "system", "content": system},
             {"role": "user", "content": message},
@@ -1880,6 +1889,7 @@ async fn openai_stream(
     model: String,
     system: String,
     message: String,
+    temperature: f64,
     history: Option<Vec<serde_json::Value>>,
 ) -> Result<(), String> {
     let client = reqwest::Client::new();
@@ -1890,6 +1900,7 @@ async fn openai_stream(
     messages.push(serde_json::json!({"role": "user", "content": message}));
     let payload = serde_json::json!({
         "model": model,
+        "temperature": temperature,
         "messages": messages,
         "stream": true,
     });
@@ -1937,6 +1948,7 @@ async fn gemini_chat(
     model: String,
     system: String,
     message: String,
+    temperature: f64,
 ) -> Result<String, String> {
     let client = reqwest::Client::builder()
         .timeout(std::time::Duration::from_secs(120))
@@ -1949,6 +1961,7 @@ async fn gemini_chat(
     let payload = serde_json::json!({
         "system_instruction": { "parts": [{ "text": system }] },
         "contents": [{ "role": "user", "parts": [{ "text": message }] }],
+        "generationConfig": { "temperature": temperature },
     });
     let resp = client
         .post(&url)
@@ -1973,6 +1986,7 @@ async fn gemini_stream(
     model: String,
     system: String,
     message: String,
+    temperature: f64,
     history: Option<Vec<serde_json::Value>>,
 ) -> Result<(), String> {
     let client = reqwest::Client::new();
@@ -1991,6 +2005,7 @@ async fn gemini_stream(
     let payload = serde_json::json!({
         "system_instruction": { "parts": [{ "text": system }] },
         "contents": contents,
+        "generationConfig": { "temperature": temperature },
     });
     let mut resp = client
         .post(&url)
@@ -2031,6 +2046,7 @@ async fn mistral_chat(
     model: String,
     system: String,
     message: String,
+    temperature: f64,
 ) -> Result<String, String> {
     let client = reqwest::Client::builder()
         .timeout(std::time::Duration::from_secs(120))
@@ -2038,6 +2054,7 @@ async fn mistral_chat(
         .map_err(|e| e.to_string())?;
     let payload = serde_json::json!({
         "model": model,
+        "temperature": temperature.min(1.0),
         "messages": [
             {"role": "system", "content": system},
             {"role": "user", "content": message},
@@ -2067,6 +2084,7 @@ async fn mistral_stream(
     model: String,
     system: String,
     message: String,
+    temperature: f64,
     history: Option<Vec<serde_json::Value>>,
 ) -> Result<(), String> {
     let client = reqwest::Client::new();
@@ -2077,6 +2095,7 @@ async fn mistral_stream(
     messages.push(serde_json::json!({"role": "user", "content": message}));
     let payload = serde_json::json!({
         "model": model,
+        "temperature": temperature.min(1.0),
         "messages": messages,
         "stream": true,
     });
