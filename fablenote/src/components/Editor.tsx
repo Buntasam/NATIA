@@ -522,6 +522,11 @@ export default function Editor() {
   const [wordCount, setWordCount] = useState(0);
   const [copied, setCopied] = useState(false);
 
+  // Wikilink hover preview
+  const [wikiPreview, setWikiPreview] = useState<{ x: number; y: number; title: string; snippet: string } | null>(null);
+  const previewTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const previewCacheRef = useRef<Map<string, string>>(new Map());
+
   // Slash command state (also backed by refs for stable closures)
   const [slashMenu, _setSlashMenu] = useState<{
     x: number; y: number; query: string; from: number;
@@ -999,17 +1004,6 @@ export default function Editor() {
             </button>
             <input ref={importRef} type="file" accept=".md,.txt" className="hidden" onChange={handleImport} />
 
-            {/* Copy as Markdown */}
-            <button
-              onClick={copyAsMarkdown}
-              title={copied ? "Copié !" : "Copier en Markdown"}
-              className={`p-1.5 rounded transition-colors ${
-                copied ? "text-accent bg-accent/10" : "text-secondary hover:text-primary hover:bg-hover"
-              }`}
-            >
-              {copied ? <Check size={17} /> : <Clipboard size={17} />}
-            </button>
-
             {/* Export */}
             <div className="relative">
               <button
@@ -1042,6 +1036,17 @@ export default function Editor() {
               )}
             </div>
 
+            {/* Copy as Markdown */}
+            <button
+              onClick={copyAsMarkdown}
+              title={copied ? "Copié !" : "Copier en Markdown"}
+              className={`p-1.5 rounded transition-colors ${
+                copied ? "text-accent bg-accent/10" : "text-secondary hover:text-primary hover:bg-hover"
+              }`}
+            >
+              {copied ? <Check size={17} /> : <Clipboard size={17} />}
+            </button>
+
             <button
               onClick={() => setShowBacklinks((s) => !s)}
               title="Liens & backlinks"
@@ -1050,15 +1055,6 @@ export default function Editor() {
               }`}
             >
               <Link2 size={17} />
-            </button>
-            <button
-              onClick={toggleAiPanel}
-              title="Panneau IA (Ctrl+Shift+A)"
-              className={`p-1.5 rounded transition-colors ${
-                showAiPanel ? "text-accent bg-accent/10" : "text-secondary hover:text-primary hover:bg-hover"
-              }`}
-            >
-              <BrainCircuit size={17} />
             </button>
             <button
               onClick={handleVersionToggle}
@@ -1086,6 +1082,15 @@ export default function Editor() {
                 }
               }}
             />
+            <button
+              onClick={toggleAiPanel}
+              title="Panneau IA (Ctrl+Shift+A)"
+              className={`p-1.5 rounded transition-colors ${
+                showAiPanel ? "text-accent bg-accent/10" : "text-secondary hover:text-primary hover:bg-hover"
+              }`}
+            >
+              <BrainCircuit size={17} />
+            </button>
           </div>
         </div>
       </div>
@@ -1114,6 +1119,44 @@ export default function Editor() {
               if (noteId) selectNote(noteId);
             }
           }}
+          onMouseOver={(e) => {
+            const target = e.target as HTMLElement;
+            const el = target.closest("[data-wikilink], .wikilink-candidate") as HTMLElement | null;
+            if (!el) { setWikiPreview(null); return; }
+
+            const noteTitle = el.getAttribute("data-note-title") || el.getAttribute("data-title") || el.textContent?.replace(/\[\[|\]\]/g, "").trim() || "";
+            if (!noteTitle) return;
+
+            if (previewTimerRef.current) clearTimeout(previewTimerRef.current);
+            previewTimerRef.current = setTimeout(async () => {
+              const rect = el.getBoundingClientRect();
+              let snippet = previewCacheRef.current.get(noteTitle);
+              if (!snippet) {
+                const found = notes.find((n) => n.title.toLowerCase() === noteTitle.toLowerCase());
+                if (found) {
+                  try {
+                    const { invoke: inv } = await import("@tauri-apps/api/core");
+                    const note = await inv<{ content: string }>("get_note", { id: found.id });
+                    const div = document.createElement("div");
+                    div.innerHTML = note.content;
+                    snippet = (div.textContent ?? "").trim().slice(0, 200) || "(note vide)";
+                  } catch {
+                    snippet = "(impossible de charger)";
+                  }
+                } else {
+                  snippet = "(note introuvable)";
+                }
+                previewCacheRef.current.set(noteTitle, snippet ?? "");
+              }
+              setWikiPreview({ x: rect.left, y: rect.bottom + 6, title: noteTitle, snippet: snippet ?? "" });
+            }, 300);
+          }}
+          onMouseOut={(e) => {
+            const target = e.relatedTarget as HTMLElement | null;
+            if (target?.closest("[data-wikilink], .wikilink-candidate")) return;
+            if (previewTimerRef.current) clearTimeout(previewTimerRef.current);
+            setWikiPreview(null);
+          }}
         >
           <div className="max-w-2xl mx-auto min-h-full pb-24">
             <EditorContent editor={editor} className="min-h-full" />
@@ -1125,6 +1168,17 @@ export default function Editor() {
           </div>
         )}
       </div>
+
+      {/* Wikilink hover preview */}
+      {wikiPreview && (
+        <div
+          className="fixed z-[400] bg-panel border border-border rounded-xl shadow-2xl p-3 w-72 pointer-events-none"
+          style={{ left: Math.min(wikiPreview.x, window.innerWidth - 300), top: wikiPreview.y }}
+        >
+          <p className="text-xs font-semibold text-primary mb-1 truncate">[[{wikiPreview.title}]]</p>
+          <p className="text-[11px] text-secondary leading-relaxed line-clamp-4">{wikiPreview.snippet}</p>
+        </div>
+      )}
 
       {/* Tags row */}
       <TagsBar noteId={activeNote.id} tags={activeNote.tags} folder={activeNote.folder} />

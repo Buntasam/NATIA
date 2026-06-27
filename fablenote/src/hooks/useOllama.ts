@@ -14,12 +14,14 @@ export async function chat(
   baseUrl: string,
   model: string,
   systemPrompt: string,
-  userMessage: string
+  userMessage: string,
+  temperature = 0.7
 ): Promise<string> {
   return invoke<string>("ollama_chat", {
     baseUrl,
     model,
     system: systemPrompt,
     message: userMessage,
+    temperature,
   });
 }

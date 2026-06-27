@@ -149,6 +149,15 @@ pub struct TrashItem {
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
+pub struct ReminderItem {
+    pub note_id: String,
+    pub note_title: String,
+    pub due_date: String,
+    pub done: bool,
+    pub text: String,
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct ApiKey {
     pub id: String,
     pub name: String,
@@ -843,6 +852,97 @@ fn lock_app(state: State<AppState>) -> Result<(), String> {
     let mut guard = state.enc_key.lock().map_err(|e| e.to_string())?;
     *guard = None;
     Ok(())
+}
+
+// ─── Reminder helpers ────────────────────────────────────────────────────────
+
+fn attr_value(html: &str, attr: &str) -> String {
+    let search = format!("{}=\"", attr);
+    if let Some(pos) = html.find(&search) {
+        let start = pos + search.len();
+        if let Some(end) = html[start..].find('"') {
+            return html[start..start + end].to_string();
+        }
+    }
+    String::new()
+}
+
+fn strip_html_tags(html: &str) -> String {
+    let mut out = String::new();
+    let mut in_tag = false;
+    for c in html.chars() {
+        match c {
+            '<' => in_tag = true,
+            '>' => in_tag = false,
+            _ if !in_tag => out.push(c),
+            _ => {}
+        }
+    }
+    out.trim().to_string()
+}
+
+fn parse_reminders(note_id: &str, note_title: &str, html: &str) -> Vec<ReminderItem> {
+    let mut items = Vec::new();
+    let marker = "data-type=\"reminder\"";
+    let mut rest = html;
+    while let Some(marker_pos) = rest.find(marker) {
+        // find opening < before the marker
+        let before = &rest[..marker_pos];
+        let tag_start = before.rfind('<').unwrap_or(0);
+        // find closing > of opening tag
+        let tag_end = rest[tag_start..].find('>').map(|p| tag_start + p + 1).unwrap_or(tag_start + 1);
+        let tag_attrs = &rest[tag_start..tag_end];
+        let due_date = attr_value(tag_attrs, "data-due");
+        let done_str = attr_value(tag_attrs, "data-done");
+        let done = done_str == "true";
+        // find closing </div>
+        let content_start = tag_end;
+        let content_end = rest[content_start..].find("</div>").map(|p| content_start + p).unwrap_or(content_start);
+        let raw_text = &rest[content_start..content_end];
+        let text = strip_html_tags(raw_text);
+        if !due_date.is_empty() {
+            items.push(ReminderItem {
+                note_id: note_id.to_string(),
+                note_title: note_title.to_string(),
+                due_date,
+                done,
+                text: if text.is_empty() { "Rappel".to_string() } else { text },
+            });
+        }
+        rest = &rest[marker_pos + marker.len()..];
+    }
+    items
+}
+
+#[tauri::command]
+fn get_all_reminders(state: State<AppState>) -> Result<Vec<ReminderItem>, String> {
+    let key = state.enc_key.lock().map_err(|e| e.to_string())?.clone();
+    let note_pairs: Vec<(String, String)> = {
+        let db = state.db.lock().map_err(|e| e.to_string())?;
+        let mut stmt = db
+            .prepare("SELECT id, title FROM notes WHERE deleted_at IS NULL")
+            .map_err(|e| e.to_string())?;
+        let x = stmt.query_map([], |row| Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?)))
+            .map_err(|e| e.to_string())?
+            .filter_map(|r| r.ok())
+            .collect();
+        x
+    };
+
+    let mut all_reminders = Vec::new();
+    for (id, raw_title) in &note_pairs {
+        let title = maybe_dec(&key, raw_title);
+        let file_path = state.notes_dir.join(format!("{}.html", id));
+        if !file_path.exists() { continue; }
+        let raw_html = match std::fs::read_to_string(&file_path) {
+            Ok(h) => h,
+            Err(_) => continue,
+        };
+        let html = maybe_dec(&key, &raw_html);
+        let reminders = parse_reminders(id, &title, &html);
+        all_reminders.extend(reminders);
+    }
+    Ok(all_reminders)
 }
 
 // ─── Note commands ────────────────────────────────────────────────────────────
@@ -2188,19 +2288,39 @@ async fn claude_cli_chat(
     message: String,
 ) -> Result<String, String> {
     use tokio::process::Command;
+    use tokio::io::AsyncWriteExt;
+    use std::process::Stdio;
     let prompt = build_claude_cli_prompt(&system, &[], &message);
     #[cfg(windows)]
-    let output = Command::new("cmd")
-        .args(["/C", "claude", "-p", &prompt])
-        .output()
-        .await
-        .map_err(|e| format!("Impossible de lancer claude CLI : {e}"))?;
+    let output = {
+        let mut child = Command::new("cmd")
+            .args(["/C", "claude", "-p"])
+            .stdin(Stdio::piped())
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped())
+            .spawn()
+            .map_err(|e| format!("Impossible de lancer claude CLI : {e}"))?;
+        if let Some(mut stdin) = child.stdin.take() {
+            let _ = stdin.write_all(prompt.as_bytes()).await;
+        }
+        child.wait_with_output().await
+            .map_err(|e| format!("Impossible de lancer claude CLI : {e}"))?
+    };
     #[cfg(not(windows))]
-    let output = Command::new("claude")
-        .args(["-p", &prompt])
-        .output()
-        .await
-        .map_err(|e| format!("Impossible de lancer claude CLI : {e}"))?;
+    let output = {
+        let mut child = Command::new("claude")
+            .arg("-p")
+            .stdin(Stdio::piped())
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped())
+            .spawn()
+            .map_err(|e| format!("Impossible de lancer claude CLI : {e}"))?;
+        if let Some(mut stdin) = child.stdin.take() {
+            let _ = stdin.write_all(prompt.as_bytes()).await;
+        }
+        child.wait_with_output().await
+            .map_err(|e| format!("Impossible de lancer claude CLI : {e}"))?
+    };
     if !output.status.success() {
         let err = String::from_utf8_lossy(&output.stderr).trim().to_string();
         return Err(format!("claude CLI : {err}"));
@@ -2218,22 +2338,28 @@ async fn claude_cli_stream(
     use tokio::io::AsyncReadExt;
     use tokio::process::Command;
     use std::process::Stdio;
+    use tokio::io::AsyncWriteExt;
     let hist = history.unwrap_or_default();
     let prompt = build_claude_cli_prompt(&system, &hist, &message);
     #[cfg(windows)]
     let mut child = Command::new("cmd")
-        .args(["/C", "claude", "-p", &prompt])
+        .args(["/C", "claude", "-p"])
+        .stdin(Stdio::piped())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
         .spawn()
         .map_err(|e| format!("Impossible de lancer claude CLI : {e}"))?;
     #[cfg(not(windows))]
     let mut child = Command::new("claude")
-        .args(["-p", &prompt])
+        .arg("-p")
+        .stdin(Stdio::piped())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
         .spawn()
         .map_err(|e| format!("Impossible de lancer claude CLI : {e}"))?;
+    if let Some(mut stdin) = child.stdin.take() {
+        let _ = stdin.write_all(prompt.as_bytes()).await;
+    }
     if let Some(mut stdout) = child.stdout.take() {
         let mut buf = vec![0u8; 512];
         loop {
@@ -2404,6 +2530,7 @@ fn get_global_stats(state: State<AppState>) -> Result<GlobalStats, String> {
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
+        .plugin(tauri_plugin_notification::init())
         .setup(|app| {
             let data_dir = app.path().app_data_dir().expect("cannot resolve app data dir");
             let notes_dir = data_dir.join("notes");
@@ -2483,6 +2610,7 @@ pub fn run() {
             search_notes,
             generate_image,
             get_global_stats,
+            get_all_reminders,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

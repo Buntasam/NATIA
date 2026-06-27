@@ -9,6 +9,7 @@ import { aiStream } from "../lib/aiInvoke";
 import AiPanel from "./AiPanel";
 import D20Roller from "./D20Roller";
 import Editor from "./Editor";
+import ReminderDaemon from "./ReminderDaemon";
 import Settings from "./Settings";
 import Sidebar from "./Sidebar";
 import TrashPanel from "./TrashPanel";
@@ -101,6 +102,7 @@ export default function Layout() {
       {showSettings && <Settings />}
       {showTrash && <TrashPanel />}
       <D20Roller />
+      <ReminderDaemon />
 
       {/* Quick open modal */}
       {quickOpen && (

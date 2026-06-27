@@ -37,6 +37,7 @@ export default function VoiceRecorder({ onInsert }: Props) {
 
   const [isAvailable, setIsAvailable]       = useState(false);
   const [isRecording, setIsRecording]       = useState(false);
+  const [isPaused, setIsPaused]             = useState(false);
   const [segments, setSegments]             = useState<Segment[]>([]);
   const [interim, setInterim]               = useState("");
   const [showPanel, setShowPanel]           = useState(false);
@@ -62,6 +63,7 @@ export default function VoiceRecorder({ onInsert }: Props) {
   const speakerRef   = useRef<number>(0);
   const audioUrlRef  = useRef<string | null>(null);
   const unlistensRef = useRef<Array<() => void>>([]);
+  const isPausedRef  = useRef(false);
 
   useEffect(() => {
     setIsAvailable(!!getSpeechRecognition());
@@ -89,33 +91,14 @@ export default function VoiceRecorder({ onInsert }: Props) {
     setShowAiResult(false);
     setIsReformatting(false);
     setError("");
+    setIsPaused(false);
+    isPausedRef.current = false;
   };
 
-  const start = async () => {
+  // Shared speech recognition setup — used by start() and resume()
+  const startRecognition = () => {
     const Rec = getSpeechRecognition();
     if (!Rec) return;
-
-    if (audioUrlRef.current) { URL.revokeObjectURL(audioUrlRef.current); }
-    setAudioUrl(null);
-    clearState();
-
-    try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      const mr = new MediaRecorder(stream);
-      mr.ondataavailable = (e) => { if (e.data.size > 0) chunksRef.current.push(e.data); };
-      mr.onstop = () => {
-        stream.getTracks().forEach(t => t.stop());
-        if (chunksRef.current.length > 0) {
-          const blob = new Blob(chunksRef.current, { type: "audio/webm" });
-          setAudioUrl(URL.createObjectURL(blob));
-        }
-      };
-      mr.start(500);
-      mediaRecRef.current = mr;
-    } catch {
-      setError("Accès microphone refusé");
-      return;
-    }
 
     const rec = new Rec();
     rec.lang = "fr-FR";
@@ -153,24 +136,80 @@ export default function VoiceRecorder({ onInsert }: Props) {
     rec.onerror = (ev: ISpeechRecognitionErrorEvent) => {
       if (ev.error !== "no-speech") setError(`Erreur : ${ev.error}`);
     };
-    rec.onend = () => { setIsRecording(false); setInterim(""); };
+
+    // Only reset recording state if we stopped intentionally (not for pause)
+    rec.onend = () => {
+      if (!isPausedRef.current) {
+        setIsRecording(false);
+        setInterim("");
+      }
+    };
 
     recRef.current = rec;
     rec.start();
+  };
+
+  const start = async () => {
+    if (!getSpeechRecognition()) return;
+
+    if (audioUrlRef.current) { URL.revokeObjectURL(audioUrlRef.current); }
+    setAudioUrl(null);
+    clearState();
+
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const mr = new MediaRecorder(stream);
+      mr.ondataavailable = (e) => { if (e.data.size > 0) chunksRef.current.push(e.data); };
+      mr.onstop = () => {
+        stream.getTracks().forEach(t => t.stop());
+        if (chunksRef.current.length > 0) {
+          const blob = new Blob(chunksRef.current, { type: "audio/webm" });
+          setAudioUrl(URL.createObjectURL(blob));
+        }
+      };
+      mr.start(500);
+      mediaRecRef.current = mr;
+    } catch {
+      setError("Accès microphone refusé");
+      return;
+    }
+
+    startRecognition();
     setIsRecording(true);
     setShowPanel(true);
     setCollapsed(false);
   };
 
-  const stop = () => {
+  const pause = () => {
+    isPausedRef.current = true;
+    setIsPaused(true);
     recRef.current?.stop();
-    if (mediaRecRef.current?.state === "recording") mediaRecRef.current.stop();
+    if (mediaRecRef.current?.state === "recording") mediaRecRef.current.pause();
+    setIsRecording(false);
+    setInterim("");
+  };
+
+  const resume = () => {
+    if (mediaRecRef.current?.state === "paused") mediaRecRef.current.resume();
+    isPausedRef.current = false;
+    setIsPaused(false);
+    startRecognition();
+    setIsRecording(true);
+  };
+
+  const stop = () => {
+    isPausedRef.current = false;
+    setIsPaused(false);
+    recRef.current?.stop();
+    const mr = mediaRecRef.current;
+    if (mr && (mr.state === "recording" || mr.state === "paused")) mr.stop();
     setIsRecording(false);
   };
 
   const discard = () => {
     recRef.current?.stop();
-    if (mediaRecRef.current?.state === "recording") mediaRecRef.current.stop();
+    const mr = mediaRecRef.current;
+    if (mr && (mr.state === "recording" || mr.state === "paused")) mr.stop();
     if (audioUrlRef.current) { URL.revokeObjectURL(audioUrlRef.current); }
     unlistensRef.current.forEach(fn => fn());
     unlistensRef.current = [];
@@ -296,13 +335,17 @@ Réponds UNIQUEMENT avec la transcription mise en forme. Aucun commentaire.`,
           >
             <GripVertical size={13} className="text-muted shrink-0" />
             <div className="flex items-center gap-2 flex-1 min-w-0">
-              {isRecording && <span className="w-1.5 h-1.5 rounded-full bg-red-400 animate-pulse shrink-0" />}
+              {(isRecording || isPaused) && (
+                <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${isPaused ? "bg-amber-400" : "bg-red-400 animate-pulse"}`} />
+              )}
               <span className="text-xs text-muted truncate">
                 {isRecording
                   ? "Enregistrement en cours…"
-                  : hasContent ? "Enregistrement terminé" : "Aucune parole détectée"}
+                  : isPaused
+                    ? "En pause"
+                    : hasContent ? "Enregistrement terminé" : "Aucune parole détectée"}
               </span>
-              {isMulti && !isRecording && (
+              {isMulti && !isRecording && !isPaused && (
                 <span className="text-[10px] text-muted/50 px-1.5 py-0.5 rounded bg-hover shrink-0">
                   {speakerSet.size} intervenants
                 </span>
@@ -310,13 +353,18 @@ Réponds UNIQUEMENT avec la transcription mise en forme. Aucun commentaire.`,
             </div>
             <div className="flex items-center gap-1 shrink-0">
               <button
+                onPointerDown={(e) => e.stopPropagation()}
                 onClick={() => setCollapsed(c => !c)}
                 className="p-0.5 text-muted hover:text-primary transition-colors"
                 title={collapsed ? "Agrandir" : "Réduire"}
               >
                 {collapsed ? <ChevronUp size={13} /> : <ChevronDown size={13} />}
               </button>
-              <button onClick={discard} className="p-0.5 text-muted hover:text-primary transition-colors">
+              <button
+                onPointerDown={(e) => e.stopPropagation()}
+                onClick={discard}
+                className="p-0.5 text-muted hover:text-primary transition-colors"
+              >
                 <X size={13} />
               </button>
             </div>
@@ -393,8 +441,8 @@ Réponds UNIQUEMENT avec la transcription mise en forme. Aucun commentaire.`,
                 </div>
               )}
 
-              {/* ── Footer actions ── */}
-              {!isRecording && hasContent && (
+              {/* ── Footer actions (post-recording) ── */}
+              {!isRecording && !isPaused && hasContent && (
                 <div className="flex items-center justify-between px-4 py-2.5 border-t border-border shrink-0">
                   <div>
                     {canAi && !showAiResult && (
@@ -424,15 +472,33 @@ Réponds UNIQUEMENT avec la transcription mise en forme. Aucun commentaire.`,
                 </div>
               )}
 
-              {/* ── Stop/Start button inside panel ── */}
-              {isRecording && (
-                <div className="flex justify-center px-4 py-3 border-t border-border shrink-0">
+              {/* ── Recording controls ── */}
+              {(isRecording || isPaused) && (
+                <div className="flex justify-center gap-2 px-4 py-3 border-t border-border shrink-0">
+                  {isRecording && (
+                    <button
+                      onClick={pause}
+                      className="flex items-center gap-2 px-4 py-2 rounded-lg bg-amber-500/10 border border-amber-500/20 text-amber-400 hover:bg-amber-500/20 transition-colors text-xs"
+                    >
+                      <Pause size={13} />
+                      Pause
+                    </button>
+                  )}
+                  {isPaused && (
+                    <button
+                      onClick={resume}
+                      className="flex items-center gap-2 px-4 py-2 rounded-lg bg-green-500/10 border border-green-500/20 text-green-400 hover:bg-green-500/20 transition-colors text-xs"
+                    >
+                      <Play size={13} />
+                      Reprendre
+                    </button>
+                  )}
                   <button
                     onClick={stop}
                     className="flex items-center gap-2 px-4 py-2 rounded-lg bg-red-500/10 border border-red-500/20 text-red-400 hover:bg-red-500/20 transition-colors text-xs"
                   >
                     <MicOff size={13} />
-                    Arrêter l'enregistrement
+                    Arrêter
                   </button>
                 </div>
               )}

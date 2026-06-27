@@ -2,6 +2,19 @@ import { invoke } from "@tauri-apps/api/core";
 import { create } from "zustand";
 import { Note, NoteMetadata, Settings, TrashItem, Version } from "../types";
 
+export type MemoryNodeType = "projet" | "utilisateur" | "contexte" | "sujet";
+
+export interface MemoryNode {
+  id: string;
+  type: MemoryNodeType;
+  label: string;
+  content: string;
+  connections: string[];
+  strength: number; // 0.1 – 1.0
+  createdAt: string;
+  auto: boolean;
+}
+
 interface AppStore {
   // Data
   notes: NoteMetadata[];
@@ -35,6 +48,17 @@ interface AppStore {
   pinnedNoteIds: string[];
   recentNoteIds: string[];
   togglePinNote: (id: string) => void;
+
+  // Memory
+  memoryEnabled: boolean;
+  setMemoryEnabled: (v: boolean) => void;
+  memoryGraphEnabled: boolean;
+  setMemoryGraphEnabled: (v: boolean) => void;
+  memoryNodes: MemoryNode[];
+  addMemoryNode: (node: Omit<MemoryNode, "id" | "createdAt">) => void;
+  updateMemoryNode: (id: string, updates: Partial<Omit<MemoryNode, "id" | "createdAt">>) => void;
+  deleteMemoryNode: (id: string) => void;
+  clearMemoryNodes: () => void;
 
   // Note actions
   loadNotes: () => Promise<void>;
@@ -186,6 +210,47 @@ export const useStore = create<AppStore>((set, get) => ({
       localStorage.setItem("natia_pinned", JSON.stringify(pinned));
       return { pinnedNoteIds: pinned };
     });
+  },
+
+  memoryEnabled: localStorage.getItem("natia_memory_enabled") === "1",
+  setMemoryEnabled: (v: boolean) => {
+    localStorage.setItem("natia_memory_enabled", v ? "1" : "0");
+    set({ memoryEnabled: v });
+  },
+  memoryGraphEnabled: localStorage.getItem("natia_memory_graph") === "1",
+  setMemoryGraphEnabled: (v: boolean) => {
+    localStorage.setItem("natia_memory_graph", v ? "1" : "0");
+    set({ memoryGraphEnabled: v });
+  },
+  memoryNodes: (() => {
+    try { return JSON.parse(localStorage.getItem("natia_memory_nodes") ?? "[]") as MemoryNode[]; }
+    catch { return []; }
+  })(),
+  addMemoryNode: (node) => {
+    set((s) => {
+      const newNode: MemoryNode = { ...node, id: crypto.randomUUID(), createdAt: new Date().toISOString() };
+      const nodes = [...s.memoryNodes, newNode];
+      localStorage.setItem("natia_memory_nodes", JSON.stringify(nodes));
+      return { memoryNodes: nodes };
+    });
+  },
+  updateMemoryNode: (id, updates) => {
+    set((s) => {
+      const nodes = s.memoryNodes.map(n => n.id === id ? { ...n, ...updates } : n);
+      localStorage.setItem("natia_memory_nodes", JSON.stringify(nodes));
+      return { memoryNodes: nodes };
+    });
+  },
+  deleteMemoryNode: (id) => {
+    set((s) => {
+      const nodes = s.memoryNodes.filter(n => n.id !== id);
+      localStorage.setItem("natia_memory_nodes", JSON.stringify(nodes));
+      return { memoryNodes: nodes };
+    });
+  },
+  clearMemoryNodes: () => {
+    localStorage.setItem("natia_memory_nodes", "[]");
+    set({ memoryNodes: [] });
   },
 
   loadNotes: async () => {
