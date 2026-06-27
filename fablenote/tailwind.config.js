@@ -14,8 +14,8 @@ export default {
         muted:          "var(--color-muted)",
         secondary:      "var(--color-secondary)",
         primary:        "var(--color-primary)",
-        accent:         "#d97757",
-        "accent-hover": "#c86848",
+        accent:         "var(--color-accent)",
+        "accent-hover": "var(--color-accent-hover)",
       },
       fontFamily: {
         sans: ["ui-sans-serif", "system-ui", "-apple-system", "Segoe UI", "sans-serif"],

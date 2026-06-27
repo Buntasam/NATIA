@@ -1,15 +1,17 @@
-import { useEffect, useRef, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
+import { getVersion } from "@tauri-apps/api/app";
 import {
   Activity,
+  AlertTriangle,
+  ArrowRight,
+  Bug,
   BrainCircuit,
   CheckCheck,
   ChevronDown,
-  Circle,
   Clipboard,
   Download,
-  Eye,
   FileText,
   Languages,
   Loader2,
@@ -24,8 +26,10 @@ import {
   X,
   Zap,
 } from "lucide-react";
-import * as Diff from "diff";
 import { fetchModels } from "../hooks/useOllama";
+import { CorrectionModal } from "./ai/CorrectionModal";
+import { OpButton } from "./ai/OpButton";
+import { TraceRow } from "./ai/TraceRow";
 import { aiChat, aiStream, activeModel } from "../lib/aiInvoke";
 import { useStore } from "../store";
 
@@ -57,15 +61,146 @@ interface SortProposal {
   accepted: boolean;
 }
 
+interface ApiKey {
+  id: string;
+  name: string;
+  provider: string;
+  key_value: string;
+  color: string;
+  model: string;
+}
+
+const COLORS = ["#6366f1","#10b981","#f59e0b","#ef4444","#8b5cf6","#06b6d4","#f97316","#ec4899"];
+
+const PROVIDER_MODELS: Record<string, { value: string; label: string }[]> = {
+  Anthropic: [
+    { value: "claude-haiku-4-5-20251001", label: "Haiku 4.5" },
+    { value: "claude-sonnet-4-6", label: "Sonnet 4.6" },
+    { value: "claude-opus-4-8", label: "Opus 4.8" },
+  ],
+  OpenAI: [
+    { value: "gpt-4o-mini", label: "GPT-4o Mini" },
+    { value: "gpt-4o", label: "GPT-4o" },
+    { value: "gpt-4-turbo", label: "GPT-4 Turbo" },
+    { value: "o1-mini", label: "o1 Mini" },
+  ],
+  Gemini: [
+    { value: "gemini-2.0-flash", label: "2.0 Flash" },
+    { value: "gemini-1.5-flash", label: "1.5 Flash" },
+    { value: "gemini-1.5-pro", label: "1.5 Pro" },
+  ],
+  Mistral: [
+    { value: "mistral-small-latest", label: "Small" },
+    { value: "mistral-medium-latest", label: "Medium" },
+    { value: "mistral-large-latest", label: "Large" },
+  ],
+  Groq: [
+    { value: "llama-3.1-8b-instant", label: "Llama 3.1 8B" },
+    { value: "llama-3.1-70b-versatile", label: "Llama 3.1 70B" },
+    { value: "mixtral-8x7b-32768", label: "Mixtral 8x7B" },
+  ],
+};
+
+function defaultModelForProvider(provider: string): string {
+  return PROVIDER_MODELS[provider]?.[0]?.value ?? "";
+}
+
+function detectProvider(key: string): string {
+  if (key.startsWith("sk-ant-")) return "Anthropic";
+  if (key.startsWith("AIza")) return "Gemini";
+  if (key.startsWith("gsk_")) return "Groq";
+  if (/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(key)) return "Mistral";
+  if (key.startsWith("sk-")) return "OpenAI";
+  return "";
+}
+
 export default function AiPanel({ onOpenConv }: { onOpenConv: () => void }) {
-  const { activeNote, settings, folders, toggleAiPanel, updateNote, renameNote, moveNote, createFolder, loadNotes, loadFolders } = useStore();
+  const { activeNote, settings, saveSettings, folders, toggleAiPanel, updateNote, renameNote, moveNote, createFolder, loadNotes, loadFolders } = useStore();
 
   const [activeTab, setActiveTab] = useState<Tab>("ops");
   const [models, setModels] = useState<string[]>([]);
   const [selectedModel, setSelectedModel] = useState(settings.default_model);
   const [shadowPrompt, setShadowPrompt] = useState(settings.global_shadow_prompt);
   const [localProvider, setLocalProvider] = useState(settings.ai_provider);
+  // Connection-based routing
+  const [apiConnections, setApiConnections] = useState<ApiKey[]>([]);
+  const [activeConnectionId, setActiveConnectionId] = useState<string | null>(null);
+  const [showAddKey, setShowAddKey] = useState(false);
+  const [addKeyForm, setAddKeyForm] = useState({ name: "", provider: "", key_value: "", color: COLORS[0], model: "" });
+  const [addKeySaving, setAddKeySaving] = useState(false);
+
+  // Connection test
+  const [connTestStatus, setConnTestStatus] = useState<"idle" | "testing" | "ok" | "error">("idle");
+  const [connTestMsg, setConnTestMsg] = useState("");
+
+  // Debug mode
+  const [errorLog, setErrorLog] = useState<{ time: string; op: string; msg: string }[]>([]);
+  const [appVersion, setAppVersion] = useState("");
+  const sessionStartRef = useRef(Date.now());
+
+  useEffect(() => { getVersion().then(setAppVersion).catch(() => {}); }, []);
+
+  // Auto-switch back to ops if debug mode is disabled while on trace tab
+  useEffect(() => {
+    if (!settings.debug_mode && activeTab === "trace") setActiveTab("ops");
+  }, [settings.debug_mode]);
+
+  const logError = (op: string, msg: string) => {
+    const time = new Date().toLocaleTimeString("fr-FR");
+    setErrorLog((prev) => [{ time, op, msg }, ...prev].slice(0, 100));
+  };
+
   const effectiveSettings = { ...settings, ai_provider: localProvider };
+  const isConnectionActive = activeConnectionId !== null;
+
+  useEffect(() => {
+    setConnTestStatus("idle");
+    setConnTestMsg("");
+  }, [activeConnectionId]);
+
+  const loadConnections = async () => {
+    try { setApiConnections(await invoke<ApiKey[]>("get_api_keys")); } catch { /* ignore */ }
+  };
+
+  useEffect(() => { loadConnections(); }, []);
+
+  // doChat/doStream: route to connection or classic provider
+  const doChat = async (sys: string, msg: string): Promise<string> => {
+    if (isConnectionActive) {
+      return invoke<string>("connection_chat", {
+        connectionId: activeConnectionId,
+        system: sys,
+        message: msg,
+        temperature: settings.temperature ?? 0.7,
+      });
+    }
+    return aiChat(effectiveSettings, sys, msg, selectedModel);
+  };
+
+  const doStream = async (sys: string, msg: string, history: { role: string; content: string }[] = []): Promise<void> => {
+    const maxMsgs = settings.context_messages ?? 0;
+    const trimmedHistory = maxMsgs > 0 ? history.slice(-maxMsgs) : history;
+    if (isConnectionActive) {
+      return invoke<void>("connection_stream", {
+        connectionId: activeConnectionId,
+        system: sys,
+        message: msg,
+        history: trimmedHistory,
+        temperature: settings.temperature ?? 0.7,
+      });
+    }
+    return aiStream(effectiveSettings, sys, msg, trimmedHistory, selectedModel);
+  };
+
+  const activeConnectionLabel = (): string => {
+    if (isConnectionActive) {
+      const c = apiConnections.find(c => c.id === activeConnectionId);
+      return c ? `${c.name} (${c.provider})` : "Connexion";
+    }
+    if (localProvider === "ollama") return `Ollama · ${selectedModel}`;
+    if (localProvider === "claude_cli") return "Claude CLI";
+    return localProvider;
+  };
   const [showShadow, setShowShadow] = useState(false);
   const [response, setResponse] = useState("");
   const [isRunning, setIsRunning] = useState(false);
@@ -87,6 +222,7 @@ export default function AiPanel({ onOpenConv }: { onOpenConv: () => void }) {
   } | null>(null);
 
   // Translate lang & continue tracking
+  const [translateFrom, setTranslateFrom] = useState("auto");
   const [translateLang, setTranslateLang] = useState("anglais");
   const [responseOp, setResponseOp] = useState<string | null>(null);
 
@@ -102,7 +238,7 @@ export default function AiPanel({ onOpenConv }: { onOpenConv: () => void }) {
     };
     setLastTrace(traceBase); startTimeRef.current = Date.now(); startTimer();
     try {
-      const result = await aiChat(effectiveSettings, shadowPrompt, fullMessage, selectedModel);
+      const result = await doChat(shadowPrompt, fullMessage);
       stopTimer();
       const elapsed = Math.round((Date.now() - startTimeRef.current) / 100) / 10;
       setLastTrace({ ...traceBase, response: result.slice(0, 600), elapsed, status: "done" });
@@ -113,6 +249,7 @@ export default function AiPanel({ onOpenConv }: { onOpenConv: () => void }) {
       const msg = e instanceof Error ? e.message : String(e);
       setLastTrace({ ...traceBase, error: msg, elapsed: Math.round((Date.now() - startTimeRef.current) / 100) / 10, status: "error" });
       setError(`Erreur : ${msg}`);
+      logError("Résumer", msg);
     } finally { setIsRunning(false); setActiveOp(null); }
   };
 
@@ -137,7 +274,7 @@ export default function AiPanel({ onOpenConv }: { onOpenConv: () => void }) {
     setQuickLoading(true);
     setQuickResponse("");
     try {
-      const result = await aiChat(effectiveSettings,shadowPrompt, msg, selectedModel);
+      const result = await doChat(shadowPrompt, msg);
       setQuickResponse(result);
       setQuickInput("");
     } catch (e: unknown) {
@@ -172,6 +309,15 @@ export default function AiPanel({ onOpenConv }: { onOpenConv: () => void }) {
   const pullUnlistenRef = useRef<(() => void) | null>(null);
   const traceTokenRef = useRef<(() => void) | null>(null);
   const traceDoneRef = useRef<(() => void) | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (timerRef.current) clearInterval(timerRef.current);
+      if (pullUnlistenRef.current) { pullUnlistenRef.current(); pullUnlistenRef.current = null; }
+      if (traceTokenRef.current) { traceTokenRef.current(); traceTokenRef.current = null; }
+      if (traceDoneRef.current) { traceDoneRef.current(); traceDoneRef.current = null; }
+    };
+  }, []);
 
   useEffect(() => {
     if (!lastTrace || lastTrace.status === "running") return;
@@ -261,7 +407,7 @@ export default function AiPanel({ onOpenConv }: { onOpenConv: () => void }) {
     startTimer();
 
     try {
-      const result = await aiChat(effectiveSettings,shadowPrompt, fullMessage, selectedModel);
+      const result = await doChat(shadowPrompt, fullMessage);
       stopTimer();
       const elapsed = Math.round((Date.now() - startTimeRef.current) / 100) / 10;
       const truncatedResp = result.length > 600 ? result.substring(0, 600) + "…" : result;
@@ -280,6 +426,7 @@ export default function AiPanel({ onOpenConv }: { onOpenConv: () => void }) {
       const elapsed = Math.round((Date.now() - startTimeRef.current) / 100) / 10;
       setLastTrace({ ...traceBase, error: msg, elapsed, status: "error" });
       setError(`Erreur : ${msg}`);
+      logError(opLabel, msg);
     } finally {
       setIsRunning(false);
       setActiveOp(null);
@@ -320,7 +467,7 @@ export default function AiPanel({ onOpenConv }: { onOpenConv: () => void }) {
     startTimer();
 
     try {
-      const result = await aiChat(effectiveSettings,shadowPrompt, fullMessage, selectedModel);
+      const result = await doChat(shadowPrompt, fullMessage);
       stopTimer();
       const elapsed = Math.round((Date.now() - startTimeRef.current) / 100) / 10;
       const truncatedResp = result.length > 600 ? result.substring(0, 600) + "…" : result;
@@ -337,6 +484,7 @@ export default function AiPanel({ onOpenConv }: { onOpenConv: () => void }) {
       const elapsed = Math.round((Date.now() - startTimeRef.current) / 100) / 10;
       setLastTrace({ ...traceBase, error: msg, elapsed, status: "error" });
       setError(`Erreur : ${msg}`);
+      logError("Corriger", msg);
     } finally {
       setIsRunning(false);
       setActiveOp(null);
@@ -393,7 +541,9 @@ export default function AiPanel({ onOpenConv }: { onOpenConv: () => void }) {
       setAppliedMsg(`✓ ${toApply.length} note(s) déplacée(s)`);
       setTimeout(() => setAppliedMsg(""), 3000);
     } catch (e: unknown) {
-      setError(`Erreur : ${e instanceof Error ? e.message : String(e)}`);
+      const msg = e instanceof Error ? e.message : String(e);
+      setError(`Erreur : ${msg}`);
+      logError("Appliquer tri", msg);
     } finally {
       setIsRunning(false);
     }
@@ -474,7 +624,7 @@ Réponds UNIQUEMENT avec ce JSON (rien d'autre, pas de texte, pas de \`\`\`) :
     startTimer();
 
     try {
-      const result = await aiChat(effectiveSettings,sortSystem, fullMessage, selectedModel);
+      const result = await doChat(sortSystem, fullMessage);
       stopTimer();
       const elapsed = Math.round((Date.now() - startTimeRef.current) / 100) / 10;
       const truncatedResp = result.length > 600 ? result.substring(0, 600) + "…" : result;
@@ -510,6 +660,7 @@ Réponds UNIQUEMENT avec ce JSON (rien d'autre, pas de texte, pas de \`\`\`) :
       const elapsed = Math.round((Date.now() - startTimeRef.current) / 100) / 10;
       setLastTrace({ ...traceBase, error: msg, elapsed, status: "error" });
       setError(`Erreur : ${msg}`);
+      logError("Trier", msg);
     } finally {
       setIsRunning(false);
       setActiveOp(null);
@@ -528,7 +679,7 @@ Réponds UNIQUEMENT avec ce JSON (rien d'autre, pas de texte, pas de \`\`\`) :
     };
     setLastTrace(traceBase); startTimeRef.current = Date.now(); startTimer();
     try {
-      const result = await aiChat(effectiveSettings,shadowPrompt, fullMessage, selectedModel);
+      const result = await doChat(shadowPrompt, fullMessage);
       stopTimer();
       const elapsed = Math.round((Date.now() - startTimeRef.current) / 100) / 10;
       setLastTrace({ ...traceBase, response: result.slice(0, 600), elapsed, status: "done" });
@@ -539,6 +690,7 @@ Réponds UNIQUEMENT avec ce JSON (rien d'autre, pas de texte, pas de \`\`\`) :
       const msg = e instanceof Error ? e.message : String(e);
       setLastTrace({ ...traceBase, error: msg, elapsed: Math.round((Date.now() - startTimeRef.current) / 100) / 10, status: "error" });
       setError(`Erreur : ${msg}`);
+      logError("Formaliser", msg);
     } finally { setIsRunning(false); setActiveOp(null); }
   };
 
@@ -547,14 +699,15 @@ Réponds UNIQUEMENT avec ce JSON (rien d'autre, pas de texte, pas de \`\`\`) :
     setError(""); setResponse(""); setAppliedMsg(""); setResponseOp(null);
     setIsRunning(true); setActiveOp("Traduire");
     const plainText = getPlainText();
-    const fullMessage = `Traduis le texte suivant en ${translateLang}. ${settings.translate_prompt}\n\n${plainText}`;
+    const fromPart = translateFrom !== "auto" ? `du ${translateFrom} ` : "";
+    const fullMessage = `Traduis le texte suivant ${fromPart}en ${translateLang}. ${settings.translate_prompt}\n\n${plainText}`;
     const traceBase: TraceEntry = {
       operation: "Traduire", model: activeModel(effectiveSettings, selectedModel), system: shadowPrompt,
       user: fullMessage.slice(0, 600), response: "", elapsed: 0, status: "running", error: "",
     };
     setLastTrace(traceBase); startTimeRef.current = Date.now(); startTimer();
     try {
-      const result = await aiChat(effectiveSettings,shadowPrompt, fullMessage, selectedModel);
+      const result = await doChat(shadowPrompt, fullMessage);
       stopTimer();
       const elapsed = Math.round((Date.now() - startTimeRef.current) / 100) / 10;
       setLastTrace({ ...traceBase, response: result.slice(0, 600), elapsed, status: "done" });
@@ -565,6 +718,7 @@ Réponds UNIQUEMENT avec ce JSON (rien d'autre, pas de texte, pas de \`\`\`) :
       const msg = e instanceof Error ? e.message : String(e);
       setLastTrace({ ...traceBase, error: msg, elapsed: Math.round((Date.now() - startTimeRef.current) / 100) / 10, status: "error" });
       setError(`Erreur : ${msg}`);
+      logError("Traduire", msg);
     } finally { setIsRunning(false); setActiveOp(null); }
   };
 
@@ -580,7 +734,7 @@ Réponds UNIQUEMENT avec ce JSON (rien d'autre, pas de texte, pas de \`\`\`) :
     };
     setLastTrace(traceBase); startTimeRef.current = Date.now(); startTimer();
     try {
-      const result = await aiChat(effectiveSettings,shadowPrompt, fullMessage, selectedModel);
+      const result = await doChat(shadowPrompt, fullMessage);
       stopTimer();
       const elapsed = Math.round((Date.now() - startTimeRef.current) / 100) / 10;
       setLastTrace({ ...traceBase, response: result.slice(0, 600), elapsed, status: "done" });
@@ -591,6 +745,7 @@ Réponds UNIQUEMENT avec ce JSON (rien d'autre, pas de texte, pas de \`\`\`) :
       const msg = e instanceof Error ? e.message : String(e);
       setLastTrace({ ...traceBase, error: msg, elapsed: Math.round((Date.now() - startTimeRef.current) / 100) / 10, status: "error" });
       setError(`Erreur : ${msg}`);
+      logError("Continuer", msg);
     } finally { setIsRunning(false); setActiveOp(null); }
   };
 
@@ -656,11 +811,12 @@ Réponds UNIQUEMENT avec ce JSON (rien d'autre, pas de texte, pas de \`\`\`) :
     });
 
     try {
-      await aiStream(effectiveSettings,shadowPrompt, msg, [], selectedModel);
+      await doStream(shadowPrompt, msg, []);
     } catch (e: unknown) {
       const errMsg = e instanceof Error ? e.message : String(e);
       setTraceResponse(`Erreur : ${errMsg}`);
       setIsTracing(false);
+      logError("Chat debug", errMsg);
     }
   };
 
@@ -707,7 +863,21 @@ Réponds UNIQUEMENT avec ce JSON (rien d'autre, pas de texte, pas de \`\`\`) :
       <div className="shrink-0 border-b border-border">
         <div className="flex items-center justify-between px-3 py-2.5">
           <div className="flex items-center gap-1.5">
-            <BrainCircuit size={14} className="text-accent" />
+            <div className="relative shrink-0">
+              {isRunning
+                ? <Loader2 size={14} className="text-accent animate-spin" />
+                : <BrainCircuit size={14} className={error ? "text-amber-400" : "text-accent"} />
+              }
+              {error && !isRunning && (
+                <button
+                  onClick={() => setError("")}
+                  title={error}
+                  className="absolute -top-1.5 -right-1.5 w-3 h-3 rounded-full bg-amber-400 flex items-center justify-center hover:bg-amber-300 transition-colors"
+                >
+                  <AlertTriangle size={7} className="text-black" />
+                </button>
+              )}
+            </div>
             <div className="flex items-center gap-0.5 ml-1">
               <button
                 onClick={() => setActiveTab("ops")}
@@ -719,23 +889,179 @@ Réponds UNIQUEMENT avec ce JSON (rien d'autre, pas de texte, pas de \`\`\`) :
               >
                 Opérations
               </button>
-              <button
-                onClick={() => setActiveTab("trace")}
-                className={`flex items-center gap-1 px-2.5 py-1 rounded text-xs font-medium transition-colors ${
-                  activeTab === "trace"
-                    ? "text-accent bg-accent/10"
-                    : "text-muted hover:text-primary"
-                }`}
-              >
-                <Eye size={10} />
-                Activité
-              </button>
+              {settings.debug_mode && (
+                <button
+                  onClick={() => setActiveTab("trace")}
+                  className={`flex items-center gap-1 px-2.5 py-1 rounded text-xs font-medium transition-colors ${
+                    activeTab === "trace"
+                      ? "text-amber-400 bg-amber-400/10"
+                      : "text-muted hover:text-primary"
+                  }`}
+                >
+                  <Bug size={10} />
+                  Debug
+                </button>
+              )}
             </div>
           </div>
           <button onClick={toggleAiPanel} className="text-muted hover:text-primary transition-colors p-1">
             <X size={15} />
           </button>
         </div>
+        {/* Provider quick-select bar */}
+        {activeTab === "ops" && (
+          <div className="flex items-center gap-1 px-3 pb-2 flex-wrap">
+            {/* Fixed: Local */}
+            <button
+              onClick={() => { setLocalProvider("ollama"); setActiveConnectionId(null); }}
+              className={`px-2.5 py-1 rounded-lg text-[11px] font-medium border transition-colors ${
+                !isConnectionActive && localProvider === "ollama"
+                  ? "bg-zinc-500/15 border-zinc-500/40 text-zinc-300"
+                  : "bg-hover border-border text-muted hover:text-secondary"
+              }`}
+            >Local</button>
+            {/* Fixed: Claude CLI */}
+            <button
+              onClick={() => { setLocalProvider("claude_cli"); setActiveConnectionId(null); }}
+              className={`px-2.5 py-1 rounded-lg text-[11px] font-medium border transition-colors ${
+                !isConnectionActive && localProvider === "claude_cli"
+                  ? "bg-orange-500/15 border-orange-500/40 text-orange-400"
+                  : "bg-hover border-border text-muted hover:text-secondary"
+              }`}
+            >Claude CLI</button>
+            {/* Dynamic: saved API connections */}
+            {apiConnections.map((conn) => (
+              <button
+                key={conn.id}
+                onClick={() => { setActiveConnectionId(conn.id); setLocalProvider("ollama"); }}
+                className={`px-2.5 py-1 rounded-lg text-[11px] font-medium border transition-colors ${
+                  activeConnectionId === conn.id
+                    ? "bg-hover"
+                    : "bg-hover border-border text-muted hover:text-secondary"
+                }`}
+                style={activeConnectionId === conn.id ? {
+                  borderColor: conn.color + "88",
+                  color: conn.color,
+                  backgroundColor: conn.color + "18",
+                } : {}}
+              >{conn.name}</button>
+            ))}
+            {/* Add key button */}
+            <button
+              onClick={() => { setShowAddKey((s) => !s); setAddKeyForm({ name: "", provider: "", key_value: "", color: COLORS[0], model: "" }); }}
+              className={`px-2 py-1 rounded-lg text-[11px] font-medium border transition-colors ${
+                showAddKey ? "bg-accent/10 border-accent/30 text-accent" : "bg-hover border-border text-muted hover:text-primary"
+              }`}
+              title="Ajouter une clé API"
+            >+</button>
+          </div>
+        )}
+        {/* Intensity bar */}
+        {activeTab === "ops" && (
+          <div className="flex flex-col gap-1 px-3 pb-2">
+            <span className="text-[10px] text-muted">Longueur des réponses IA</span>
+            <div className="flex items-center gap-1">
+              {([
+                { key: "eco",    label: "Éco",   color: "#22c55e", title: "Ultra-court — 1 à 2 phrases" },
+                { key: "low",    label: "Concis", color: "#2dd4bf", title: "Court — 3 à 5 phrases" },
+                { key: "medium", label: "Normal", color: "#d97757", title: "Longueur standard" },
+                { key: "high",   label: "Détaillé", color: "#fb923c", title: "Développé avec contexte" },
+                { key: "max",    label: "Complet", color: "#f87171", title: "Exhaustif et structuré" },
+              ] as const).map(({ key, label, color, title }) => {
+                const active = (settings.prompt_intensity ?? "medium") === key;
+                return (
+                  <button
+                    key={key}
+                    onClick={() => saveSettings({ ...settings, prompt_intensity: key })}
+                    title={title}
+                    aria-label={`Longueur : ${label} — ${title}`}
+                    className={`flex-1 py-1 rounded text-[10px] font-semibold border transition-all ${
+                      active ? "border-current" : "bg-hover border-border text-muted hover:text-secondary"
+                    }`}
+                    style={active ? { color, borderColor: color + "80", backgroundColor: color + "18" } : {}}
+                  >
+                    {label}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
+        {/* Inline add-key form */}
+        {activeTab === "ops" && showAddKey && (
+          <div className="mx-3 mb-2 flex flex-col gap-2 p-3 rounded-lg border border-accent/30 bg-accent/5">
+            <div className="relative">
+              <input
+                type="password"
+                value={addKeyForm.key_value}
+                onChange={(e) => {
+                  const key = e.target.value;
+                  const detected = detectProvider(key);
+                  setAddKeyForm((f) => ({
+                    ...f, key_value: key,
+                    ...(detected ? { provider: detected, model: defaultModelForProvider(detected) } : {}),
+                    ...(detected && !f.name ? { name: detected } : {}),
+                  }));
+                }}
+                placeholder="Colle ta clé API (sk-ant-..., sk-..., AIza...)"
+                className="w-full bg-hover border border-border rounded-lg px-2.5 py-1.5 text-xs text-primary outline-none focus:border-accent/50 placeholder-muted font-mono"
+              />
+              {addKeyForm.provider && (
+                <span className="absolute right-2.5 top-1/2 -translate-y-1/2 text-[10px] text-accent font-medium">{addKeyForm.provider}</span>
+              )}
+            </div>
+            <div className="flex gap-2">
+              <input
+                value={addKeyForm.name}
+                onChange={(e) => setAddKeyForm((f) => ({ ...f, name: e.target.value }))}
+                placeholder="Nom de la connexion"
+                className="flex-1 bg-hover border border-border rounded-lg px-2.5 py-1.5 text-xs text-primary outline-none focus:border-accent/50 placeholder-muted"
+              />
+              <div className="flex gap-1 items-center">
+                {COLORS.map((c) => (
+                  <button key={c} onClick={() => setAddKeyForm((f) => ({ ...f, color: c }))}
+                    className="w-4 h-4 rounded-full transition-transform hover:scale-110 shrink-0"
+                    style={{ backgroundColor: c, outline: c === addKeyForm.color ? `2px solid ${c}` : "none", outlineOffset: "2px" }}
+                  />
+                ))}
+              </div>
+            </div>
+            {PROVIDER_MODELS[addKeyForm.provider] && (
+              <select
+                value={addKeyForm.model}
+                onChange={(e) => setAddKeyForm((f) => ({ ...f, model: e.target.value }))}
+                className="w-full bg-hover border border-border rounded-lg px-2.5 py-1.5 text-xs text-primary outline-none"
+              >
+                {PROVIDER_MODELS[addKeyForm.provider].map((m) => (
+                  <option key={m.value} value={m.value}>{m.label}</option>
+                ))}
+              </select>
+            )}
+            <div className="flex gap-2">
+              <button
+                disabled={!addKeyForm.key_value.trim() || !addKeyForm.name.trim() || addKeySaving}
+                onClick={async () => {
+                  if (!addKeyForm.key_value.trim() || !addKeyForm.name.trim()) return;
+                  setAddKeySaving(true);
+                  try {
+                    const id = crypto.randomUUID();
+                    await invoke("upsert_api_key", { key: { id, ...addKeyForm } });
+                    await loadConnections();
+                    setActiveConnectionId(id);
+                    setLocalProvider("ollama");
+                    setShowAddKey(false);
+                  } finally { setAddKeySaving(false); }
+                }}
+                className="flex items-center gap-1 px-3 py-1.5 rounded-lg bg-accent hover:bg-accent-hover disabled:opacity-40 text-white text-xs transition-colors"
+              >
+                {addKeySaving ? <Loader2 size={11} className="animate-spin" /> : <Plus size={11} />}
+                Ajouter
+              </button>
+              <button onClick={() => setShowAddKey(false)} className="px-3 py-1.5 rounded-lg bg-hover text-muted text-xs transition-colors">Annuler</button>
+            </div>
+          </div>
+        )}
       </div>
 
       <div className="flex-1 overflow-y-auto p-3 flex flex-col gap-3">
@@ -743,36 +1069,74 @@ Réponds UNIQUEMENT avec ce JSON (rien d'autre, pas de texte, pas de \`\`\`) :
         {/* ── OPERATIONS TAB ──────────────────────────────────────────────────── */}
         {activeTab === "ops" && (
           <>
-            {/* ── Provider switcher ── */}
-            <div className="flex flex-col gap-1.5">
-              <p className="text-[10px] text-muted uppercase tracking-wider">Fournisseur</p>
-              <div className="flex flex-wrap gap-1">
-                {([
-                  { id: "ollama",     label: "Local" },
-                  { id: "claude_cli", label: "CLI" },
-                  { id: "claude",     label: "Anthropic" },
-                  { id: "openai",     label: "OpenAI" },
-                  { id: "gemini",     label: "Gemini" },
-                  { id: "mistral",    label: "Mistral" },
-                ] as const).map(({ id, label }) => (
-                  <button
-                    key={id}
-                    onClick={() => setLocalProvider(id)}
-                    className={`px-2.5 py-1 rounded-lg text-[11px] font-medium border transition-colors ${
-                      localProvider === id
-                        ? "bg-accent/15 border-accent/40 text-accent"
-                        : "bg-hover border-border text-muted hover:text-secondary"
-                    }`}
-                  >
-                    {label}
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            {/* Model selector */}
+            {/* Model selector / Connection test */}
             <div>
-              {localProvider === "ollama" ? (
+              {isConnectionActive ? (
+                (() => {
+                  const conn = apiConnections.find(c => c.id === activeConnectionId);
+                  if (!conn) return null;
+                  const testConn = async () => {
+                    setConnTestStatus("testing");
+                    setConnTestMsg("");
+                    try {
+                      await invoke<string>("connection_chat", {
+                        connectionId: conn.id,
+                        system: "Tu es un assistant de test.",
+                        message: "Réponds juste \"OK\" sans rien d'autre.",
+                        temperature: 0.0,
+                      });
+                      setConnTestStatus("ok");
+                      setConnTestMsg("Connexion opérationnelle");
+                    } catch (e) {
+                      setConnTestStatus("error");
+                      setConnTestMsg(String(e));
+                    }
+                  };
+                  const providerLabel: Record<string, string> = {
+                    anthropic: "Anthropic", claude: "Anthropic", gemini: "Google Gemini",
+                    openai: "OpenAI", mistral: "Mistral AI", groq: "Groq",
+                  };
+                  return (
+                    <div className="flex flex-col gap-2 p-3 bg-hover rounded-xl border border-border">
+                      <div className="flex items-center justify-between">
+                        <div className="flex flex-col min-w-0">
+                          <span className="text-[10px] text-muted uppercase tracking-wide">
+                            {providerLabel[conn.provider] ?? conn.provider}
+                          </span>
+                          <span className="text-sm font-medium truncate" style={{ color: conn.color }}>{conn.name}</span>
+                          <span className="text-[11px] text-secondary truncate">{conn.model || "modèle par défaut"}</span>
+                        </div>
+                        <button
+                          onClick={testConn}
+                          disabled={connTestStatus === "testing"}
+                          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-panel border border-border text-xs text-secondary hover:text-primary hover:border-accent/40 disabled:opacity-50 transition-colors shrink-0"
+                          aria-label="Tester la connexion"
+                        >
+                          {connTestStatus === "testing"
+                            ? <Loader2 size={11} className="animate-spin text-accent" />
+                            : connTestStatus === "ok"
+                            ? <CheckCheck size={11} className="text-green-400" />
+                            : connTestStatus === "error"
+                            ? <AlertTriangle size={11} className="text-red-400" />
+                            : <Zap size={11} />}
+                          {connTestStatus === "testing" ? "Test…" : "Tester"}
+                        </button>
+                      </div>
+                      {connTestStatus !== "idle" && (
+                        <div className={`text-[11px] px-2 py-1.5 rounded-lg border ${
+                          connTestStatus === "ok"
+                            ? "text-green-400 bg-green-400/10 border-green-400/20"
+                            : connTestStatus === "error"
+                            ? "text-red-400 bg-red-400/10 border-red-400/20"
+                            : "text-muted bg-hover border-border"
+                        }`}>
+                          {connTestMsg || "Test en cours…"}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })()
+              ) : localProvider === "ollama" ? (
                 <>
                   <div className="flex items-center justify-between mb-1">
                     <label className="text-xs text-muted">Modèle Ollama</label>
@@ -968,31 +1332,6 @@ Réponds UNIQUEMENT avec ce JSON (rien d'autre, pas de texte, pas de \`\`\`) :
                 loading={isRunning && activeOp === "Formaliser"}
                 onClick={handleFormalize}
               />
-              <div className="flex flex-col gap-1">
-                <OpButton
-                  icon={<Languages size={14} />}
-                  label="Traduire"
-                  description={`Traduit la note en ${translateLang}`}
-                  active={activeOp === "Traduire"}
-                  loading={isRunning && activeOp === "Traduire"}
-                  onClick={handleTranslate}
-                />
-                <div className="flex gap-1 px-1 flex-wrap">
-                  {(["anglais", "espagnol", "allemand", "italien", "portugais", "japonais"] as const).map((lang) => (
-                    <button
-                      key={lang}
-                      onClick={() => setTranslateLang(lang)}
-                      className={`px-2 py-0.5 rounded-full text-[10px] border transition-colors ${
-                        translateLang === lang
-                          ? "bg-accent/15 border-accent/40 text-accent"
-                          : "bg-hover border-border text-muted hover:text-primary"
-                      }`}
-                    >
-                      {lang.charAt(0).toUpperCase() + lang.slice(1)}
-                    </button>
-                  ))}
-                </div>
-              </div>
               <OpButton
                 icon={<PenLine size={14} />}
                 label="Continuer"
@@ -1001,6 +1340,44 @@ Réponds UNIQUEMENT avec ce JSON (rien d'autre, pas de texte, pas de \`\`\`) :
                 loading={isRunning && activeOp === "Continuer"}
                 onClick={handleContinue}
               />
+              <div className="flex flex-col gap-1.5">
+                <div className="flex items-center gap-1.5 px-1">
+                  <div className="relative flex-1">
+                    <select
+                      value={translateFrom}
+                      onChange={(e) => setTranslateFrom(e.target.value)}
+                      className="w-full bg-hover border border-border rounded-lg px-2 py-1.5 text-[11px] text-secondary outline-none appearance-none cursor-pointer"
+                    >
+                      <option value="auto">Détecte auto.</option>
+                      {["français","anglais","espagnol","allemand","italien","portugais","japonais","chinois","arabe","russe"].map((l) => (
+                        <option key={l} value={l}>{l.charAt(0).toUpperCase() + l.slice(1)}</option>
+                      ))}
+                    </select>
+                    <ChevronDown size={10} className="absolute right-1.5 top-1/2 -translate-y-1/2 text-muted pointer-events-none" />
+                  </div>
+                  <ArrowRight size={12} className="text-muted shrink-0" />
+                  <div className="relative flex-1">
+                    <select
+                      value={translateLang}
+                      onChange={(e) => setTranslateLang(e.target.value)}
+                      className="w-full bg-hover border border-border rounded-lg px-2 py-1.5 text-[11px] text-secondary outline-none appearance-none cursor-pointer"
+                    >
+                      {["français","anglais","espagnol","allemand","italien","portugais","japonais","chinois","arabe","russe"].map((l) => (
+                        <option key={l} value={l}>{l.charAt(0).toUpperCase() + l.slice(1)}</option>
+                      ))}
+                    </select>
+                    <ChevronDown size={10} className="absolute right-1.5 top-1/2 -translate-y-1/2 text-muted pointer-events-none" />
+                  </div>
+                </div>
+                <OpButton
+                  icon={<Languages size={14} />}
+                  label="Traduire"
+                  description={`${translateFrom === "auto" ? "Auto" : translateFrom.charAt(0).toUpperCase() + translateFrom.slice(1)} → ${translateLang.charAt(0).toUpperCase() + translateLang.slice(1)}`}
+                  active={activeOp === "Traduire"}
+                  loading={isRunning && activeOp === "Traduire"}
+                  onClick={handleTranslate}
+                />
+              </div>
             </div>
 
             {/* Applied feedback */}
@@ -1120,9 +1497,62 @@ Réponds UNIQUEMENT avec ce JSON (rien d'autre, pas de texte, pas de \`\`\`) :
           </>
         )}
 
-        {/* ── TRACE / ACTIVITÉ TAB ────────────────────────────────────────────── */}
+        {/* ── DEBUG TAB ────────────────────────────────────────────── */}
         {activeTab === "trace" && (
           <>
+            {/* App info */}
+            <div className="bg-panel rounded-lg p-3 flex flex-col gap-1.5 border border-amber-500/20">
+              <div className="flex items-center gap-1.5 mb-0.5">
+                <Bug size={11} className="text-amber-400" />
+                <span className="text-xs font-medium text-amber-400">Info session</span>
+              </div>
+              <TraceRow label="version" value={appVersion || "…"} />
+              <TraceRow label="uptime" value={(() => {
+                const s = Math.floor((Date.now() - sessionStartRef.current) / 1000);
+                if (s < 60) return `${s}s`;
+                if (s < 3600) return `${Math.floor(s/60)}m ${s%60}s`;
+                return `${Math.floor(s/3600)}h ${Math.floor((s%3600)/60)}m`;
+              })()} />
+              <TraceRow label="provider" value={isConnectionActive
+                ? (apiConnections.find(c => c.id === activeConnectionId)?.name ?? "connexion")
+                : localProvider} />
+              <TraceRow label="modèle" value={isConnectionActive
+                ? (apiConnections.find(c => c.id === activeConnectionId)?.model || "auto")
+                : activeModel(effectiveSettings, selectedModel)} />
+              <TraceRow label="température" value={String(settings.temperature)} />
+              <TraceRow label="contexte" value={settings.context_messages === 0 ? "illimité" : `${settings.context_messages} msgs`} />
+              <TraceRow label="erreurs session" value={String(errorLog.length)} dim={errorLog.length === 0} />
+            </div>
+
+            {/* Error log */}
+            <div className="flex flex-col gap-1.5">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-1.5">
+                  <AlertTriangle size={11} className={errorLog.length > 0 ? "text-red-400" : "text-muted"} />
+                  <p className="text-xs text-muted">Journal des erreurs</p>
+                  {errorLog.length > 0 && (
+                    <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-red-400/15 text-red-400 border border-red-400/20">{errorLog.length}</span>
+                  )}
+                </div>
+                {errorLog.length > 0 && (
+                  <button onClick={() => setErrorLog([])} className="text-[10px] text-muted hover:text-primary transition-colors">Effacer</button>
+                )}
+              </div>
+              {errorLog.length === 0 ? (
+                <p className="text-[10px] text-muted/50 italic px-1">Aucune erreur cette session</p>
+              ) : (
+                <div className="flex flex-col gap-1 max-h-32 overflow-y-auto">
+                  {errorLog.map((e, i) => (
+                    <div key={i} className="flex items-start gap-2 px-2.5 py-1.5 bg-red-400/5 border border-red-400/15 rounded-lg text-[10px]">
+                      <span className="text-red-400/60 shrink-0 font-mono">{e.time}</span>
+                      <span className="text-red-400 font-medium shrink-0">{e.op}</span>
+                      <span className="text-red-300/70 min-w-0 truncate">{e.msg}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
             {/* Connection info */}
             <div className="bg-panel rounded-lg p-3 flex flex-col gap-1.5 border border-border">
               <div className="flex items-center gap-1.5 mb-0.5">
@@ -1315,136 +1745,3 @@ Réponds UNIQUEMENT avec ce JSON (rien d'autre, pas de texte, pas de \`\`\`) :
   );
 }
 
-// ─── Sub-components ───────────────────────────────────────────────────────────
-
-import React from "react";
-
-function TraceRow({ label, value, dim }: { label: string; value: string; dim?: boolean }) {
-  return (
-    <div className="flex items-start gap-2 font-mono text-[10px]">
-      <span className="text-muted shrink-0 w-12">{label}</span>
-      <span className={dim ? "text-muted" : "text-secondary break-all"}>{value}</span>
-    </div>
-  );
-}
-
-function OpButton({
-  icon, label, description, onClick, loading, active, badge,
-}: {
-  icon: React.ReactNode;
-  label: string;
-  description: string;
-  onClick: () => void;
-  loading: boolean;
-  active: boolean;
-  badge?: string;
-}) {
-  return (
-    <button
-      onClick={onClick}
-      disabled={loading}
-      className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-left transition-colors w-full ${
-        active
-          ? "bg-accent/10 border border-accent/30"
-          : "bg-hover hover:bg-active border border-transparent"
-      }`}
-    >
-      <span className={active ? "text-accent" : "text-secondary"}>{icon}</span>
-      <div className="flex-1 min-w-0">
-        <div className="flex items-center gap-1.5 mb-0.5">
-          <p className="text-sm font-medium text-primary leading-none">{label}</p>
-          {badge && (
-            <span className="px-1 py-0.5 rounded text-[9px] font-semibold leading-none bg-amber-400/20 text-amber-600 border border-amber-400/30">
-              {badge}
-            </span>
-          )}
-        </div>
-        <p className="text-xs text-muted truncate">{description}</p>
-      </div>
-      {loading && <Loader2 size={13} className="text-accent animate-spin shrink-0" />}
-    </button>
-  );
-}
-
-// ─── Correction modal ─────────────────────────────────────────────────────────
-
-function CorrectionModal({
-  title, subtitle, applyLabel, original, proposed, html, onApply, onCancel,
-}: {
-  title: string;
-  subtitle: string;
-  applyLabel: string;
-  original: string;
-  proposed: string;
-  html: string;
-  onApply: (html: string) => void;
-  onCancel: () => void;
-}) {
-  const diffParts = Diff.diffWordsWithSpace(original, proposed);
-  const hasChanges = diffParts.some((p) => p.added || p.removed);
-
-  return (
-    <div className="fixed inset-0 z-[200] flex items-center justify-center bg-black/70 backdrop-blur-sm">
-      <div className="bg-panel border border-border rounded-xl w-[680px] max-h-[80vh] flex flex-col shadow-2xl">
-
-        {/* Header */}
-        <div className="px-5 py-4 border-b border-border flex items-start gap-3 shrink-0">
-          <div className="w-9 h-9 rounded-full bg-accent/15 flex items-center justify-center shrink-0">
-            <CheckCheck size={16} className="text-accent" />
-          </div>
-          <div>
-            <h2 className="text-sm font-semibold text-primary">{title}</h2>
-            <p className="text-xs text-muted mt-0.5">
-              {hasChanges ? subtitle : "Aucune modification détectée dans le texte"}
-            </p>
-          </div>
-        </div>
-
-        {/* Diff */}
-        <div className="flex-1 overflow-y-auto px-5 py-4">
-          <div className="text-sm leading-relaxed whitespace-pre-wrap">
-            {diffParts.map((part, i) => (
-              <span
-                key={i}
-                className={
-                  part.added
-                    ? "bg-green-500/20 text-green-400 rounded"
-                    : part.removed
-                    ? "bg-red-500/15 text-red-400 line-through rounded"
-                    : "text-secondary"
-                }
-              >
-                {part.value}
-              </span>
-            ))}
-          </div>
-        </div>
-
-        {/* Footer */}
-        <div className="px-5 py-4 border-t border-border flex items-center justify-between shrink-0">
-          <p className="text-xs text-muted">
-            {hasChanges
-              ? `${diffParts.filter((p) => p.added).length} ajout(s) · ${diffParts.filter((p) => p.removed).length} suppression(s)`
-              : "Le texte est identique"}
-          </p>
-          <div className="flex gap-3">
-            <button
-              onClick={onCancel}
-              className="px-4 py-2 rounded-lg bg-hover hover:bg-active text-secondary hover:text-primary text-sm transition-colors"
-            >
-              Annuler
-            </button>
-            <button
-              onClick={() => onApply(html)}
-              disabled={!hasChanges}
-              className="px-4 py-2 rounded-lg bg-accent hover:bg-accent-hover text-white text-sm font-medium transition-colors disabled:opacity-40"
-            >
-              {applyLabel}
-            </button>
-          </div>
-        </div>
-
-      </div>
-    </div>
-  );
-}

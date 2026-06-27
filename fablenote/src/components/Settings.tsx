@@ -2,13 +2,14 @@ import { useState, useEffect, useRef } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { save } from "@tauri-apps/plugin-dialog";
 import { getCurrentWindow } from "@tauri-apps/api/window";
-import { BarChart2, BookMarked, CheckCircle2, Download, Eye, EyeOff, FolderOpen, Lock, LogOut, Moon, Plus, RotateCcw, Shield, ShieldOff, Sun, Terminal, Trash2 as TrashIcon, X, ChevronDown, Clock, Trash2, XCircle } from "lucide-react";
+import { BarChart2, BookMarked, CheckCircle2, Download, Eye, EyeOff, FolderOpen, Leaf, Lock, LogOut, Minus, Plus, RotateCcw, Shield, ShieldOff, Terminal, Trash2 as TrashIcon, TrendingUp, X, ChevronDown, Clock, Trash2, XCircle, Zap, Activity } from "lucide-react";
 import { useStore } from "../store";
 import { DEFAULT_SETTINGS } from "../store";
 import { Settings as SettingsType, PromptVersion } from "../types";
 import ApiKeysPanel from "./ApiKeysPanel";
 import StatsPanel from "./StatsPanel";
 import React from "react";
+import { TabBtn, Section, Field, Input, SecInput } from "./settings/SettingsWidgets";
 
 type Tab = "general" | "advanced" | "stats";
 
@@ -23,9 +24,23 @@ const PROMPT_FIELDS: { key: keyof SettingsType; label: string; rows: number }[] 
   { key: "continue_prompt",      label: "Continuation de texte",                       rows: 2 },
 ];
 
+const INTENSITY_LEVELS: {
+  key: "eco" | "low" | "medium" | "high" | "max";
+  label: string;
+  desc: string;
+  icon: React.ReactNode;
+  activeClass: string;
+}[] = [
+  { key: "eco",    label: "Éco",   desc: "1-2 phrases · minimal",      icon: <Leaf size={11} />,       activeClass: "bg-green-400/15 border-green-400/50 text-green-400"   },
+  { key: "low",    label: "Low",   desc: "3-5 phrases · concis",       icon: <Minus size={11} />,      activeClass: "bg-teal-400/15 border-teal-400/50 text-teal-400"       },
+  { key: "medium", label: "Moyen", desc: "Longueur naturelle",         icon: <Activity size={11} />,   activeClass: "bg-accent/15 border-accent/50 text-accent"             },
+  { key: "high",   label: "Fort",  desc: "Développé avec exemples",    icon: <TrendingUp size={11} />, activeClass: "bg-orange-400/15 border-orange-400/50 text-orange-400" },
+  { key: "max",    label: "Maxi",  desc: "Exhaustif · structuré",      icon: <Zap size={11} />,        activeClass: "bg-red-400/15 border-red-400/50 text-red-400"          },
+];
+
 const TEMP_PRESET_MAP: Record<string, (t: number) => string> = {
-  global_shadow_prompt: (t) => t <= 0.3 ? "Froid" : t <= 0.8 ? "Défaut" : t <= 1.4 ? "Chaud" : "Expert",
-  correct_prompt:       (t) => t <= 0.3 ? "Minimal" : t <= 0.8 ? "Défaut" : t <= 1.4 ? "Complet" : "Formel",
+  global_shadow_prompt: (t) => t <= 0.3 ? "Factuel" : t <= 0.8 ? "Défaut" : t <= 1.4 ? "Créatif" : "Expert",
+  correct_prompt:       (t) => t <= 0.3 ? "Léger" : t <= 0.8 ? "Défaut" : t <= 1.4 ? "Complet" : "Stylistique",
   summary_prompt:       (t) => t <= 0.3 ? "1 phrase" : t <= 0.8 ? "Défaut" : t <= 1.4 ? "Détaillé" : "Bullet points",
   rename_prompt:        (t) => t <= 0.3 ? "Minimaliste" : t <= 0.8 ? "Défaut" : t <= 1.4 ? "Descriptif" : "Créatif",
   sort_prompt:          (t) => t <= 0.8 ? "Simple" : t <= 1.4 ? "Défaut" : "Détaillé",
@@ -33,35 +48,51 @@ const TEMP_PRESET_MAP: Record<string, (t: number) => string> = {
 
 const PROMPT_PRESETS: Record<string, { label: string; value: string }[]> = {
   global_shadow_prompt: [
-    { label: "Défaut",  value: "Tu es un assistant de prise de notes, précis et concis. Réponds toujours en français." },
-    { label: "Froid",   value: "Tu es un assistant factuel et neutre. Réponds en français de manière concise, sans reformulation ni fioritures." },
-    { label: "Chaud",   value: "Tu es un assistant enthousiaste et créatif. Réponds en français avec dynamisme, propose des idées et suggestions." },
-    { label: "Rapide",  value: "Réponds en français. Sois ultra-court : 1 à 2 phrases maximum, va droit au but." },
-    { label: "Expert",  value: "Tu es un expert analytique. Réponds en français avec précision technique, structure et profondeur." },
+    { label: "Défaut",   value: "Tu es NATIA, un assistant de prise de notes expert. Sois direct, précis et utile. Réponds TOUJOURS en français sauf si une autre langue est explicitement demandée. Ne te présente pas, ne conclus pas avec des formules de politesse — va directement à l'essentiel." },
+    { label: "Factuel",  value: "Tu es un assistant factuel et neutre. Réponds en français, sans reformulation ni fioritures. Faits uniquement, pas d'opinion." },
+    { label: "Créatif",  value: "Tu es un assistant créatif et inspirant. En français, enrichis les idées, propose des angles originaux et des connexions inattendues." },
+    { label: "Expert",   value: "Tu es un expert analytique et méthodique. En français, réponds avec précision technique, structure claire et profondeur d'analyse." },
+    { label: "Coach",    value: "Tu es un coach bienveillant. En français, encourage, structure les pensées et pose des questions pertinentes pour approfondir la réflexion." },
   ],
   correct_prompt: [
-    { label: "Défaut",   value: "Corrige les fautes de grammaire et d'orthographe. Réponds uniquement avec le texte corrigé, sans explication :" },
-    { label: "Minimal",  value: "Corrige uniquement les fautes graves (orthographe, accords). Ne reformule pas. Texte corrigé uniquement :" },
-    { label: "Complet",  value: "Corrige l'orthographe, la grammaire, la ponctuation et améliore légèrement le style. Réponds uniquement avec le texte corrigé :" },
-    { label: "Formel",   value: "Corrige et adapte au registre formel/professionnel. Réponds uniquement avec le texte corrigé :" },
+    { label: "Défaut",       value: "Tu es un correcteur orthographique professionnel. Corrige uniquement les fautes d'orthographe, de grammaire, de conjugaison et de ponctuation. INTERDIT : reformuler, changer le style, réorganiser les idées, ajouter ou supprimer du contenu. Retourne SEULEMENT le texte corrigé, sans guillemets, sans commentaire, sans introduction. Texte à corriger :" },
+    { label: "Léger",        value: "Corrige uniquement les fautes graves d'orthographe et d'accord. Ne modifie rien d'autre. Retourne SEULEMENT le texte, sans commentaire :" },
+    { label: "Complet",      value: "Corrige l'orthographe, la grammaire, la ponctuation et la syntaxe. Ne reformule pas. Retourne SEULEMENT le texte corrigé, sans commentaire :" },
+    { label: "Stylistique",  value: "Corrige les fautes ET améliore légèrement le style (clarté, fluidité) sans changer le sens. Retourne SEULEMENT le texte amélioré, sans commentaire :" },
   ],
   summary_prompt: [
-    { label: "Défaut",        value: "Résume en 2-3 phrases en français :" },
-    { label: "1 phrase",      value: "Résume en une seule phrase en français :" },
-    { label: "Détaillé",      value: "Résume en 5-6 phrases en français en structurant les points clés :" },
-    { label: "Bullet points", value: "Résume sous forme de 3 à 5 bullet points en français :" },
-    { label: "TL;DR",         value: "Donne un TL;DR de 1 ligne en français :" },
+    { label: "Défaut",        value: "Rédige un résumé en 2 à 3 phrases en français. Capture uniquement les idées essentielles. Réponds SEULEMENT avec le résumé, sans introduction, sans \"Résumé :\", sans commentaire. Texte :" },
+    { label: "1 phrase",      value: "Résume en une seule phrase percutante en français. Réponds SEULEMENT avec cette phrase, sans commentaire :" },
+    { label: "Détaillé",      value: "Résume en 5 à 6 phrases structurées en français. Couvre les points clés, le contexte et les implications. Réponds SEULEMENT avec le résumé, sans commentaire :" },
+    { label: "Bullet points", value: "Résume sous forme de 3 à 5 bullet points en français (commence chaque point par « • »). Réponds SEULEMENT avec les bullet points, sans introduction :" },
+    { label: "TL;DR",         value: "Donne un TL;DR de max 15 mots en français. Réponds SEULEMENT avec le TL;DR, sans le mot \"TL;DR\" :" },
   ],
   rename_prompt: [
-    { label: "Défaut",      value: "Propose un titre court (5 mots max) en français. Réponds uniquement avec le titre :" },
-    { label: "Descriptif",  value: "Propose un titre descriptif (8 mots max) en français. Réponds uniquement avec le titre :" },
-    { label: "Créatif",     value: "Propose un titre accrocheur et original en français. Réponds uniquement avec le titre :" },
-    { label: "Minimaliste", value: "Propose un titre de 2-3 mots en français. Réponds uniquement avec le titre :" },
+    { label: "Défaut",      value: "Génère un titre de note en français de 3 à 5 mots. Le titre doit refléter le sujet central. Réponds avec le titre UNIQUEMENT : sans guillemets, sans point final, sans explication. Texte :" },
+    { label: "Descriptif",  value: "Génère un titre descriptif de 5 à 8 mots en français. Réponds avec le titre UNIQUEMENT, sans guillemets, sans commentaire. Texte :" },
+    { label: "Créatif",     value: "Génère un titre accrocheur et original de 4 à 6 mots en français. Réponds avec le titre UNIQUEMENT, sans guillemets. Texte :" },
+    { label: "Minimaliste", value: "Génère un titre de 2 à 3 mots en français qui capture l'essence. Réponds avec le titre UNIQUEMENT, sans guillemets. Texte :" },
   ],
   sort_prompt: [
-    { label: "Défaut",   value: "Organise ces notes par sujet. Utilise des sous-dossiers avec / si utile (ex: Travail/Projets). Réponds UNIQUEMENT avec du JSON valide, sans texte autour : [{\"id\":\"...\",\"folder\":\"NomDossier\"}]" },
-    { label: "Simple",   value: "Classe ces notes par thème principal (1 niveau). Réponds UNIQUEMENT avec du JSON : [{\"id\":\"...\",\"folder\":\"NomDossier\"}]" },
-    { label: "Détaillé", value: "Organise en arborescence détaillée avec des sous-dossiers (ex: Travail/Projets/Web). Réponds UNIQUEMENT avec du JSON : [{\"id\":\"...\",\"folder\":\"Dossier/SousDossier\"}]" },
+    { label: "Défaut",   value: "Analyse ces notes et assigne chacune à un dossier thématique. Utilise des sous-dossiers avec / pour plus de précision (ex: Travail/Projets). Réponds UNIQUEMENT avec un tableau JSON valide, sans texte avant ou après, sans bloc de code : [{\"id\":\"uuid\",\"folder\":\"NomDossier\"}]" },
+    { label: "Simple",   value: "Classe ces notes par thème principal (1 seul niveau, pas de sous-dossiers). Réponds UNIQUEMENT avec du JSON valide, sans texte : [{\"id\":\"uuid\",\"folder\":\"NomDossier\"}]" },
+    { label: "Détaillé", value: "Organise en arborescence précise avec sous-dossiers (ex: Travail/Projets/Web, Perso/Santé). Réponds UNIQUEMENT avec du JSON valide, sans texte : [{\"id\":\"uuid\",\"folder\":\"Dossier/SousDossier\"}]" },
+  ],
+  formalize_prompt: [
+    { label: "Défaut",      value: "Transforme ce texte en email professionnel en français. Structure obligatoire : \"Bonjour,\" (saut de ligne), corps clair et structuré, \"Cordialement,\" (saut de ligne), prénom/nom si mentionné sinon omis. Réponds UNIQUEMENT avec l'email, sans guillemets, sans commentaire :" },
+    { label: "Formel",      value: "Transforme ce texte en email professionnel formel (registre soutenu). \"Madame, Monsieur,\" si destinataire inconnu. Corps structuré, \"Veuillez agréer mes salutations distinguées,\". Réponds UNIQUEMENT avec l'email :" },
+    { label: "Décontracté", value: "Transforme ce texte en email professionnel mais accessible. Ton cordial et clair. \"Bonjour,\" puis corps fluide, \"Bonne journée,\" en fin. Réponds UNIQUEMENT avec l'email :" },
+  ],
+  translate_prompt: [
+    { label: "Défaut",       value: "Traduis le texte suivant en respectant strictement le style, le registre et le ton de l'original. Réponds UNIQUEMENT avec la traduction, sans introduction, sans commentaire, sans guillemets. Texte :" },
+    { label: "Littéral",     value: "Traduis mot à mot en restant aussi proche que possible de l'original, même si cela nuit à la fluidité. Réponds UNIQUEMENT avec la traduction :" },
+    { label: "Naturel",      value: "Traduis en adaptant les expressions idiomatiques pour une lecture naturelle dans la langue cible. Réponds UNIQUEMENT avec la traduction :" },
+  ],
+  continue_prompt: [
+    { label: "Défaut",    value: "Continue ce texte de façon fluide et cohérente. Respecte strictement le style, le registre et le ton de l'auteur. Écris 80 à 150 mots. Réponds UNIQUEMENT avec le texte à ajouter, en continuant directement là où le texte s'arrête, sans en-tête ni commentaire. Texte :" },
+    { label: "Court",     value: "Continue ce texte en 30 à 50 mots. Respecte le style de l'auteur. Réponds UNIQUEMENT avec la continuation directe, sans en-tête :" },
+    { label: "Long",      value: "Continue ce texte en 200 à 300 mots. Développe les idées avec profondeur. Respecte le style de l'auteur. Réponds UNIQUEMENT avec la continuation directe :" },
+    { label: "Narratif",  value: "Continue ce texte narratif en restant fidèle à l'intrigue, aux personnages et au ton. 100 à 200 mots. Réponds UNIQUEMENT avec la continuation directe :" },
   ],
 };
 
@@ -81,7 +112,7 @@ function fmtDate(iso: string) {
 }
 
 export default function Settings() {
-  const { settings, saveSettings, toggleSettings, isDark, toggleTheme, hasPassword, passwordType, lock, setupPassword, changePassword, removePassword, memoryEnabled, setMemoryEnabled, memoryGraphEnabled, setMemoryGraphEnabled, memoryNodes, clearMemoryNodes } = useStore();
+  const { settings, saveSettings, toggleSettings, theme, setTheme, isDark, hasPassword, passwordType, lock, setupPassword, changePassword, removePassword, memoryEnabled, setMemoryEnabled, memoryGraphEnabled, setMemoryGraphEnabled, memoryNodes, clearMemoryNodes } = useStore();
   const [confirmClear, setConfirmClear] = React.useState(false);
   const [form, setForm] = useState<SettingsType>({ ...settings });
   const [tab, setTab] = useState<Tab>("general");
@@ -218,7 +249,7 @@ export default function Settings() {
     finally { setSecLoading(false); }
   };
 
-  const set = (key: keyof SettingsType, value: string) =>
+  const set = (key: keyof SettingsType, value: string | number | boolean) =>
     setForm((f) => ({ ...f, [key]: value }));
 
   const isUnsaved = (key: keyof SettingsType) => form[key] !== settings[key];
@@ -267,14 +298,16 @@ export default function Settings() {
   const securitySection = (
     <Section title="Sécurité">
       {!hasPassword && secMode === "idle" && (
-        <div className="flex items-start justify-between gap-4">
-          <div>
-            <p className="text-sm text-secondary">Protection par mot de passe</p>
-            <p className="text-[10px] text-muted mt-0.5">Données non chiffrées · AES-256-GCM disponible</p>
+        <div className="flex flex-col gap-3">
+          <div className="flex items-start justify-between gap-4">
+            <div>
+              <p className="text-sm text-secondary">Protection par mot de passe</p>
+              <p className="text-[10px] text-muted mt-0.5">Notes non chiffrées · Clés API protégées par le keychain OS · AES-256-GCM disponible</p>
+            </div>
+            <button onClick={() => setSecMode("setup")} className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-accent/10 border border-accent/30 text-xs text-accent hover:bg-accent/20 transition-colors shrink-0">
+              <Shield size={11} />Activer
+            </button>
           </div>
-          <button onClick={() => setSecMode("setup")} className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-accent/10 border border-accent/30 text-xs text-accent hover:bg-accent/20 transition-colors shrink-0">
-            <Shield size={11} />Activer
-          </button>
         </div>
       )}
 
@@ -350,6 +383,28 @@ export default function Settings() {
             <button onClick={cancelSec} className="flex-1 py-2 rounded-lg bg-hover border border-border text-xs text-secondary hover:text-primary transition-colors">Annuler</button>
             <button onClick={doRemove} disabled={secLoading || !secA} className="flex-1 py-2 rounded-lg bg-red-400/80 hover:bg-red-400 text-white text-xs font-medium transition-colors disabled:opacity-50">{secLoading ? "Déchiffrement…" : "Désactiver"}</button>
           </div>
+        </div>
+      )}
+      {secMode === "idle" && (
+        <div className="flex items-center justify-between pt-1">
+          <div className="flex items-center gap-2">
+            <Clock size={12} className="text-muted" />
+            <div>
+              <p className="text-xs text-secondary">Verrouillage automatique</p>
+              <p className="text-[10px] text-muted">après inactivité</p>
+            </div>
+          </div>
+          <select
+            value={form.auto_lock_minutes}
+            onChange={(e) => set("auto_lock_minutes", Number(e.target.value))}
+            className="text-xs bg-hover border border-border rounded-lg px-2 py-1.5 text-secondary focus:outline-none focus:border-accent/50"
+          >
+            <option value={0}>Désactivé</option>
+            <option value={5}>5 min</option>
+            <option value={15}>15 min</option>
+            <option value={30}>30 min</option>
+            <option value={60}>1 heure</option>
+          </select>
         </div>
       )}
     </Section>
@@ -580,6 +635,54 @@ export default function Settings() {
             </p>
           </div>
         </div>
+
+        {/* Context window */}
+        <div className="flex items-center justify-between">
+          <div>
+            <p className="text-sm text-secondary">Historique de conversation</p>
+            <p className="text-[10px] text-muted mt-0.5">Nombre de messages passés envoyés à l'IA</p>
+          </div>
+          <select value={form.context_messages} onChange={(e) => set("context_messages", Number(e.target.value))}
+            className="text-xs bg-hover border border-border rounded-lg px-2 py-1.5 text-secondary focus:outline-none focus:border-accent/50">
+            <option value={0}>Illimité</option>
+            <option value={10}>10 messages</option>
+            <option value={20}>20 messages</option>
+            <option value={50}>50 messages</option>
+          </select>
+        </div>
+
+        {/* Prompt intensity bar */}
+        <div className="flex flex-col gap-2">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-sm text-secondary">Consommation de tokens</p>
+              <p className="text-[10px] text-muted mt-0.5">
+                {INTENSITY_LEVELS.find(l => l.key === (form.prompt_intensity ?? "medium"))?.desc ?? "Longueur naturelle"}
+              </p>
+            </div>
+            <span className={`text-[11px] font-semibold ${INTENSITY_LEVELS.find(l => l.key === (form.prompt_intensity ?? "medium"))?.activeClass.split(" ").find(c => c.startsWith("text-")) ?? "text-accent"}`}>
+              {INTENSITY_LEVELS.find(l => l.key === (form.prompt_intensity ?? "medium"))?.label}
+            </span>
+          </div>
+          <div className="flex gap-1">
+            {INTENSITY_LEVELS.map((level) => {
+              const active = (form.prompt_intensity ?? "medium") === level.key;
+              return (
+                <button
+                  key={level.key}
+                  onClick={() => set("prompt_intensity", level.key)}
+                  title={level.desc}
+                  className={`flex-1 flex flex-col items-center gap-1 py-2 rounded-lg border text-[10px] font-medium transition-all ${
+                    active ? level.activeClass : "bg-hover border-border text-muted hover:text-secondary hover:border-border/80"
+                  }`}
+                >
+                  <span className={active ? "" : "opacity-50"}>{level.icon}</span>
+                  {level.label}
+                </button>
+              );
+            })}
+          </div>
+        </div>
       </Section>
 
       <Section title="Données">
@@ -657,16 +760,81 @@ export default function Settings() {
       </Section>
 
       <Section title="Apparence">
+        <div className="flex flex-col gap-2">
+          <p className="text-sm text-secondary">Thème</p>
+          <div className="grid grid-cols-4 gap-2">
+            {([
+              { key: "light",    label: "Clair",   bg: "#f5f3ee", panel: "#e8e4db", accent: "#d97757", dark: false },
+              { key: "dark",     label: "Sombre",  bg: "#242424", panel: "#303030", accent: "#d97757", dark: true  },
+              { key: "midnight", label: "Minuit",  bg: "#0d1117", panel: "#1c2128", accent: "#818cf8", dark: true  },
+              { key: "ink",      label: "Encre",   bg: "#0a0a0a", panel: "#171717", accent: "#e8b84b", dark: true  },
+              { key: "foret",    label: "Forêt",   bg: "#0f1a14", panel: "#192620", accent: "#d97757", dark: true  },
+              { key: "brume",    label: "Brume",   bg: "#eeecea", panel: "#dedad6", accent: "#5b7fa6", dark: false },
+              { key: "sakura",   label: "Sakura",  bg: "#fdf6f0", panel: "#f1e2d6", accent: "#c97088", dark: false },
+            ] as const).map(({ key, label, bg, panel, accent }) => {
+              const active = theme === key;
+              return (
+                <button
+                  key={key}
+                  onClick={() => setTheme(key)}
+                  className={`relative flex flex-col items-center gap-1.5 p-2 rounded-xl border transition-all ${
+                    active ? "border-accent ring-1 ring-accent/40" : "border-border hover:border-border/60"
+                  }`}
+                  style={{ backgroundColor: bg }}
+                  aria-label={`Thème ${label}`}
+                >
+                  <div className="w-full h-5 rounded-md" style={{ backgroundColor: panel }} />
+                  <div className="w-4 h-1.5 rounded-full" style={{ backgroundColor: accent }} />
+                  <span className="text-[10px] font-medium" style={{ color: bg < "#888888" ? "#ffffff99" : "#00000099" }}>{label}</span>
+                  {active && (
+                    <div className="absolute top-1 right-1 w-2 h-2 rounded-full" style={{ backgroundColor: accent }} />
+                  )}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+
+        {/* Editor typography */}
         <div className="flex items-center justify-between">
           <div>
-            <p className="text-sm text-secondary">Thème</p>
-            <p className="text-[10px] text-muted mt-0.5">Clair ou sombre</p>
+            <p className="text-sm text-secondary">Police de l'éditeur</p>
+            <p className="text-[10px] text-muted mt-0.5">Famille de caractères des notes</p>
           </div>
-          <button onClick={toggleTheme} className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-hover border border-border text-sm text-secondary hover:text-primary hover:border-accent/40 transition-colors">
-            {isDark ? <Moon size={13} className="text-accent" /> : <Sun size={13} className="text-amber-400" />}
-            {isDark ? "Sombre" : "Clair"}
-          </button>
+          <select value={form.editor_font_family} onChange={(e) => set("editor_font_family", e.target.value)}
+            className="text-xs bg-hover border border-border rounded-lg px-2 py-1.5 text-secondary focus:outline-none focus:border-accent/50">
+            <option value="system">Système</option>
+            <option value="serif">Serif</option>
+            <option value="mono">Monospace</option>
+          </select>
         </div>
+        <div className="flex items-center justify-between">
+          <div>
+            <p className="text-sm text-secondary">Taille de la police</p>
+            <p className="text-[10px] text-muted mt-0.5">Taille du texte dans l'éditeur</p>
+          </div>
+          <select value={form.editor_font_size} onChange={(e) => set("editor_font_size", Number(e.target.value))}
+            className="text-xs bg-hover border border-border rounded-lg px-2 py-1.5 text-secondary focus:outline-none focus:border-accent/50">
+            <option value={13}>Petite (13px)</option>
+            <option value={15}>Normale (15px)</option>
+            <option value={17}>Grande (17px)</option>
+            <option value={19}>Très grande (19px)</option>
+          </select>
+        </div>
+        <div className="flex items-center justify-between">
+          <div>
+            <p className="text-sm text-secondary">Largeur de l'éditeur</p>
+            <p className="text-[10px] text-muted mt-0.5">Largeur max du contenu</p>
+          </div>
+          <select value={form.editor_max_width} onChange={(e) => set("editor_max_width", e.target.value)}
+            className="text-xs bg-hover border border-border rounded-lg px-2 py-1.5 text-secondary focus:outline-none focus:border-accent/50">
+            <option value="narrow">Étroit (600px)</option>
+            <option value="normal">Normal (720px)</option>
+            <option value="wide">Large (960px)</option>
+            <option value="full">Pleine largeur</option>
+          </select>
+        </div>
+
         <div className="flex items-center justify-between">
           <div>
             <p className="text-sm text-secondary">Dé à 20 faces</p>
@@ -764,7 +932,7 @@ export default function Settings() {
 
               {/* Textarea */}
               <textarea
-                id={key} value={form[key]} onChange={(e) => set(key, e.target.value)} rows={rows}
+                id={key} value={form[key] as string} onChange={(e) => set(key, e.target.value)} rows={rows}
                 className="w-full bg-hover border border-border rounded-lg px-3 py-2 text-sm text-primary outline-none focus:border-accent/50 transition-colors resize-none font-mono"
               />
 
@@ -904,6 +1072,23 @@ export default function Settings() {
           </button>
         </div>
       </Section>
+
+      <Section title="Développement">
+        <div className="flex items-center justify-between">
+          <div>
+            <p className="text-sm text-secondary">Mode débogage</p>
+            <p className="text-[10px] text-muted mt-0.5">Active l'onglet Activité dans le panneau IA — journalisation des requêtes</p>
+          </div>
+          <button
+            role="switch"
+            aria-checked={form.debug_mode}
+            onClick={() => set("debug_mode", !form.debug_mode)}
+            className={`relative w-9 h-5 rounded-full transition-colors shrink-0 ${form.debug_mode ? "bg-accent" : "bg-border"}`}
+          >
+            <span className={`absolute top-0.5 w-4 h-4 rounded-full bg-white shadow-sm transition-transform ${form.debug_mode ? "left-[18px]" : "left-0.5"}`} />
+          </button>
+        </div>
+      </Section>
     </>
   );
 
@@ -1008,47 +1193,3 @@ export default function Settings() {
   );
 }
 
-function TabBtn({ active, onClick, children }: { active: boolean; onClick: () => void; children: React.ReactNode }) {
-  return (
-    <button onClick={onClick} className={`px-3 py-1.5 text-sm font-medium transition-colors border-b-2 -mb-px ${active ? "text-primary border-accent" : "text-muted border-transparent hover:text-primary"}`}>
-      {children}
-    </button>
-  );
-}
-
-function Section({ title, children }: { title: string; children: React.ReactNode }) {
-  return (
-    <div>
-      <p className="text-xs text-muted uppercase tracking-wider mb-3">{title}</p>
-      <div className="flex flex-col gap-3">{children}</div>
-    </div>
-  );
-}
-
-function Field({ label, id, children }: { label: string; id: string; children: React.ReactNode }) {
-  return (
-    <div>
-      <label htmlFor={id} className="text-sm text-secondary mb-1.5 block">{label}</label>
-      {children}
-    </div>
-  );
-}
-
-function Input({ id, value, onChange, placeholder, type = "text" }: { id: string; value: string; onChange: (v: string) => void; placeholder?: string; type?: string }) {
-  return (
-    <input id={id} type={type} value={value} onChange={(e) => onChange(e.target.value)} placeholder={placeholder}
-      className="w-full bg-hover border border-border rounded-lg px-3 py-2 text-sm text-primary outline-none focus:border-accent/50 transition-colors" />
-  );
-}
-
-function SecInput({ label, value, onChange, show, onToggleShow }: { label: string; value: string; onChange: (v: string) => void; show: boolean; onToggleShow: () => void }) {
-  return (
-    <div className="relative">
-      <input type={show ? "text" : "password"} value={value} onChange={(e) => onChange(e.target.value)} placeholder={label}
-        className="w-full bg-hover border border-border rounded-lg px-3 py-2 pr-9 text-sm text-primary outline-none focus:border-accent/50 transition-colors" />
-      <button type="button" onClick={onToggleShow} className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted hover:text-primary transition-colors" tabIndex={-1}>
-        {show ? <EyeOff size={13} /> : <Eye size={13} />}
-      </button>
-    </div>
-  );
-}

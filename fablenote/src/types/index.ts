@@ -39,6 +39,13 @@ export interface Settings {
   gemini_model: string;
   mistral_api_key: string;
   mistral_model: string;
+  auto_lock_minutes: number;
+  editor_font_size: number;
+  editor_font_family: string;
+  editor_max_width: string;
+  context_messages: number;
+  debug_mode: boolean;
+  prompt_intensity: "eco" | "low" | "medium" | "high" | "max";
 }
 
 export interface PromptVersion {

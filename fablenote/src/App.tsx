@@ -6,11 +6,15 @@ import Disclaimer from "./components/Disclaimer";
 import LockScreen from "./components/LockScreen";
 
 export default function App() {
-  const { loadNotes, loadSettings, loadFolders, loadColors, isDark, checkSecurity, isLocked, hasPassword } = useStore();
+  const { loadNotes, loadSettings, loadFolders, loadColors, theme, setTheme, isDark, checkSecurity, isLocked, hasPassword } = useStore();
+
+  useEffect(() => {
+    // Apply persisted theme on startup
+    setTheme(theme);
+  }, []);
 
   useEffect(() => {
     checkSecurity().then(() => {
-      // Only load data if not locked (no password) or after unlock (handled in unlock action)
       if (!useStore.getState().isLocked) {
         loadSettings();
         loadNotes();
@@ -20,7 +24,6 @@ export default function App() {
     }).catch(console.error);
   }, []);
 
-  // Load data once unlocked
   useEffect(() => {
     if (!isLocked) {
       loadSettings();

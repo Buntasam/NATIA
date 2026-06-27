@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { invoke } from "@tauri-apps/api/core";
-import { Check, Edit2, Eye, EyeOff, Plus, Trash2 } from "lucide-react";
+import { Check, ChevronDown, Edit2, Eye, EyeOff, Plus, Trash2 } from "lucide-react";
 
 interface ApiKey {
   id: string;
@@ -8,20 +8,65 @@ interface ApiKey {
   provider: string;
   key_value: string;
   color: string;
+  model: string;
 }
 
 const PROVIDERS = ["OpenAI", "Anthropic", "Mistral", "Groq", "Gemini", "Cohere", "Autre"];
+
+function detectProvider(key: string): string {
+  if (key.startsWith("sk-ant-")) return "Anthropic";
+  if (key.startsWith("AIza")) return "Gemini";
+  if (key.startsWith("gsk_")) return "Groq";
+  if (/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(key)) return "Mistral";
+  if (key.startsWith("sk-")) return "OpenAI";
+  return "";
+}
 
 const COLORS = [
   "#6366f1", "#10b981", "#f59e0b", "#ef4444",
   "#8b5cf6", "#06b6d4", "#f97316", "#ec4899",
 ];
 
+const PROVIDER_MODELS: Record<string, { value: string; label: string }[]> = {
+  Anthropic: [
+    { value: "claude-haiku-4-5-20251001", label: "Haiku 4.5 — rapide · économique" },
+    { value: "claude-sonnet-4-6", label: "Sonnet 4.6 — équilibré · recommandé" },
+    { value: "claude-opus-4-8", label: "Opus 4.8 — puissant · plus lent" },
+  ],
+  OpenAI: [
+    { value: "gpt-4o-mini", label: "GPT-4o Mini — rapide · économique" },
+    { value: "gpt-4o", label: "GPT-4o — équilibré · recommandé" },
+    { value: "gpt-4-turbo", label: "GPT-4 Turbo — puissant" },
+    { value: "o1-mini", label: "o1 Mini — raisonnement" },
+  ],
+  Gemini: [
+    { value: "gemini-2.0-flash", label: "Gemini 2.0 Flash — rapide · recommandé" },
+    { value: "gemini-1.5-flash", label: "Gemini 1.5 Flash — économique" },
+    { value: "gemini-1.5-pro", label: "Gemini 1.5 Pro — puissant" },
+  ],
+  Mistral: [
+    { value: "mistral-small-latest", label: "Mistral Small — rapide · économique" },
+    { value: "mistral-medium-latest", label: "Mistral Medium — équilibré" },
+    { value: "mistral-large-latest", label: "Mistral Large — puissant" },
+  ],
+  Groq: [
+    { value: "llama-3.1-8b-instant", label: "Llama 3.1 8B — ultra rapide" },
+    { value: "llama-3.1-70b-versatile", label: "Llama 3.1 70B — équilibré" },
+    { value: "mixtral-8x7b-32768", label: "Mixtral 8x7B" },
+  ],
+};
+
+function defaultModelForProvider(provider: string): string {
+  const models = PROVIDER_MODELS[provider];
+  return models?.[0]?.value ?? "";
+}
+
 const blank = (): Omit<ApiKey, "id"> => ({
   name: "",
   provider: "OpenAI",
   key_value: "",
   color: COLORS[0],
+  model: PROVIDER_MODELS["OpenAI"][0].value,
 });
 
 function mask(k: string) {
@@ -40,7 +85,7 @@ export default function ApiKeysPanel() {
   const reload = async () => setKeys(await invoke<ApiKey[]>("get_api_keys"));
 
   const startAdd = () => { setForm(blank()); setEditId("new"); setShowKey(false); };
-  const startEdit = (k: ApiKey) => { setForm({ name: k.name, provider: k.provider, key_value: k.key_value, color: k.color }); setEditId(k.id); setShowKey(false); };
+  const startEdit = (k: ApiKey) => { setForm({ name: k.name, provider: k.provider, key_value: k.key_value, color: k.color, model: k.model }); setEditId(k.id); setShowKey(false); };
   const cancel = () => setEditId(null);
 
   const save = async () => {
@@ -108,6 +153,16 @@ function Form({ form, setForm, showKey, setShowKey, onSave, onCancel }: {
   onCancel: () => void;
 }) {
   const set = (k: keyof typeof form, v: string) => setForm((f) => ({ ...f, [k]: v }));
+
+  const handleKeyChange = (key: string) => {
+    const detected = detectProvider(key);
+    setForm((f) => ({
+      ...f,
+      key_value: key,
+      ...(detected ? { provider: detected, model: defaultModelForProvider(detected) } : {}),
+      ...(detected && !f.name ? { name: detected } : {}),
+    }));
+  };
   const ok = form.name.trim() && form.key_value.trim();
 
   return (
@@ -121,18 +176,35 @@ function Form({ form, setForm, showKey, setShowKey, onSave, onCancel }: {
         />
         <select
           value={form.provider}
-          onChange={(e) => set("provider", e.target.value)}
+          onChange={(e) => {
+            const p = e.target.value;
+            setForm((f) => ({ ...f, provider: p, model: defaultModelForProvider(p) }));
+          }}
           className="bg-hover border border-border rounded-lg px-2 py-1.5 text-sm text-primary outline-none"
         >
           {PROVIDERS.map((p) => <option key={p} value={p}>{p}</option>)}
         </select>
       </div>
+      {PROVIDER_MODELS[form.provider] && (
+        <div className="relative">
+          <select
+            value={form.model}
+            onChange={(e) => set("model", e.target.value)}
+            className="w-full bg-hover border border-border rounded-lg px-2.5 py-1.5 text-sm text-primary outline-none appearance-none"
+          >
+            {PROVIDER_MODELS[form.provider].map((m) => (
+              <option key={m.value} value={m.value}>{m.label}</option>
+            ))}
+          </select>
+          <ChevronDown size={12} className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted pointer-events-none" />
+        </div>
+      )}
 
       <div className="relative">
         <input
           type={showKey ? "text" : "password"}
           value={form.key_value}
-          onChange={(e) => set("key_value", e.target.value)}
+          onChange={(e) => handleKeyChange(e.target.value)}
           placeholder="sk-..."
           className="w-full bg-hover border border-border rounded-lg px-2.5 py-1.5 pr-20 text-sm text-primary outline-none focus:border-accent/50 placeholder-muted font-mono"
         />

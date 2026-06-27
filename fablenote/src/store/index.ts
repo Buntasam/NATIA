@@ -90,12 +90,14 @@ interface AppStore {
   saveSettings: (s: Settings) => Promise<void>;
 
   // UI actions
+  theme: string;
   isDark: boolean;
+  setTheme: (name: string) => void;
+  toggleTheme: () => void;
   versionLimit: number | null;
   saveMode: "manual" | "balanced" | "auto";
   focusMode: boolean;
   showGraph: boolean;
-  toggleTheme: () => void;
   setSearchQuery: (q: string) => void;
   toggleAiPanel: () => void;
   toggleVersionPanel: () => void;
@@ -127,15 +129,22 @@ export const DEFAULT_SETTINGS: Settings = {
   gemini_model: "gemini-2.0-flash",
   mistral_api_key: "",
   mistral_model: "mistral-small-latest",
-  global_shadow_prompt: "Tu es un assistant de prise de notes, précis et concis. Réponds toujours en français.",
-  correct_prompt: "Corrige les fautes de grammaire et d'orthographe. Réponds uniquement avec le texte corrigé, sans explication :",
-  summary_prompt: "Résume en 2-3 phrases en français :",
-  rename_prompt: "Propose un titre court (5 mots max) en français. Réponds uniquement avec le titre :",
-  sort_prompt: "Organise ces notes par sujet. Utilise des sous-dossiers avec / si utile (ex: Travail/Projets). Réponds UNIQUEMENT avec du JSON valide, sans texte autour : [{\"id\":\"...\",\"folder\":\"NomDossier\"}]",
-  formalize_prompt: "Réécris ce texte sous forme d'email professionnel en français. Commence par \"Bonjour,\" et termine par \"Cordialement,\". Réponds uniquement avec l'email reformulé, sans commentaires :",
-  translate_prompt: "Réponds uniquement avec la traduction, sans commentaires ni explications :",
-  continue_prompt: "Continue ce texte de manière cohérente, en respectant le style et le ton de l'auteur. Écris entre 80 et 150 mots supplémentaires. Réponds uniquement avec le texte à ajouter :",
+  global_shadow_prompt: "Tu es NATIA, un assistant de prise de notes expert. Sois direct, précis et utile. Réponds TOUJOURS en français sauf si une autre langue est explicitement demandée. Ne te présente pas, ne conclus pas avec des formules de politesse — va directement à l'essentiel.",
+  correct_prompt: "Tu es un correcteur orthographique professionnel. Corrige uniquement les fautes d'orthographe, de grammaire, de conjugaison et de ponctuation. INTERDIT : reformuler, changer le style, réorganiser les idées, ajouter ou supprimer du contenu. Retourne SEULEMENT le texte corrigé, sans guillemets, sans commentaire, sans introduction. Texte à corriger :",
+  summary_prompt: "Rédige un résumé en 2 à 3 phrases en français. Capture uniquement les idées essentielles. Réponds SEULEMENT avec le résumé, sans introduction, sans \"Résumé :\", sans commentaire. Texte :",
+  rename_prompt: "Génère un titre de note en français de 3 à 5 mots. Le titre doit refléter le sujet central. Réponds avec le titre UNIQUEMENT : sans guillemets, sans point final, sans explication. Texte :",
+  sort_prompt: "Analyse ces notes et assigne chacune à un dossier thématique. Utilise des sous-dossiers avec / pour plus de précision (ex: Travail/Projets). Réponds UNIQUEMENT avec un tableau JSON valide, sans texte avant ou après, sans bloc de code : [{\"id\":\"uuid\",\"folder\":\"NomDossier\"}]",
+  formalize_prompt: "Transforme ce texte en email professionnel en français. Structure obligatoire : \"Bonjour,\" (saut de ligne), corps clair et structuré, \"Cordialement,\" (saut de ligne), prénom/nom si mentionné sinon omis. Réponds UNIQUEMENT avec l'email, sans guillemets, sans commentaire :",
+  translate_prompt: "Traduis le texte suivant en respectant strictement le style, le registre et le ton de l'original. Réponds UNIQUEMENT avec la traduction, sans introduction, sans commentaire, sans guillemets. Texte :",
+  continue_prompt: "Continue ce texte de façon fluide et cohérente. Respecte strictement le style, le registre et le ton de l'auteur. Écris 80 à 150 mots. Réponds UNIQUEMENT avec le texte à ajouter, en continuant directement là où le texte s'arrête, sans en-tête ni commentaire. Texte :",
   temperature: 0.7,
+  auto_lock_minutes: 0,
+  editor_font_size: 16,
+  editor_font_family: "system",
+  editor_max_width: "normal",
+  context_messages: 0,
+  debug_mode: false,
+  prompt_intensity: "medium",
 };
 
 export const useStore = create<AppStore>((set, get) => ({
@@ -421,7 +430,26 @@ export const useStore = create<AppStore>((set, get) => ({
   toggleFocusMode: () => set((s) => ({ focusMode: !s.focusMode })),
   toggleGraph: () => set((s) => ({ showGraph: !s.showGraph })),
 
-  isDark: localStorage.getItem("theme") === "dark",
+  theme: localStorage.getItem("natia_theme") ?? (localStorage.getItem("theme") === "dark" ? "dark" : "light"),
+  isDark: (() => {
+    const t = localStorage.getItem("natia_theme") ?? (localStorage.getItem("theme") === "dark" ? "dark" : "light");
+    return ["dark", "midnight", "ink", "foret"].includes(t);
+  })(),
+  setTheme: (name: string) => {
+    const root = document.documentElement;
+    root.classList.remove("dark", "theme-midnight", "theme-ink", "theme-foret", "theme-brume", "theme-sakura");
+    if (name === "dark") root.classList.add("dark");
+    else if (!["light"].includes(name)) root.classList.add(`theme-${name}`);
+    localStorage.setItem("natia_theme", name);
+    const dark = ["dark", "midnight", "ink", "foret"].includes(name);
+    invoke("set_window_theme", { dark }).catch(() => {});
+    set({ theme: name, isDark: dark });
+  },
+  toggleTheme: () => {
+    const current = get().theme;
+    const dark = ["dark", "midnight", "ink", "foret"].includes(current);
+    get().setTheme(dark ? "light" : "dark");
+  },
   versionLimit: (() => {
     const v = localStorage.getItem("natia_version_limit");
     if (v === "null") return null;
@@ -437,19 +465,6 @@ export const useStore = create<AppStore>((set, get) => ({
     localStorage.setItem("natia_save_mode", mode);
     set({ saveMode: mode });
   },
-  toggleTheme: () =>
-    set((s) => {
-      const next = !s.isDark;
-      if (next) {
-        document.documentElement.classList.add("dark");
-        localStorage.setItem("theme", "dark");
-      } else {
-        document.documentElement.classList.remove("dark");
-        localStorage.setItem("theme", "light");
-      }
-      invoke("set_window_theme", { dark: next }).catch(() => {});
-      return { isDark: next };
-    }),
   setSearchQuery: (q) => set({ searchQuery: q }),
   toggleAiPanel: () => set((s) => ({ showAiPanel: !s.showAiPanel, showVersionPanel: false })),
   toggleVersionPanel: () => set((s) => ({ showVersionPanel: !s.showVersionPanel, showAiPanel: false })),

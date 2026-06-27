@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { Clock, GitBranch, RotateCcw, X } from "lucide-react";
 import { invoke } from "@tauri-apps/api/core";
+import DOMPurify from "dompurify";
 import { useStore } from "../store";
 import { Version } from "../types";
 import * as Diff from "diff";
@@ -213,7 +214,7 @@ export default function VersionTree() {
               ) : (
                 <div
                   className="text-xs text-secondary leading-relaxed prose-sm"
-                  dangerouslySetInnerHTML={{ __html: versionContent }}
+                  dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(versionContent) }}
                 />
               )}
             </div>

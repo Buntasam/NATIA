@@ -1,5 +1,6 @@
 import { useEffect, useState, useCallback } from "react";
 import { ChevronLeft, ChevronRight, X } from "lucide-react";
+import DOMPurify from "dompurify";
 import { useStore } from "../store";
 
 function htmlToSlides(html: string): string[] {
@@ -84,7 +85,7 @@ export default function PresentationMode({ onClose }: Props) {
       <div className="flex-1 flex items-center justify-center px-16 py-12 overflow-hidden">
         <div
           className="slide-content max-w-4xl w-full"
-          dangerouslySetInnerHTML={{ __html: slides[idx] }}
+          dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(slides[idx]) }}
         />
       </div>
 

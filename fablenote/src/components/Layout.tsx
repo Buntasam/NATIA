@@ -21,8 +21,28 @@ export default function Layout() {
   const {
     showAiPanel, showVersionPanel, showSettings, showTrash,
     createNote, toggleSettings, toggleAiPanel, toggleVersionPanel,
-    focusMode, toggleGraph, notes, selectNote, recentNoteIds,
+    focusMode, toggleFocusMode, toggleGraph, notes, selectNote, recentNoteIds,
+    settings, isLocked, lock,
   } = useStore();
+
+  // Auto-lock on inactivity
+  useEffect(() => {
+    const minutes = settings.auto_lock_minutes ?? 0;
+    if (!minutes || isLocked) return;
+    const ms = minutes * 60 * 1000;
+    let timer: ReturnType<typeof setTimeout>;
+    const reset = () => { clearTimeout(timer); timer = setTimeout(() => lock(), ms); };
+    window.addEventListener("mousemove", reset, { passive: true });
+    window.addEventListener("keydown", reset, { passive: true });
+    window.addEventListener("pointerdown", reset, { passive: true });
+    reset();
+    return () => {
+      clearTimeout(timer);
+      window.removeEventListener("mousemove", reset);
+      window.removeEventListener("keydown", reset);
+      window.removeEventListener("pointerdown", reset);
+    };
+  }, [settings.auto_lock_minutes, isLocked]);
 
   const [convOpen, setConvOpen] = useState(false);
   const [quickOpen, setQuickOpen] = useState(false);
@@ -31,6 +51,17 @@ export default function Layout() {
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       const ctrl = e.ctrlKey || e.metaKey;
+
+      // Escape: close open panels in priority order
+      if (e.key === "Escape") {
+        const st = useStore.getState();
+        if (st.showSettings) { e.preventDefault(); toggleSettings(); return; }
+        if (st.showAiPanel) { e.preventDefault(); toggleAiPanel(); return; }
+        if (st.showVersionPanel) { e.preventDefault(); toggleVersionPanel(); return; }
+        if (st.focusMode) { e.preventDefault(); toggleFocusMode(); return; }
+        return;
+      }
+
       if (!ctrl) return;
 
       if (e.key === "n") {
@@ -64,7 +95,7 @@ export default function Layout() {
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [createNote, toggleSettings, toggleAiPanel, toggleVersionPanel, toggleGraph]);
+  }, [createNote, toggleSettings, toggleAiPanel, toggleVersionPanel, toggleGraph, toggleFocusMode]);
 
   return (
     <div className="flex h-screen overflow-hidden bg-base">

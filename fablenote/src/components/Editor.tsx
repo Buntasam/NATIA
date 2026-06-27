@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import DOMPurify from "dompurify";
 import { useEditor, EditorContent } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
 import Underline from "@tiptap/extension-underline";
@@ -512,6 +513,7 @@ export default function Editor() {
     saveMode,
     focusMode,
     toggleFocusMode,
+    settings,
   } = useStore();
 
   const [localTitle, setLocalTitle] = useState("");
@@ -916,15 +918,16 @@ export default function Editor() {
     const text = await file.text();
     const ext = file.name.split(".").pop()?.toLowerCase();
 
-    let html: string;
+    let rawHtml: string;
     if (ext === "md") {
-      html = markdownToHtml(text);
+      rawHtml = markdownToHtml(text);
     } else {
-      html = text
+      rawHtml = text
         .split(/\n{2,}/)
         .map((p) => `<p>${p.replace(/\n/g, "<br>")}</p>`)
         .join("");
     }
+    const html = DOMPurify.sanitize(rawHtml);
 
     const titleMatch = text.match(/^#\s+(.+)/m);
     const title = titleMatch
@@ -1158,7 +1161,18 @@ export default function Editor() {
             setWikiPreview(null);
           }}
         >
-          <div className="max-w-2xl mx-auto min-h-full pb-24">
+          <div
+            className="mx-auto min-h-full pb-24"
+            style={{
+              maxWidth: { narrow: "600px", normal: "720px", wide: "960px", full: "none" }[settings.editor_max_width ?? "normal"] ?? "720px",
+              fontSize: `${settings.editor_font_size ?? 15}px`,
+              fontFamily: settings.editor_font_family === "serif"
+                ? "Georgia, 'Times New Roman', serif"
+                : settings.editor_font_family === "mono"
+                ? "Menlo, Consolas, 'Courier New', monospace"
+                : "var(--font-sans, system-ui, sans-serif)",
+            }}
+          >
             <EditorContent editor={editor} className="min-h-full" />
           </div>
         </div>
@@ -1183,21 +1197,32 @@ export default function Editor() {
       {/* Tags row */}
       <TagsBar noteId={activeNote.id} tags={activeNote.tags} folder={activeNote.folder} />
 
-      {/* Status bar: word count + reading time */}
-      <div className="flex items-center justify-end gap-4 px-6 py-1 border-t border-border bg-sidebar shrink-0">
-        <button
-          onClick={() => setShowFindReplace((s) => !s)}
-          title="Chercher & remplacer (Ctrl+H)"
-          className={`transition-colors ${showFindReplace ? "text-accent" : "text-muted hover:text-primary"}`}
-        >
-          <Search size={11} />
-        </button>
-        <span className="text-[10px] text-muted">
-          {wordCount} mot{wordCount !== 1 ? "s" : ""}
-        </span>
-        <span className="text-[10px] text-muted">
-          {Math.max(1, Math.ceil(wordCount / 200))} min de lecture
-        </span>
+      {/* Status bar */}
+      <div className="flex items-center justify-between gap-4 px-4 py-1 border-t border-border bg-sidebar shrink-0 select-none">
+        <div className="flex items-center gap-3">
+          {/* Save status */}
+          <span className={`text-[10px] transition-colors ${isSaving ? "text-accent" : "text-muted/50"}`}>
+            {isSaving ? "Sauvegarde…" : saveMode === "manual" ? "Manuel" : "Sauvegardé"}
+          </span>
+          {/* Provider */}
+          <span className="text-[10px] text-muted/40 capitalize">{settings.ai_provider}</span>
+        </div>
+        <div className="flex items-center gap-3">
+          <span className="text-[10px] text-muted">
+            {wordCount} mot{wordCount !== 1 ? "s" : ""}
+          </span>
+          <span className="text-[10px] text-muted/60">
+            {Math.max(1, Math.ceil(wordCount / 200))} min
+          </span>
+          <button
+            onClick={() => setShowFindReplace((s) => !s)}
+            title="Chercher & remplacer (Ctrl+H)"
+            aria-label="Chercher et remplacer"
+            className={`transition-colors ${showFindReplace ? "text-accent" : "text-muted/50 hover:text-muted"}`}
+          >
+            <Search size={11} />
+          </button>
+        </div>
       </div>
 
       {showTemplates && (

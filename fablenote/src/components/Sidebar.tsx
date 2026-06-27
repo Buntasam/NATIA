@@ -122,6 +122,7 @@ export default function Sidebar() {
     folders,
     isDark,
     toggleTheme,
+    theme,
     setSearchQuery,
     createNote,
     selectNote,
@@ -518,8 +519,9 @@ export default function Sidebar() {
           )}
           <button
             onClick={toggleTheme}
-            title={isDark ? "Mode clair" : "Mode sombre"}
+            title={`Thème : ${theme} — cliquer pour basculer`}
             className="p-1.5 rounded text-muted hover:text-primary hover:bg-hover transition-colors"
+            aria-label="Basculer le thème"
           >
             {isDark ? <Sun size={15} /> : <Moon size={15} />}
           </button>

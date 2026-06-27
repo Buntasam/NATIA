@@ -2,36 +2,121 @@
 @tailwind components;
 @tailwind utilities;
 
-/* ─── Light mode (default) ──────────────────────────────────────────────────── */
+/* ─── Clair (default) ───────────────────────────────────────────────────────── */
 :root {
-  --color-base:      #f5f3ee;
-  --color-sidebar:   #ede9e1;
-  --color-panel:     #e8e4db;
-  --color-hover:     #dedad0;
-  --color-active:    #d0ccc2;
-  --color-border:    #cdc8be;
-  --color-muted:     #9a9088;
-  --color-secondary: #645c52;
-  --color-primary:   #1a1814;
+  --color-base:         #f5f3ee;
+  --color-sidebar:      #ede9e1;
+  --color-panel:        #e8e4db;
+  --color-hover:        #dedad0;
+  --color-active:       #d0ccc2;
+  --color-border:       #cdc8be;
+  --color-muted:        #9a9088;
+  --color-secondary:    #645c52;
+  --color-primary:      #1a1814;
+  --color-accent:       #d97757;
+  --color-accent-hover: #c86848;
 }
 
-/* ─── Dark mode ──────────────────────────────────────────────────────────────── */
+/* ─── Sombre ─────────────────────────────────────────────────────────────────── */
 .dark {
-  --color-base:      #242424;
-  --color-sidebar:   #2b2b2b;
-  --color-panel:     #303030;
-  --color-hover:     #383838;
-  --color-active:    #404040;
-  --color-border:    #464646;
-  --color-muted:     #686868;
-  --color-secondary: #9a9a9a;
-  --color-primary:   #ebebeb;
+  --color-base:         #242424;
+  --color-sidebar:      #2b2b2b;
+  --color-panel:        #303030;
+  --color-hover:        #383838;
+  --color-active:       #404040;
+  --color-border:       #464646;
+  --color-muted:        #686868;
+  --color-secondary:    #9a9a9a;
+  --color-primary:      #ebebeb;
+  --color-accent:       #d97757;
+  --color-accent-hover: #c86848;
+}
+
+/* ─── Minuit ─────────────────────────────────────────────────────────────────── */
+.theme-midnight {
+  --color-base:         #0d1117;
+  --color-sidebar:      #161b22;
+  --color-panel:        #1c2128;
+  --color-hover:        #21262d;
+  --color-active:       #30363d;
+  --color-border:       #3d444d;
+  --color-muted:        #656d76;
+  --color-secondary:    #8b949e;
+  --color-primary:      #e6edf3;
+  --color-accent:       #818cf8;
+  --color-accent-hover: #6366f1;
+}
+
+/* ─── Encre ──────────────────────────────────────────────────────────────────── */
+.theme-ink {
+  --color-base:         #0a0a0a;
+  --color-sidebar:      #111111;
+  --color-panel:        #171717;
+  --color-hover:        #1f1f1f;
+  --color-active:       #282828;
+  --color-border:       #333333;
+  --color-muted:        #606060;
+  --color-secondary:    #999999;
+  --color-primary:      #f0e8d8;
+  --color-accent:       #e8b84b;
+  --color-accent-hover: #d4a43a;
+}
+
+/* ─── Forêt ──────────────────────────────────────────────────────────────────── */
+.theme-foret {
+  --color-base:         #0f1a14;
+  --color-sidebar:      #141f19;
+  --color-panel:        #192620;
+  --color-hover:        #1f2e26;
+  --color-active:       #26382c;
+  --color-border:       #34473a;
+  --color-muted:        #5c7a62;
+  --color-secondary:    #8aaa90;
+  --color-primary:      #e8f0e9;
+  --color-accent:       #d97757;
+  --color-accent-hover: #c86848;
+}
+
+/* ─── Brume ──────────────────────────────────────────────────────────────────── */
+.theme-brume {
+  --color-base:         #eeecea;
+  --color-sidebar:      #e6e3e0;
+  --color-panel:        #dedad6;
+  --color-hover:        #d4d0cb;
+  --color-active:       #c8c4be;
+  --color-border:       #bcb8b2;
+  --color-muted:        #8a8580;
+  --color-secondary:    #5a5450;
+  --color-primary:      #1c1816;
+  --color-accent:       #5b7fa6;
+  --color-accent-hover: #4a6e95;
+}
+
+/* ─── Sakura ─────────────────────────────────────────────────────────────────── */
+.theme-sakura {
+  --color-base:         #fdf6f0;
+  --color-sidebar:      #f7ece3;
+  --color-panel:        #f1e2d6;
+  --color-hover:        #ead9cb;
+  --color-active:       #e1cfbf;
+  --color-border:       #d6c4b4;
+  --color-muted:        #a07868;
+  --color-secondary:    #6a4e42;
+  --color-primary:      #2a1a12;
+  --color-accent:       #c97088;
+  --color-accent-hover: #b85f77;
 }
 
 * {
   box-sizing: border-box;
   margin: 0;
   padding: 0;
+}
+
+:focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 2px;
+  border-radius: 4px;
 }
 
 html,
