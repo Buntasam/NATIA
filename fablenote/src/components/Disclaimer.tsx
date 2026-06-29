@@ -36,6 +36,31 @@ const ASCII_WAVE = [
   "|/           '-'         '-'",
 ].join("\n");
 
+const ASCII_TURTLE = `                         __    _
+                    _wr""        "-q__
+                 _dP                 9m_
+               _#P                     9#_
+              d#@                       9#m
+             d##                         ###
+            J###                         ###L
+            {###K                       J###K
+            ]####K      ___aaa___      J####F
+        __gmM######_  w#P""   ""9#m  _d#####Mmw__
+     _g##############mZ_         __g##############m_
+   _d####M@PPPP@@M#######Mmp gm#########@@PPP9@M####m_
+  a###""          ,Z"#####@" '######"\\g          ""M##m
+ J#@"             0L  "*##     ##@"  J#              *#K
+ #"               \`#    "_gmwgm_~    dF               \`#_
+7F                 "#_   ]#####F   _dK                 JE
+]                    *m__ ##### __g@"                   F
+                       "PJ#####LP"
+ \`                       0######_                      '
+                       _0########_
+     .               _d#####^#####m__              ,
+      "*w_________am#####P"   ~9#####mw_________w*"
+          ""9@#####@M""           ""P@#####@M""`;
+
+
 
 export default function Disclaimer() {
   const { toggleSettings } = useStore();
@@ -131,6 +156,25 @@ export default function Disclaimer() {
               </button>
             </div>
 
+            {/* ── Encart IA locale lente ─────────────────────────────────────────── */}
+            <div className="flex flex-col gap-2.5 rounded-xl border border-red-500/40 bg-red-500/8 px-4 py-3.5">
+              <div className="flex items-center gap-2">
+                <AlertTriangle size={14} className="text-red-500 shrink-0" />
+                <span className="text-xs font-semibold text-red-500">Attention — IA locale : performances très limitées</span>
+              </div>
+              <pre className="text-[6.5px] leading-[1.3] font-mono text-red-400/50 dark:text-red-400/40 whitespace-pre overflow-x-auto select-none">
+                {ASCII_TURTLE}
+              </pre>
+              <p className="text-xs text-secondary/80 leading-relaxed">
+                Sur des notes longues, les modèles IA locaux (Ollama) peuvent être <strong className="text-red-400">extrêmement lents</strong> — plusieurs minutes pour une correction ou un résumé. Choisissez un modèle adapté à votre matériel.
+              </p>
+              <ul className="text-xs text-secondary/80 leading-relaxed list-disc list-inside space-y-1 pl-1">
+                <li>Modèles rapides recommandés : <code className="text-accent text-[10px] bg-accent/10 px-1 rounded">gemma3:1b</code> <code className="text-accent text-[10px] bg-accent/10 px-1 rounded">phi4-mini</code> <code className="text-accent text-[10px] bg-accent/10 px-1 rounded">qwen2.5:1.5b</code></li>
+                <li>Pour les longues notes, préférez un modèle avec un <strong className="text-primary">grand contexte</strong></li>
+                <li><strong className="text-primary">Claude CLI</strong> ou une API cloud sont bien plus adaptés</li>
+              </ul>
+            </div>
+
             <p className="text-xs text-muted border-t border-border pt-3">
               En continuant, vous acceptez que cette application est fournie « en l'état » (as-is), sans garantie d'aucune sorte. L'auteur décline toute responsabilité pour tout dommage résultant de son utilisation.
             </p>
@@ -176,6 +220,23 @@ export default function Disclaimer() {
             <p>
               Tu utilises une version <strong className="text-primary">bêta de NATIA</strong>. Envoie tes retours par email :
             </p>
+
+            {/* Debug mode tip */}
+            <div className="flex flex-col gap-1.5 rounded-lg border border-accent/25 bg-accent/5 px-3 py-2.5">
+              <div className="flex items-center gap-1.5">
+                <Bug size={10} className="text-accent shrink-0" />
+                <span className="text-[10px] font-semibold text-accent">Mode debug disponible</span>
+              </div>
+              <p className="text-[10px] text-secondary/80 leading-relaxed">
+                Active le <strong className="text-primary">journal d'erreurs</strong> et les infos de session (provider, modèle, uptime, tokens) dans le panneau IA → onglet Debug.
+              </p>
+              <button
+                onClick={() => { close(); toggleSettings(); }}
+                className="self-start text-[10px] text-accent hover:underline underline-offset-2 transition-colors text-left"
+              >
+                Paramètres → Avancé → Développement →
+              </button>
+            </div>
 
             {/* Email address */}
             <div className="flex items-center gap-2 px-2.5 py-2 rounded-lg bg-hover border border-border">

@@ -48,6 +48,7 @@ import {
 } from "lucide-react";
 import TemplatesPanel from "./TemplatesPanel";
 import BacklinksPanel from "./BacklinksPanel";
+import { registerSaveNow } from "./CloseOverlay";
 
 const lowlight = createLowlight(common);
 import { useStore } from "../store";
@@ -816,8 +817,8 @@ export default function Editor() {
       // Ctrl+S
       if (ctrl && e.key === "s") { e.preventDefault(); saveNow(); }
 
-      // Ctrl+H — find & replace
-      if (ctrl && (e.key === "h" || e.key === "H")) {
+      // Ctrl+F / Ctrl+H — find & replace
+      if (ctrl && (e.key === "f" || e.key === "F" || e.key === "h" || e.key === "H")) {
         e.preventDefault();
         setShowFindReplace((s) => !s);
       }
@@ -847,24 +848,11 @@ export default function Editor() {
     lastSavedContent.current = html;
   }, [editor, activeNote, localTitle, updateNote]);
 
-  useEffect(() => { saveNowRef.current = saveNow; }, [saveNow]);
-
-  // Save on window close
   useEffect(() => {
-    let unlisten: (() => void) | undefined;
-    import("@tauri-apps/api/window").then(({ getCurrentWindow }) => {
-      const win = getCurrentWindow();
-      win.onCloseRequested(async (event) => {
-        event.preventDefault();
-        unlisten?.();
-        unlisten = undefined;
-        saveNowRef.current?.();
-        await new Promise<void>((r) => setTimeout(r, 400));
-        win.close();
-      }).then((fn) => { unlisten = fn; });
-    });
-    return () => { unlisten?.(); };
-  }, []);
+    saveNowRef.current = saveNow;
+    registerSaveNow(saveNow);
+    return () => { registerSaveNow(null); };
+  }, [saveNow]);
 
   const handleVersionToggle = () => {
     toggleVersionPanel();
@@ -895,8 +883,29 @@ export default function Editor() {
   };
 
   const exportPdf = () => {
+    if (!editor || !activeNote) return;
     setShowExport(false);
+
+    let printEl = document.getElementById("natia-print");
+    if (!printEl) {
+      printEl = document.createElement("div");
+      printEl.id = "natia-print";
+      document.body.appendChild(printEl);
+    }
+
+    const h1 = document.createElement("h1");
+    h1.className = "print-title";
+    h1.textContent = localTitle || activeNote.title || "Note";
+
+    const contentDiv = document.createElement("div");
+    contentDiv.innerHTML = editor.getHTML();
+
+    printEl.innerHTML = "";
+    printEl.appendChild(h1);
+    printEl.appendChild(contentDiv);
+
     window.print();
+    setTimeout(() => { if (printEl) printEl.innerHTML = ""; }, 400);
   };
 
   const copyAsMarkdown = () => {
@@ -1003,7 +1012,7 @@ export default function Editor() {
               title="Importer un fichier (.md, .txt)"
               className="p-1.5 rounded transition-colors text-secondary hover:text-primary hover:bg-hover"
             >
-              <Upload size={17} />
+              <Download size={17} />
             </button>
             <input ref={importRef} type="file" accept=".md,.txt" className="hidden" onChange={handleImport} />
 
@@ -1016,7 +1025,7 @@ export default function Editor() {
                   showExport ? "text-accent bg-accent/10" : "text-secondary hover:text-primary hover:bg-hover"
                 }`}
               >
-                <Download size={17} />
+                <Upload size={17} />
               </button>
               {showExport && (
                 <>
@@ -1032,7 +1041,7 @@ export default function Editor() {
                       Exporter en HTML
                     </button>
                     <button onClick={exportPdf} className="w-full flex items-center gap-2 px-3 py-2 text-sm text-secondary hover:text-primary hover:bg-hover transition-colors">
-                      Imprimer / PDF
+                      Exporter en PDF
                     </button>
                   </div>
                 </>
@@ -1216,7 +1225,7 @@ export default function Editor() {
           </span>
           <button
             onClick={() => setShowFindReplace((s) => !s)}
-            title="Chercher & remplacer (Ctrl+H)"
+            title="Chercher & remplacer (Ctrl+F)"
             aria-label="Chercher et remplacer"
             className={`transition-colors ${showFindReplace ? "text-accent" : "text-muted/50 hover:text-muted"}`}
           >

@@ -16,6 +16,8 @@ pub struct AppState {
     pub db: Mutex<Connection>,
     pub notes_dir: PathBuf,
     pub enc_key: Mutex<Option<[u8; 32]>>,
+    pub failed_attempts: Mutex<u32>,
+    pub lock_until: Mutex<Option<std::time::Instant>>,
 }
 
 // ─── Data types ───────────────────────────────────────────────────────────────
@@ -199,6 +201,8 @@ pub fn run() {
                 db: Mutex::new(conn),
                 notes_dir,
                 enc_key: Mutex::new(None),
+                failed_attempts: Mutex::new(0),
+                lock_until: Mutex::new(None),
             });
 
             Ok(())
@@ -267,7 +271,13 @@ pub fn run() {
             ai::check_claude_cli,
             ai::claude_cli_chat,
             ai::claude_cli_stream,
+            exit_app,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
+}
+
+#[tauri::command]
+fn exit_app(app_handle: tauri::AppHandle) {
+    app_handle.exit(0);
 }

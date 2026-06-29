@@ -1,5 +1,6 @@
 import React from "react";
 import ReactDOM from "react-dom/client";
+import "./debug/logger"; // installe les intercepteurs console + window.onerror dès le boot
 import App from "./App";
 import "./index.css";
 

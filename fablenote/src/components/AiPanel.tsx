@@ -32,6 +32,8 @@ import { OpButton } from "./ai/OpButton";
 import { TraceRow } from "./ai/TraceRow";
 import { aiChat, aiStream, activeModel } from "../lib/aiInvoke";
 import { useStore } from "../store";
+import DebugConsole from "./DebugConsole";
+import { addAiLog } from "../debug/logger";
 
 interface PullProgress {
   status: string;
@@ -148,6 +150,7 @@ export default function AiPanel({ onOpenConv }: { onOpenConv: () => void }) {
   const logError = (op: string, msg: string) => {
     const time = new Date().toLocaleTimeString("fr-FR");
     setErrorLog((prev) => [{ time, op, msg }, ...prev].slice(0, 100));
+    addAiLog(`✗ ${op}`, msg);
   };
 
   const effectiveSettings = { ...settings, ai_provider: localProvider };
@@ -346,6 +349,17 @@ export default function AiPanel({ onOpenConv }: { onOpenConv: () => void }) {
       traceResponseRef.current.scrollTop = traceResponseRef.current.scrollHeight;
     }
   }, [traceResponse]);
+
+  // Feed AI operation lifecycle into the global debug logger
+  useEffect(() => {
+    if (!lastTrace) return;
+    if (lastTrace.status === "running") {
+      addAiLog(`▶ ${lastTrace.operation}`, lastTrace.model);
+    } else if (lastTrace.status === "done") {
+      addAiLog(`✓ ${lastTrace.operation}`, `${lastTrace.model} · ${lastTrace.elapsed}s · ~${Math.round((lastTrace.system.length + lastTrace.user.length) / 4)} tok`);
+    }
+    // errors are already pushed via logError()
+  }, [lastTrace?.status, lastTrace?.operation]);
 
   const refreshModels = async () => {
     setIsRefreshing(true);
@@ -1524,34 +1538,8 @@ Réponds UNIQUEMENT avec ce JSON (rien d'autre, pas de texte, pas de \`\`\`) :
               <TraceRow label="erreurs session" value={String(errorLog.length)} dim={errorLog.length === 0} />
             </div>
 
-            {/* Error log */}
-            <div className="flex flex-col gap-1.5">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-1.5">
-                  <AlertTriangle size={11} className={errorLog.length > 0 ? "text-red-400" : "text-muted"} />
-                  <p className="text-xs text-muted">Journal des erreurs</p>
-                  {errorLog.length > 0 && (
-                    <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-red-400/15 text-red-400 border border-red-400/20">{errorLog.length}</span>
-                  )}
-                </div>
-                {errorLog.length > 0 && (
-                  <button onClick={() => setErrorLog([])} className="text-[10px] text-muted hover:text-primary transition-colors">Effacer</button>
-                )}
-              </div>
-              {errorLog.length === 0 ? (
-                <p className="text-[10px] text-muted/50 italic px-1">Aucune erreur cette session</p>
-              ) : (
-                <div className="flex flex-col gap-1 max-h-32 overflow-y-auto">
-                  {errorLog.map((e, i) => (
-                    <div key={i} className="flex items-start gap-2 px-2.5 py-1.5 bg-red-400/5 border border-red-400/15 rounded-lg text-[10px]">
-                      <span className="text-red-400/60 shrink-0 font-mono">{e.time}</span>
-                      <span className="text-red-400 font-medium shrink-0">{e.op}</span>
-                      <span className="text-red-300/70 min-w-0 truncate">{e.msg}</span>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
+            {/* Debug console — logs temps réel */}
+            <DebugConsole />
 
             {/* Connection info */}
             <div className="bg-panel rounded-lg p-3 flex flex-col gap-1.5 border border-border">

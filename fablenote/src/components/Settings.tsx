@@ -762,15 +762,17 @@ export default function Settings() {
       <Section title="Apparence">
         <div className="flex flex-col gap-2">
           <p className="text-sm text-secondary">Thème</p>
-          <div className="grid grid-cols-4 gap-2">
+          <div className="grid grid-cols-3 gap-2">
             {([
               { key: "light",    label: "Clair",   bg: "#f5f3ee", panel: "#e8e4db", accent: "#d97757", dark: false },
               { key: "dark",     label: "Sombre",  bg: "#242424", panel: "#303030", accent: "#d97757", dark: true  },
               { key: "midnight", label: "Minuit",  bg: "#0d1117", panel: "#1c2128", accent: "#818cf8", dark: true  },
               { key: "ink",      label: "Encre",   bg: "#0a0a0a", panel: "#171717", accent: "#e8b84b", dark: true  },
-              { key: "foret",    label: "Forêt",   bg: "#0f1a14", panel: "#192620", accent: "#d97757", dark: true  },
-              { key: "brume",    label: "Brume",   bg: "#eeecea", panel: "#dedad6", accent: "#5b7fa6", dark: false },
-              { key: "sakura",   label: "Sakura",  bg: "#fdf6f0", panel: "#f1e2d6", accent: "#c97088", dark: false },
+              { key: "foret",      label: "Forêt",      bg: "#0f1a14", panel: "#192620", accent: "#d97757", dark: true  },
+              { key: "brume",      label: "Brume",      bg: "#eeecea", panel: "#dedad6", accent: "#5b7fa6", dark: false },
+              { key: "sakura",     label: "Sakura",     bg: "#fdf6f0", panel: "#f1e2d6", accent: "#c97088", dark: false },
+              { key: "crepuscule", label: "Crépuscule", bg: "#120d1e", panel: "#1f1535", accent: "#c084fc", dark: true  },
+              { key: "ocean",      label: "Océan",      bg: "#071221", panel: "#0e2040", accent: "#22d3ee", dark: true  },
             ] as const).map(({ key, label, bg, panel, accent }) => {
               const active = theme === key;
               return (

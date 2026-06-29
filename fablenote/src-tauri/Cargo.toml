@@ -30,6 +30,7 @@ ammonia = "3"
 keyring = "3"
 tauri-plugin-dialog = "2"
 tauri-plugin-notification = "2"
+zeroize = "1"
 
 [features]
 default = ["custom-protocol"]

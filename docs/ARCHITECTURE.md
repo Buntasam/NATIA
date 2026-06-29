@@ -7,37 +7,39 @@ Ce document décrit les choix d'architecture et le flux de données de NATIA.
 ## Vue d'ensemble
 
 ```
-┌─────────────────────────────────────────────────────────┐
-│                     Fenêtre Tauri                        │
-│  ┌─────────────────────────────────────────────────┐    │
-│  │                React (WebView2)                  │    │
-│  │                                                  │    │
-│  │  LockScreen │ Sidebar │ Editor │ AiPanel │ ...   │    │
-│  │  TreeMapPanel                                    │    │
-│  │               Zustand Store                      │    │
-│  └──────────────────┬───────────────────────────────┘   │
-│                     │ invoke()                            │
-│  ┌──────────────────▼───────────────────────────────┐   │
-│  │             Rust / Tauri Commands                 │   │
-│  │  CRUD notes │ Git │ Ollama │ Chiffrement │ Thème  │   │
-│  │                                                   │   │
-│  │  ┌─────────────────────────────────────────────┐ │   │
-│  │  │  AppState { db, notes_dir, enc_key (RAM) }  │ │   │
-│  │  └─────────────────────────────────────────────┘ │   │
-│  └──────┬────────────────────────┬───────────────────┘  │
-│         │                        │                        │
-│  ┌──────▼────┐          ┌────────▼──────────┐           │
-│  │  SQLite   │          │  Fichiers HTML     │           │
-│  │  (.db)    │          │  + Git (.git)      │           │
-│  │ chiffrés  │          │  chiffrés          │           │
-│  └───────────┘          └────────────────────┘           │
-└─────────────────────────────────────────────────────────┘
-                           │
-                ┌──────────▼──────────┐
-                │   Ollama (local)    │
-                │ http://localhost:   │
-                │      11434          │
-                └─────────────────────┘
+┌─────────────────────────────────────────────────────────────────┐
+│                         Fenêtre Tauri                            │
+│  ┌──────────────────────────────────────────────────────────┐   │
+│  │                    React (WebView2)                       │   │
+│  │                                                           │   │
+│  │  LockScreen │ Sidebar │ Editor │ AiPanel │ ConvPanel      │   │
+│  │  TreeMapPanel │ CalendarPanel │ GraphPanel │ BacklinksPanel│   │
+│  │  VersionTree │ TrashPanel │ Settings │ StatsPanel         │   │
+│  │  ReminderDaemon │ CloseOverlay │ D20Roller                │   │
+│  │                    Zustand Store                          │   │
+│  └───────────────────────┬────────────────────────────────────┘  │
+│                          │ invoke()                               │
+│  ┌───────────────────────▼────────────────────────────────────┐  │
+│  │                 Rust / Tauri Commands                      │  │
+│  │  notes.rs │ settings.rs │ ai.rs │ crypto.rs │ db.rs        │  │
+│  │                                                            │  │
+│  │  ┌──────────────────────────────────────────────────────┐ │  │
+│  │  │  AppState { db, notes_dir, enc_key (RAM) }           │ │  │
+│  │  └──────────────────────────────────────────────────────┘ │  │
+│  └──────┬──────────────────────────┬──────────────────────────┘  │
+│         │                          │                              │
+│  ┌──────▼────┐           ┌─────────▼──────────┐                 │
+│  │  SQLite   │           │  Fichiers HTML      │                 │
+│  │  (.db)    │           │  + Git (.git)       │                 │
+│  │ chiffrés  │           │  chiffrés           │                 │
+│  └───────────┘           └─────────────────────┘                 │
+└─────────────────────────────────────────────────────────────────┘
+              │
+   ┌──────────┴──────────────────────────────────────┐
+   │             Providers IA externes               │
+   │  Ollama (local) · Claude API · OpenAI           │
+   │  Gemini · Mistral · Claude CLI                  │
+   └─────────────────────────────────────────────────┘
 ```
 
 ---
@@ -50,65 +52,131 @@ Ce document décrit les choix d'architecture et le flux de données de NATIA.
 
 | Fichier | Rôle |
 |---|---|
-| `Layout.tsx` | Orchestrateur : gère quelle colonne est visible |
-| `Sidebar.tsx` | Arborescence dossiers/notes, recherche, toggle thème, bouton arborescence |
+| `Layout.tsx` | Orchestrateur : panneaux visibles, raccourcis clavier, QuickOpen, ConvPanel, auto-lock |
+| `Sidebar.tsx` | Arborescence dossiers/notes, recherche, toggle thème, CalendarPanel, GraphPanel |
 | `TreeMapPanel.tsx` | Vue maillage complète (├──/└──) de toute l'arborescence |
+| `CalendarPanel.tsx` | Vue calendrier des notes par date |
+| `GraphPanel.tsx` | Graphe interactif des wikilinks entre notes |
+| `BacklinksPanel.tsx` | Notes qui pointent vers la note active |
+| `TemplatesPanel.tsx` | Modèles de notes réutilisables |
 | `LockScreen.tsx` | Écran de verrouillage affiché au démarrage si mot de passe actif |
-| `Editor.tsx` | Éditeur TipTap, auto-save, tags |
-| `Toolbar.tsx` | Boutons de formatage (gras, titres, listes…) |
-| `AiPanel.tsx` | Opérations IA + debug panel |
+| `Editor.tsx` | Éditeur TipTap, auto-save, fermeture avec confirmation |
+| `Toolbar.tsx` | Boutons de formatage (gras, titres, listes, wikilinks, rappels…) |
+| `AiPanel.tsx` | Opérations IA, sélecteur de connexion, debug trace |
+| `ApiKeysPanel.tsx` | Gestionnaire de connexions IA (nom, provider, couleur, modèle) |
+| `ImageGenPanel.tsx` | Génération d'image via provider actif |
+| `VoiceRecorder.tsx` | Enregistreur vocal avec transcription IA |
 | `VersionTree.tsx` | Navigation dans l'historique Git, diff, restauration |
-| `Settings.tsx` | Modal de configuration Ollama, prompts, sécurité |
+| `TrashPanel.tsx` | Corbeille : restauration ou suppression définitive |
+| `StatsPanel.tsx` | Statistiques globales (mots, notes, activité) |
+| `PresentationMode.tsx` | Mode diaporama sur le contenu de la note |
+| `D20Roller.tsx` | Dé à 20 faces |
+| `ReminderDaemon.tsx` | Vérifie les rappels toutes les 60 s, envoie des notifs Windows |
+| `CloseOverlay.tsx` | Confirmation de fermeture + spinner/checkmark pendant la sauvegarde |
+| `Disclaimer.tsx` | Écran d'accueil beta avec avertissements et tips testeurs |
+| `Settings.tsx` | Configuration complète (modèle, prompts, sécurité, éditeur, avancé) |
+
+**Extensions TipTap** :
+
+| Fichier | Rôle |
+|---|---|
+| `extensions/PostIt.tsx` | Bloc post-it coloré repositionnable |
+| `extensions/Wikilink.tsx` | Lien `[[Titre]]` avec navigation directe |
+| `extensions/Reminder.tsx` | Bloc rappel avec date/heure et état (fait/en attente) |
 
 **State (Zustand)** — `src/store/index.ts` :
 
-Le store est le seul endroit qui appelle `invoke()`. Les composants lisent l'état et appellent des actions du store — jamais `invoke()` directement (sauf `AiPanel` qui gère ses propres appels streaming).
+Le store est le seul endroit qui appelle `invoke()` pour les données (sauf `AiPanel` qui gère ses propres appels streaming). Les composants lisent l'état et appellent des actions du store.
 
-État de sécurité dans le store :
-- `isLocked` — vrai si l'app est verrouillée (mot de passe actif non encore saisi)
-- `hasPassword` — vrai si un mot de passe a été configuré
-- `passwordType` — `"pin"` ou `"alpha"`
+État principal :
+- `notes`, `folders`, `activeNote` — données notes
+- `settings` — paramètres complets (model, prompts, provider…)
+- `isLocked`, `hasPassword`, `passwordType` — sécurité
+- `theme`, `isDark` — thème
+- `showAiPanel`, `showVersionPanel`, `showSettings`, `showTrash`, `focusMode` — panneaux visibles
+- `isConfirmingClose`, `isClosingApp`, `closeOverlayDone` — flux de fermeture
+- `recentNoteIds` — historique de navigation (Quick open)
 
-**Thème** :
+**Abstraction IA** — `src/lib/aiInvoke.ts` :
 
-- `isDark` est initialisé depuis `localStorage`
-- `toggleTheme()` : met à jour la classe `.dark` sur `<html>` + `localStorage` + appelle `set_window_theme` (Rust) pour la barre de titre native
-- `App.tsx` appelle `set_window_theme` au montage pour synchroniser l'état natif dès l'ouverture
+Expose `aiChat()` et `aiStream()` qui routent vers le bon `invoke()` Rust selon le provider actif (ollama, claude, openai, gemini, mistral, connection, claude_cli). Les composants ne gèrent pas le provider directement.
 
 ---
 
 ### Backend (Rust + Tauri)
 
-Toutes les commandes sont dans `src-tauri/src/lib.rs`.
+Le backend est découpé en modules :
 
-**Catégories** :
+```
+src-tauri/src/
+├── lib.rs          ← types, AppState, setup, invoke_handler, exit_app
+├── notes.rs        ← CRUD notes, dossiers, Git, export, stats, rappels
+├── settings.rs     ← paramètres, clés API, couleurs, sécurité, thème
+├── ai.rs           ← tous les providers IA (chat + stream)
+├── crypto.rs       ← AES-256-GCM, Argon2id, maybe_enc/maybe_dec
+└── db.rs           ← init SQLite, migrations, init_git
+```
 
-| Commandes | Description |
+**Commandes — notes.rs** :
+
+| Commande | Description |
 |---|---|
-| `get_all_notes`, `get_note`, `create_note`, `update_note`, `rename_note`, `delete_note` | CRUD notes (SQLite + fichiers HTML) |
+| `get_all_notes`, `get_note` | Lecture notes (SQLite + HTML déchiffré) |
+| `create_note`, `update_note`, `rename_note`, `delete_note` | CRUD + commit Git |
 | `get_folders`, `create_folder`, `delete_folder`, `rename_folder`, `move_note` | Gestion dossiers |
-| `get_versions`, `get_version_content`, `restore_version` | Git (via `std::process::Command`) |
+| `get_versions`, `get_version_content`, `restore_version`, `trim_note_versions` | Historique Git |
+| `get_trash`, `restore_from_trash`, `permanent_delete_item`, `empty_trash` | Corbeille |
+| `reveal_data_dir`, `export_zip`, `save_zip_to_path`, `export_note_to_path` | Export |
+| `search_notes` | Recherche plein texte (titre + contenu déchiffré) |
+| `get_global_stats` | Statistiques globales |
+| `get_all_reminders` | Rappels échus depuis toutes les notes |
+
+**Commandes — settings.rs** :
+
+| Commande | Description |
+|---|---|
 | `get_settings`, `update_settings` | Paramètres (SQLite key/value) |
-| `ollama_test_simple`, `ollama_chat`, `ollama_models`, `ollama_stream` | Proxy HTTP vers Ollama |
-| `set_window_theme` | Thème natif de la fenêtre OS |
-| `has_password`, `get_password_type` | Lecture état sécurité |
+| `get_prompt_versions`, `delete_prompt_version` | Historique des versions de prompts |
+| `get_api_keys`, `upsert_api_key`, `delete_api_key` | Connexions IA personnalisées |
+| `get_colors`, `set_color`, `delete_color` | Couleurs personnalisées |
+| `has_password`, `get_password_type` | État sécurité |
 | `setup_password`, `verify_password`, `change_password`, `remove_password` | Gestion du mot de passe |
-| `lock_app` | Efface la clé AES de la RAM (verrouillage) |
+| `lock_app` | Efface la clé AES de la RAM |
+| `set_window_theme` | Thème natif de la barre de titre OS |
+
+**Commandes — ai.rs** :
+
+| Commande | Description |
+|---|---|
+| `ollama_test_simple`, `ollama_chat`, `ollama_models`, `ollama_stream`, `ollama_pull` | Proxy HTTP vers Ollama |
+| `claude_chat`, `claude_stream` | Claude API (Anthropic) |
+| `openai_chat`, `openai_stream` | OpenAI API |
+| `gemini_chat`, `gemini_stream` | Google Gemini API |
+| `mistral_chat`, `mistral_stream` | Mistral API |
+| `connection_chat`, `connection_stream` | Connexion personnalisée (clé API stockée) |
+| `check_claude_cli`, `claude_cli_chat`, `claude_cli_stream` | Claude via CLI local |
+| `generate_image` | Génération d'image |
+
+**Commande — lib.rs** :
+
+| Commande | Description |
+|---|---|
+| `exit_app` | `app_handle.exit(0)` — fermeture OS-level après sauvegarde |
 
 **Stockage** :
 
 ```
 AppDataDir/
-├── fablenote.db          ← SQLite
-│   ├── notes             (id, title*, tags*, folder, timestamps)
-│   ├── folders           (path)
-│   ├── settings          (key, value*)
-│   ├── api_keys          (id, name*, provider*, key_value*)
-│   ├── prompt_versions   (id, value*)
-│   └── app_config        (key, value)  ← salt, hash vérif, type mdp
+├── natia.db           ← SQLite
+│   ├── notes          (id, title*, tags*, folder, timestamps)
+│   ├── folders        (path)
+│   ├── settings       (key, value*)
+│   ├── api_keys       (id, name*, provider*, key_value*, color*, model*)
+│   ├── prompt_versions(id, value*)
+│   └── app_config     (key, value)  ← salt, hash vérif, type mdp
 └── notes/
-    ├── {uuid}.html*      ← Contenu HTML des notes
-    └── .git/             ← Dépôt Git interne pour le versionnage
+    ├── {uuid}.html*   ← Contenu HTML des notes (avec rappels, wikilinks, post-its…)
+    └── .git/          ← Dépôt Git interne pour le versionnage
 ```
 
 *\* Champs chiffrés AES-256-GCM quand un mot de passe est actif.*
@@ -116,7 +184,7 @@ AppDataDir/
 **Versionnage Git** :
 
 À chaque `update_note`, le backend :
-1. Écrit le fichier HTML
+1. Chiffre (si nécessaire) et écrit le fichier HTML
 2. Exécute `git add {id}.html && git commit -m "Update: {title}"`
 
 `get_versions` fait un `git log`, `restore_version` fait un `git checkout {hash} -- {id}.html`.
@@ -180,13 +248,14 @@ Démarrage app
 Saisie du mot de passe
   → verify_password(password)
     → Argon2id derive 64 bytes
-    → compare [0..32] avec hash en DB
+    → compare [0..32] avec hash en DB (temps constant)
     → si OK : stocke [32..64] dans AppState.enc_key (RAM)
     → isLocked = false → données chargées
 
-Verrouillage
-  → lock_app()
-    → AppState.enc_key ← None  (clé effacée de la RAM)
+Verrouillage automatique (inactivité)
+  → Layout.tsx : timer reset sur mousemove/keydown/pointerdown
+  → délai écoulé → lock()
+    → AppState.enc_key ← None
     → isLocked = true → LockScreen réaffiché
 ```
 
@@ -195,7 +264,7 @@ Verrouillage
 ## Flux de données — sauvegarde d'une note
 
 ```
-Editor (onChange) 
+Editor (onChange)
   → debounce 1500ms
   → store.updateNote(id, title, content, tags, folder)
     → invoke("update_note", {...})
@@ -208,17 +277,59 @@ Editor (onChange)
 
 ---
 
+## Flux de données — fermeture de l'app
+
+```
+Utilisateur clique [X]
+  → Tauri onCloseRequested → event.preventDefault()
+  → setIsConfirmingClose(true)
+  → CloseOverlay affiche "Quitter NATIA ?" (Rester / Quitter)
+
+Si Quitter :
+  → setIsClosingApp(true)
+  → saveNowRef.current?.()  ← flush du debounce TipTap
+  → polling isSaving jusqu'à false (max 5 s)
+  → setCloseOverlayDone(true)
+  → overlay affiche "Sauvegardé !" (1,2 s)
+  → invoke("exit_app")
+    → Rust: app_handle.exit(0)  ← fermeture OS-level
+```
+
+> `app_handle.exit(0)` est la seule méthode fiable en Tauri v2 pour fermer l'app depuis un handler `onCloseRequested` async — `win.close()` et `win.destroy()` déclenchent un nouveau `CloseRequested` event.
+
+---
+
 ## Flux de données — opération IA (streaming)
 
 ```
 AiPanel (clic "Corriger")
-  → invoke("ollama_stream", { url, model, system, user })
-    → Rust: POST /api/chat vers Ollama
-    → Rust: émet "ollama-chunk" à chaque token
-    → Rust: émet "ollama-done" en fin
-  → AiPanel écoute "ollama-chunk" via listen()
+  → aiStream(settings, system, userMessage)
+    → lib/aiInvoke.ts : sélection du provider actif
+    → invoke("ollama_stream" | "claude_stream" | "openai_stream" | ...)
+      → Rust: POST vers le provider sélectionné
+      → Rust: émet "ollama-token" (ou "claude-token"…) à chaque token
+      → Rust: émet "ollama-done" en fin
+  → AiPanel écoute via listen()
   → accumule les tokens dans le state local
   → affiche le résultat progressivement
+  → CorrectionModal : propose Accepter / Refuser / Copier
+```
+
+---
+
+## Rappels et notifications système
+
+```
+ReminderDaemon (monté dans Layout)
+  → setInterval(check, 60_000)
+  → invoke("get_all_reminders")
+    → Rust: scanne toutes les notes, parse le HTML pour trouver
+            les blocs <div data-type="reminder"> avec data-done=false
+    → retourne ReminderItem[]
+  → pour chaque rappel échu non encore notifié :
+    → sendNotification({ title: note_title, body: text })
+       (tauri-plugin-notification → Windows toast)
+  → notifiedRef garde la liste des clés déjà notifiées
 ```
 
 ---

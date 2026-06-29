@@ -43,6 +43,12 @@ interface AppStore {
   showTrash: boolean;
   isLoading: boolean;
   isSaving: boolean;
+  isConfirmingClose: boolean;
+  isClosingApp: boolean;
+  closeOverlayDone: boolean;
+  setIsConfirmingClose: (v: boolean) => void;
+  setIsClosingApp: (v: boolean) => void;
+  setCloseOverlayDone: (v: boolean) => void;
 
   // Pinned & recent
   pinnedNoteIds: string[];
@@ -178,7 +184,13 @@ export const useStore = create<AppStore>((set, get) => ({
 
   lock: async () => {
     await invoke("lock_app");
-    set({ isLocked: true });
+    set({
+      isLocked: true,
+      notes: [],
+      activeNote: null,
+      folders: [],
+      versions: [],
+    });
   },
 
   setupPassword: async (password: string, pwType: string) => {
@@ -202,6 +214,12 @@ export const useStore = create<AppStore>((set, get) => ({
   showTrash: false,
   isLoading: false,
   isSaving: false,
+  isConfirmingClose: false,
+  isClosingApp: false,
+  closeOverlayDone: false,
+  setIsConfirmingClose: (v) => set({ isConfirmingClose: v }),
+  setIsClosingApp: (v) => set({ isClosingApp: v }),
+  setCloseOverlayDone: (v) => set({ closeOverlayDone: v }),
 
   pinnedNoteIds: (() => {
     try { return JSON.parse(localStorage.getItem("natia_pinned") ?? "[]") as string[]; }
@@ -433,15 +451,15 @@ export const useStore = create<AppStore>((set, get) => ({
   theme: localStorage.getItem("natia_theme") ?? (localStorage.getItem("theme") === "dark" ? "dark" : "light"),
   isDark: (() => {
     const t = localStorage.getItem("natia_theme") ?? (localStorage.getItem("theme") === "dark" ? "dark" : "light");
-    return ["dark", "midnight", "ink", "foret"].includes(t);
+    return ["dark", "midnight", "ink", "foret", "crepuscule", "ocean"].includes(t);
   })(),
   setTheme: (name: string) => {
     const root = document.documentElement;
-    root.classList.remove("dark", "theme-midnight", "theme-ink", "theme-foret", "theme-brume", "theme-sakura");
+    root.classList.remove("dark", "theme-midnight", "theme-ink", "theme-foret", "theme-brume", "theme-sakura", "theme-crepuscule", "theme-ocean");
     if (name === "dark") root.classList.add("dark");
     else if (!["light"].includes(name)) root.classList.add(`theme-${name}`);
     localStorage.setItem("natia_theme", name);
-    const dark = ["dark", "midnight", "ink", "foret"].includes(name);
+    const dark = ["dark", "midnight", "ink", "foret", "crepuscule", "ocean"].includes(name);
     invoke("set_window_theme", { dark }).catch(() => {});
     set({ theme: name, isDark: dark });
   },

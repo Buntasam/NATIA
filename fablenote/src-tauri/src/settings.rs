@@ -6,6 +6,8 @@ use std::collections::HashMap;
 use tauri::{State, Theme};
 use uuid::Uuid;
 
+use zeroize::Zeroize;
+
 use crate::{AppState, ApiKey, PromptVersion, Settings};
 use crate::crypto::{decrypt_all_data, derive_64, encrypt_all_data, maybe_dec, maybe_enc};
 use crate::db::{keychain_get, keychain_set, API_KEY_NAMES};
@@ -35,10 +37,11 @@ pub fn setup_password(password: String, pw_type: String, state: State<AppState>)
     let mut salt = [0u8; 16];
     rand::thread_rng().fill_bytes(&mut salt);
     let salt_b64 = B64.encode(&salt);
-    let derived = derive_64(&password, &salt)?;
+    let mut derived = derive_64(&password, &salt)?;
     let verif_b64 = B64.encode(&derived[..32]);
     let mut enc_key = [0u8; 32];
     enc_key.copy_from_slice(&derived[32..]);
+    derived.zeroize();
     {
         let db = state.db.lock().map_err(|e| e.to_string())?;
         for (k, v) in [("password_salt", salt_b64.as_str()), ("password_hash", verif_b64.as_str()), ("password_type", pw_type.as_str())] {
@@ -57,6 +60,18 @@ pub fn setup_password(password: String, pw_type: String, state: State<AppState>)
 
 #[tauri::command]
 pub fn verify_password(password: String, state: State<AppState>) -> Result<bool, String> {
+    // Check Rust-side lockout (process-lifetime, not bypassable via localStorage clear)
+    {
+        let now = std::time::Instant::now();
+        let lock_until = state.lock_until.lock().map_err(|e| e.to_string())?;
+        if let Some(until) = *lock_until {
+            if until > now {
+                let secs = (until - now).as_secs() + 1;
+                return Err(format!("Trop de tentatives. Réessayez dans {} s.", secs));
+            }
+        }
+    }
+
     let (salt_b64, verif_b64) = {
         let db = state.db.lock().map_err(|e| e.to_string())?;
         let salt = db.query_row("SELECT value FROM app_config WHERE key='password_salt'", [], |r| r.get::<_, String>(0))
@@ -66,14 +81,35 @@ pub fn verify_password(password: String, state: State<AppState>) -> Result<bool,
         (salt, verif)
     };
     let salt = B64.decode(&salt_b64).map_err(|e| e.to_string())?;
-    let derived = derive_64(&password, &salt)?;
+    let mut derived = derive_64(&password, &salt)?;
     let stored = B64.decode(&verif_b64).map_err(|e| e.to_string())?;
-    if stored.len() != 32 { return Err("Hash corrompu".to_string()); }
+    if stored.len() != 32 { derived.zeroize(); return Err("Hash corrompu".to_string()); }
+
     let mut diff = 0u8;
     for (a, b) in derived[..32].iter().zip(stored.iter()) { diff |= a ^ b; }
-    if diff != 0 { return Ok(false); }
+
+    if diff != 0 {
+        derived.zeroize();
+        // Exponential backoff: 2s, 4s, 8s, 16s, 30s max
+        let mut attempts = state.failed_attempts.lock().map_err(|e| e.to_string())?;
+        *attempts += 1;
+        let delay = (1u64 << (*attempts).min(5)).min(30);
+        let mut lock_until = state.lock_until.lock().map_err(|e| e.to_string())?;
+        *lock_until = Some(std::time::Instant::now() + std::time::Duration::from_secs(delay));
+        return Ok(false);
+    }
+
+    // Success — reset counters
+    {
+        let mut attempts = state.failed_attempts.lock().map_err(|e| e.to_string())?;
+        *attempts = 0;
+        let mut lock_until = state.lock_until.lock().map_err(|e| e.to_string())?;
+        *lock_until = None;
+    }
+
     let mut enc_key = [0u8; 32];
     enc_key.copy_from_slice(&derived[32..]);
+    derived.zeroize();
     let mut guard = state.enc_key.lock().map_err(|e| e.to_string())?;
     *guard = Some(enc_key);
     Ok(true)
@@ -88,24 +124,27 @@ pub fn change_password(old_pass: String, new_pass: String, state: State<AppState
         (s, v)
     };
     let salt = B64.decode(&salt_b64).map_err(|e| e.to_string())?;
-    let old_derived = derive_64(&old_pass, &salt)?;
+    let mut old_derived = derive_64(&old_pass, &salt)?;
     let stored = B64.decode(&verif_b64).map_err(|e| e.to_string())?;
     let mut diff = 0u8;
     for (a, b) in old_derived[..32].iter().zip(stored.iter()) { diff |= a ^ b; }
-    if diff != 0 { return Err("Ancien mot de passe incorrect".to_string()); }
+    if diff != 0 { old_derived.zeroize(); return Err("Ancien mot de passe incorrect".to_string()); }
     let mut old_key = [0u8; 32];
     old_key.copy_from_slice(&old_derived[32..]);
+    old_derived.zeroize();
     let mut new_salt = [0u8; 16];
     rand::thread_rng().fill_bytes(&mut new_salt);
     let new_salt_b64 = B64.encode(&new_salt);
-    let new_derived = derive_64(&new_pass, &new_salt)?;
+    let mut new_derived = derive_64(&new_pass, &new_salt)?;
     let new_verif_b64 = B64.encode(&new_derived[..32]);
     let mut new_key = [0u8; 32];
     new_key.copy_from_slice(&new_derived[32..]);
+    new_derived.zeroize();
     {
         let db = state.db.lock().map_err(|e| e.to_string())?;
         let notes_dir = state.notes_dir.clone();
         decrypt_all_data(&db, &notes_dir, &old_key)?;
+        old_key.zeroize();
         encrypt_all_data(&db, &notes_dir, &new_key)?;
         db.execute("UPDATE app_config SET value=?1 WHERE key='password_salt'", [&new_salt_b64]).map_err(|e| e.to_string())?;
         db.execute("UPDATE app_config SET value=?1 WHERE key='password_hash'", [&new_verif_b64]).map_err(|e| e.to_string())?;
@@ -124,17 +163,19 @@ pub fn remove_password(password: String, state: State<AppState>) -> Result<(), S
         (s, v)
     };
     let salt = B64.decode(&salt_b64).map_err(|e| e.to_string())?;
-    let derived = derive_64(&password, &salt)?;
+    let mut derived = derive_64(&password, &salt)?;
     let stored = B64.decode(&verif_b64).map_err(|e| e.to_string())?;
     let mut diff = 0u8;
     for (a, b) in derived[..32].iter().zip(stored.iter()) { diff |= a ^ b; }
-    if diff != 0 { return Err("Mot de passe incorrect".to_string()); }
+    if diff != 0 { derived.zeroize(); return Err("Mot de passe incorrect".to_string()); }
     let mut key = [0u8; 32];
     key.copy_from_slice(&derived[32..]);
+    derived.zeroize();
     {
         let db = state.db.lock().map_err(|e| e.to_string())?;
         let notes_dir = state.notes_dir.clone();
         decrypt_all_data(&db, &notes_dir, &key)?;
+        key.zeroize();
         db.execute("DELETE FROM app_config WHERE key IN ('password_salt','password_hash','password_type')", [])
             .map_err(|e| e.to_string())?;
     }
@@ -146,6 +187,9 @@ pub fn remove_password(password: String, state: State<AppState>) -> Result<(), S
 #[tauri::command]
 pub fn lock_app(state: State<AppState>) -> Result<(), String> {
     let mut guard = state.enc_key.lock().map_err(|e| e.to_string())?;
+    if let Some(ref mut key) = *guard {
+        key.zeroize();
+    }
     *guard = None;
     Ok(())
 }

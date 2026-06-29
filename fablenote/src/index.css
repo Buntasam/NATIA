@@ -107,6 +107,36 @@
   --color-accent-hover: #b85f77;
 }
 
+/* ─── Crépuscule ─────────────────────────────────────────────────────────────── */
+.theme-crepuscule {
+  --color-base:         #120d1e;
+  --color-sidebar:      #181128;
+  --color-panel:        #1f1535;
+  --color-hover:        #281d45;
+  --color-active:       #332554;
+  --color-border:       #443368;
+  --color-muted:        #7055a0;
+  --color-secondary:    #a088cc;
+  --color-primary:      #ede8f8;
+  --color-accent:       #c084fc;
+  --color-accent-hover: #a855f7;
+}
+
+/* ─── Océan ──────────────────────────────────────────────────────────────────── */
+.theme-ocean {
+  --color-base:         #071221;
+  --color-sidebar:      #0a1a2e;
+  --color-panel:        #0e2040;
+  --color-hover:        #132852;
+  --color-active:       #1a3264;
+  --color-border:       #234078;
+  --color-muted:        #3d6b9f;
+  --color-secondary:    #6a9cc8;
+  --color-primary:      #deeaf8;
+  --color-accent:       #22d3ee;
+  --color-accent-hover: #06b6d4;
+}
+
 * {
   box-sizing: border-box;
   margin: 0;
@@ -501,4 +531,44 @@ body,
 
 .d20-fade-in {
   animation: d20-fade-in 0.25s ease-out forwards;
+}
+
+/* ─── Print ──────────────────────────────────────────────────────────────────── */
+#natia-print { display: none; }
+
+@media print {
+  html, body { overflow: visible !important; height: auto !important; }
+  #root { display: none !important; }
+  #natia-print {
+    display: block !important;
+    font-family: system-ui, sans-serif;
+    font-size: 15px;
+    line-height: 1.75;
+    color: #1a1814;
+    background: white;
+  }
+  #natia-print h1.print-title {
+    font-size: 1.75rem; font-weight: 700;
+    margin-bottom: 1.5rem; padding-bottom: 0.75rem;
+    border-bottom: 2px solid #e0e0e0; color: #1a1814;
+  }
+  #natia-print h1:not(.print-title) { font-size: 1.5rem; font-weight: 700; margin: 1.25rem 0 0.75rem; color: #1a1814; }
+  #natia-print h2 { font-size: 1.25rem; font-weight: 600; margin: 1rem 0 0.5rem; color: #1a1814; }
+  #natia-print h3 { font-size: 1.1rem; font-weight: 600; margin: 0.75rem 0 0.4rem; color: #1a1814; }
+  #natia-print p { margin-bottom: 0.75rem; color: #1a1814; }
+  #natia-print ul, #natia-print ol { padding-left: 1.5rem; margin-bottom: 0.75rem; }
+  #natia-print li { margin-bottom: 0.25rem; color: #1a1814; }
+  #natia-print blockquote { border-left: 3px solid #d97757; padding-left: 1rem; color: #645c52; font-style: italic; margin: 0.75rem 0; }
+  #natia-print code { background: #f0ede8; padding: 0.1em 0.4em; border-radius: 3px; font-size: 0.875em; font-family: monospace; }
+  #natia-print pre { background: #f0ede8; border-radius: 6px; padding: 1rem; margin-bottom: 1rem; }
+  #natia-print pre code { background: none; padding: 0; }
+  #natia-print table { border-collapse: collapse; width: 100%; margin: 1rem 0; }
+  #natia-print td, #natia-print th { border: 1px solid #cdc8be; padding: 0.4rem 0.6rem; vertical-align: top; text-align: left; }
+  #natia-print th { background: #f0ede8; font-weight: 600; }
+  #natia-print img { max-width: 100%; }
+  #natia-print mark { background: rgba(217,119,87,0.2); }
+  #natia-print hr { border: none; border-top: 1px solid #cdc8be; margin: 1.5rem 0; }
+  #natia-print a { color: #d97757; }
+  #natia-print strong { font-weight: 600; }
+  @page { margin: 2cm 2.5cm; }
 }

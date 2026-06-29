@@ -186,7 +186,7 @@ pub fn create_note(
     }
     let file_path = state.notes_dir.join(format!("{}.html", id));
     std::fs::write(&file_path, maybe_enc(&key, &content)).map_err(|e| e.to_string())?;
-    git_commit_note(&state.notes_dir, &id, &format!("Créer : {}", title));
+    git_commit_note(&state.notes_dir, &id, "create");
     Ok(Note { id, title, content, tags, folder, created_at: now.clone(), updated_at: now })
 }
 
@@ -213,7 +213,7 @@ pub fn update_note(
     }
     let file_path = state.notes_dir.join(format!("{}.html", id));
     std::fs::write(&file_path, maybe_enc(&key, &content)).map_err(|e| e.to_string())?;
-    git_commit_note(&state.notes_dir, &id, &format!("Modifier : {}", title));
+    git_commit_note(&state.notes_dir, &id, "update");
     let created_at = {
         let db = state.db.lock().map_err(|e| e.to_string())?;
         let ca = db.query_row("SELECT created_at FROM notes WHERE id=?1", [&id], |r| r.get::<_, String>(0))
@@ -228,6 +228,7 @@ pub fn update_note(
 
 #[tauri::command]
 pub fn rename_note(id: String, title: String, state: State<AppState>) -> Result<(), String> {
+    if !is_valid_uuid(&id) { return Err("ID invalide".to_string()); }
     let key = state.enc_key.lock().map_err(|e| e.to_string())?.clone();
     let now = Utc::now().to_rfc3339();
     let db = state.db.lock().map_err(|e| e.to_string())?;
@@ -240,6 +241,7 @@ pub fn rename_note(id: String, title: String, state: State<AppState>) -> Result<
 
 #[tauri::command]
 pub fn delete_note(id: String, state: State<AppState>) -> Result<(), String> {
+    if !is_valid_uuid(&id) { return Err("ID invalide".to_string()); }
     let now = Utc::now().to_rfc3339();
     let db = state.db.lock().map_err(|e| e.to_string())?;
     db.execute("UPDATE notes SET deleted_at=?1 WHERE id=?2", params![now, id])
@@ -386,6 +388,7 @@ pub fn rename_folder(old_path: String, new_path: String, state: State<AppState>)
 
 #[tauri::command]
 pub fn move_note(id: String, folder: Option<String>, state: State<AppState>) -> Result<NoteMetadata, String> {
+    if !is_valid_uuid(&id) { return Err("ID invalide".to_string()); }
     let key = state.enc_key.lock().map_err(|e| e.to_string())?.clone();
     let now = Utc::now().to_rfc3339();
     let db = state.db.lock().map_err(|e| e.to_string())?;
