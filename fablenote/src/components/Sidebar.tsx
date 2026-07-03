@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import {
   CalendarDays,
   ChevronRight,
+  Columns2,
   Download,
   FilePlus,
   Folder,
@@ -17,16 +18,20 @@ import {
   Search,
   Settings,
   Sun,
+  Tag,
   Trash2,
   MoveRight,
   Pencil,
   Undo2,
+  X,
 } from "lucide-react";
 import { invoke } from "@tauri-apps/api/core";
 import { save } from "@tauri-apps/plugin-dialog";
 import TreeMapPanel from "./TreeMapPanel";
 import CalendarPanel from "./CalendarPanel";
 import GraphPanel from "./GraphPanel";
+import ResizeHandle from "./ResizeHandle";
+import Tip from "./Tooltip";
 import { useStore } from "../store";
 import { NoteMetadata } from "../types";
 
@@ -144,6 +149,9 @@ export default function Sidebar() {
     togglePinNote,
     memoryGraphEnabled,
     memoryEnabled,
+    sidebarWidth,
+    setSidebarWidth,
+    setSplitNote,
   } = useStore();
 
   const [showTreeMap, setShowTreeMap] = useState(false);
@@ -156,7 +164,8 @@ export default function Sidebar() {
   const [ftResults, setFtResults] = useState<SearchResult[]>([]);
   const [ftLoading, setFtLoading] = useState(false);
   useEffect(() => {
-    if (!searchQuery.trim()) { setFtResults([]); return; }
+    // Les requêtes "#tag" filtrent par tag localement, pas via la recherche plein texte
+    if (!searchQuery.trim() || searchQuery.trim().startsWith("#")) { setFtResults([]); setFtLoading(false); return; }
     setFtLoading(true);
     const timer = setTimeout(() => {
       invoke<SearchResult[]>("search_notes", { query: searchQuery })
@@ -166,6 +175,28 @@ export default function Sidebar() {
     }, 300);
     return () => clearTimeout(timer);
   }, [searchQuery]);
+
+  // Filtrage par tag : requête "#xxx"
+  const tagQuery = searchQuery.trim().startsWith("#")
+    ? searchQuery.trim().slice(1).toLowerCase()
+    : null;
+  const tagResults = tagQuery !== null
+    ? notes.filter((n) => n.tags.some((t) => t.toLowerCase().includes(tagQuery)))
+    : [];
+
+  // Section Tags repliable
+  const [tagsOpen, setTagsOpen] = useState(localStorage.getItem("natia_tags_open") === "1");
+  const toggleTagsOpen = () => {
+    setTagsOpen((v) => {
+      localStorage.setItem("natia_tags_open", v ? "0" : "1");
+      return !v;
+    });
+  };
+  const tagCounts = (() => {
+    const map = new Map<string, number>();
+    for (const n of notes) for (const t of n.tags) map.set(t, (map.get(t) ?? 0) + 1);
+    return [...map.entries()].sort((a, b) => b[1] - a[1]);
+  })();
   const [menu, setMenu] = useState<MenuAction | null>(null);
   const [creatingIn, setCreatingIn] = useState<string | null>(null);
   const [newFolderName, setNewFolderName] = useState("");
@@ -202,6 +233,27 @@ export default function Sidebar() {
   useEffect(() => {
     if (renamingPath !== null) renameRef.current?.select();
   }, [renamingPath]);
+
+  // Breadcrumb de l'éditeur → déplie le dossier dans l'arbre
+  useEffect(() => {
+    const onReveal = (e: Event) => {
+      const path = (e as CustomEvent<string>).detail;
+      if (!path) return;
+      setSearchQuery("");
+      setExpanded((s) => {
+        const n = new Set(s);
+        const parts = path.split("/");
+        let cur = "";
+        for (const part of parts) {
+          cur = cur ? `${cur}/${part}` : part;
+          n.add(cur);
+        }
+        return n;
+      });
+    };
+    window.addEventListener("natia:reveal-folder", onReveal);
+    return () => window.removeEventListener("natia:reveal-folder", onReveal);
+  }, [setSearchQuery]);
 
   const toggle = (path: string) =>
     setExpanded((s) => {
@@ -273,39 +325,53 @@ export default function Sidebar() {
   return (
     <>
       <div
-        className="w-60 shrink-0 flex flex-col border-r border-border bg-sidebar overflow-hidden"
+        className="relative shrink-0 flex flex-col border-r border-border bg-sidebar overflow-hidden"
+        style={{ width: sidebarWidth }}
         onClick={closeMenu}
       >
+        <ResizeHandle
+          edge="right"
+          getWidth={() => useStore.getState().sidebarWidth}
+          setWidth={setSidebarWidth}
+          min={200}
+          max={420}
+        />
         {/* Header */}
         <div className="px-4 py-3 flex items-center gap-2 border-b border-border">
           <span className="text-accent font-bold text-lg tracking-tight select-none">NATIA</span>
           <div className="ml-auto flex items-center gap-0.5">
-            <button
-              onClick={() => setShowTreeMap(true)}
-              title="Arborescence"
-              className="p-1 rounded text-muted hover:text-primary hover:bg-hover transition-colors"
-            >
-              <Network size={14} />
-            </button>
-            {memoryEnabled && (
+            <Tip label="Arborescence">
               <button
-                onClick={toggleGraph}
-                title="Mémoire IA"
+                onClick={() => setShowTreeMap(true)}
+                aria-label="Arborescence"
                 className="p-1 rounded text-muted hover:text-primary hover:bg-hover transition-colors"
               >
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <circle cx="6" cy="6" r="3"/><circle cx="18" cy="6" r="3"/><circle cx="12" cy="18" r="3"/>
-                  <line x1="6" y1="9" x2="12" y2="15"/><line x1="18" y1="9" x2="12" y2="15"/>
-                </svg>
+                <Network size={14} />
               </button>
+            </Tip>
+            {memoryEnabled && (
+              <Tip label="Mémoire IA" shortcut="Ctrl+G">
+                <button
+                  onClick={toggleGraph}
+                  aria-label="Mémoire IA"
+                  className="p-1 rounded text-muted hover:text-primary hover:bg-hover transition-colors"
+                >
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <circle cx="6" cy="6" r="3"/><circle cx="18" cy="6" r="3"/><circle cx="12" cy="18" r="3"/>
+                    <line x1="6" y1="9" x2="12" y2="15"/><line x1="18" y1="9" x2="12" y2="15"/>
+                  </svg>
+                </button>
+              </Tip>
             )}
-            <button
-              onClick={() => setShowCalendar(true)}
-              title="Vue calendrier"
-              className="p-1 rounded text-muted hover:text-primary hover:bg-hover transition-colors"
-            >
-              <CalendarDays size={14} />
-            </button>
+            <Tip label="Vue calendrier">
+              <button
+                onClick={() => setShowCalendar(true)}
+                aria-label="Vue calendrier"
+                className="p-1 rounded text-muted hover:text-primary hover:bg-hover transition-colors"
+              >
+                <CalendarDays size={14} />
+              </button>
+            </Tip>
           </div>
         </div>
 
@@ -314,11 +380,22 @@ export default function Sidebar() {
             <Search size={14} className="text-muted shrink-0" />
             <input
               type="text"
-              placeholder="Rechercher…"
+              placeholder="Rechercher… (#tag)"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
+              data-global-search
+              aria-label="Recherche globale"
               className="bg-transparent text-sm text-primary placeholder-muted outline-none w-full"
             />
+            {searchQuery && (
+              <button
+                onClick={() => setSearchQuery("")}
+                aria-label="Effacer la recherche"
+                className="text-muted hover:text-primary transition-colors shrink-0"
+              >
+                <X size={12} />
+              </button>
+            )}
           </div>
         </div>
 
@@ -330,14 +407,52 @@ export default function Sidebar() {
             <FilePlus size={14} />
             Nouvelle note
           </button>
-          <button
-            onClick={() => { setCreatingIn(""); setNewFolderName(""); }}
-            title="Nouveau dossier"
-            className="px-2 py-1.5 rounded-lg text-secondary hover:text-primary hover:bg-hover transition-colors"
-          >
-            <FolderPlus size={14} />
-          </button>
+          <Tip label="Nouveau dossier">
+            <button
+              onClick={() => { setCreatingIn(""); setNewFolderName(""); }}
+              aria-label="Nouveau dossier"
+              className="px-2 py-1.5 rounded-lg text-secondary hover:text-primary hover:bg-hover transition-colors"
+            >
+              <FolderPlus size={14} />
+            </button>
+          </Tip>
         </div>
+
+        {/* Section Tags repliable */}
+        {tagCounts.length > 0 && (
+          <div className="px-3 pb-1">
+            <button
+              onClick={toggleTagsOpen}
+              className="flex items-center gap-1.5 w-full px-1 py-1 text-muted hover:text-primary transition-colors"
+              aria-expanded={tagsOpen}
+            >
+              <ChevronRight size={11} className={`transition-transform ${tagsOpen ? "rotate-90" : ""}`} />
+              <Tag size={11} />
+              <span className="text-[11px] uppercase tracking-wider">Tags</span>
+              <span className="text-[11px] opacity-60">({tagCounts.length})</span>
+            </button>
+            {tagsOpen && (
+              <div className="flex flex-wrap gap-1 px-1 pt-1 pb-1.5">
+                {tagCounts.map(([tag, count]) => {
+                  const active = tagQuery !== null && tag.toLowerCase().includes(tagQuery);
+                  return (
+                    <button
+                      key={tag}
+                      onClick={() => setSearchQuery(active && searchQuery === `#${tag}` ? "" : `#${tag}`)}
+                      className={`text-[11px] px-2 py-0.5 rounded-full border transition-colors ${
+                        active
+                          ? "bg-accent/15 border-accent/40 text-accent"
+                          : "bg-hover border-border text-secondary hover:text-primary hover:border-accent/30"
+                      }`}
+                    >
+                      {tag} <span className="opacity-50">{count}</span>
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        )}
 
         {creatingIn === "" && (
           <div className="px-3 pb-2">
@@ -371,8 +486,32 @@ export default function Sidebar() {
             {isLoading && (
               <p className="text-muted text-xs text-center py-4">Chargement…</p>
             )}
+            {/* Résultats par tag (#tag) */}
+            {tagQuery !== null && (
+              <div className="pb-1">
+                <div className="flex items-center gap-1.5 px-2 py-1">
+                  <Tag size={10} className="text-accent" />
+                  <span className="text-[11px] text-muted uppercase tracking-wider">
+                    Tag « {tagQuery || "…"} » · {tagResults.length}
+                  </span>
+                </div>
+                {tagResults.length === 0 && (
+                  <p className="text-xs text-muted text-center py-3">Aucune note avec ce tag</p>
+                )}
+                {tagResults.map((note) => (
+                  <NoteItem
+                    key={note.id}
+                    note={note}
+                    active={activeNote?.id === note.id}
+                    color={itemColors[`note:${note.id}`]}
+                    onSelect={() => selectNote(note.id)}
+                    onMenu={(e) => openMenu(e, { kind: "note", note, x: e.clientX, y: e.clientY })}
+                  />
+                ))}
+              </div>
+            )}
             {/* Full-text search results */}
-            {searchQuery.trim() && (
+            {searchQuery.trim() && tagQuery === null && (
               <div className="pb-1">
                 {ftLoading && <p className="text-xs text-muted text-center py-3">Recherche…</p>}
                 {!ftLoading && ftResults.length === 0 && (
@@ -413,7 +552,7 @@ export default function Sidebar() {
                 <div className="mb-1">
                   <div className="flex items-center gap-1 px-2 py-1">
                     <Pin size={9} className="text-muted" />
-                    <span className="text-[10px] text-muted uppercase tracking-wider">Épinglées</span>
+                    <span className="text-[11px] text-muted uppercase tracking-wider">Épinglées</span>
                   </div>
                   {pinned.map((note) => (
                     <NoteItem
@@ -501,30 +640,35 @@ export default function Sidebar() {
             <Settings size={15} />
             Paramètres
           </button>
-          <button
-            onClick={toggleTrash}
-            title="Corbeille"
-            className="p-1.5 rounded text-muted hover:text-primary hover:bg-hover transition-colors"
-          >
-            <Trash2 size={15} />
-          </button>
-          {hasPassword && (
+          <Tip label="Corbeille" side="top">
             <button
-              onClick={() => lock()}
-              title="Verrouiller l'application"
+              onClick={toggleTrash}
+              aria-label="Corbeille"
               className="p-1.5 rounded text-muted hover:text-primary hover:bg-hover transition-colors"
             >
-              <Lock size={15} />
+              <Trash2 size={15} />
             </button>
+          </Tip>
+          {hasPassword && (
+            <Tip label="Verrouiller l'application" side="top">
+              <button
+                onClick={() => lock()}
+                aria-label="Verrouiller l'application"
+                className="p-1.5 rounded text-muted hover:text-primary hover:bg-hover transition-colors"
+              >
+                <Lock size={15} />
+              </button>
+            </Tip>
           )}
-          <button
-            onClick={toggleTheme}
-            title={`Thème : ${theme} — cliquer pour basculer`}
-            className="p-1.5 rounded text-muted hover:text-primary hover:bg-hover transition-colors"
-            aria-label="Basculer le thème"
-          >
-            {isDark ? <Sun size={15} /> : <Moon size={15} />}
-          </button>
+          <Tip label={`Thème : ${theme}`} side="top">
+            <button
+              onClick={toggleTheme}
+              className="p-1.5 rounded text-muted hover:text-primary hover:bg-hover transition-colors"
+              aria-label="Basculer le thème"
+            >
+              {isDark ? <Sun size={15} /> : <Moon size={15} />}
+            </button>
+          </Tip>
         </div>
       </div>
 
@@ -553,6 +697,13 @@ export default function Sidebar() {
                   {pinnedNoteIds.includes(menu.note.id)
                     ? <><PinOff size={13} />Désépingler</>
                     : <><Pin size={13} />Épingler</>}
+                </button>
+                <button
+                  className="w-full flex items-center gap-2 px-3 py-2 text-sm text-secondary hover:text-primary hover:bg-hover transition-colors"
+                  onClick={() => { setSplitNote(menu.note.id); closeMenu(); }}
+                >
+                  <Columns2 size={13} />
+                  Ouvrir côte à côte
                 </button>
                 <div className="border-t border-border my-1" />
 
@@ -963,9 +1114,17 @@ function NoteItem({
       {note.tags.length > 0 && (
         <div className="flex gap-1 mt-1 flex-wrap">
           {note.tags.slice(0, 2).map((tag) => (
-            <span key={tag} className="text-xs px-1.5 py-0.5 bg-hover rounded text-muted">
+            <button
+              key={tag}
+              onClick={(e) => {
+                e.stopPropagation();
+                useStore.getState().setSearchQuery(`#${tag}`);
+              }}
+              className="text-xs px-1.5 py-0.5 bg-hover rounded text-muted hover:text-accent transition-colors"
+              aria-label={`Filtrer par le tag ${tag}`}
+            >
               {tag}
-            </span>
+            </button>
           ))}
         </div>
       )}

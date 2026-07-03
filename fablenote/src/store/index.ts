@@ -55,6 +55,22 @@ interface AppStore {
   recentNoteIds: string[];
   togglePinNote: (id: string) => void;
 
+  // Panel widths (resizable, persisted)
+  sidebarWidth: number;
+  setSidebarWidth: (w: number) => void;
+  aiPanelWidth: number;
+  setAiPanelWidth: (w: number) => void;
+
+  // Navigation history (back / forward between notes)
+  navBackIds: string[];
+  navForwardIds: string[];
+  goBack: () => Promise<void>;
+  goForward: () => Promise<void>;
+
+  // Split view (second note, read-only)
+  splitNoteId: string | null;
+  setSplitNote: (id: string | null) => void;
+
   // Memory
   memoryEnabled: boolean;
   setMemoryEnabled: (v: boolean) => void;
@@ -190,6 +206,9 @@ export const useStore = create<AppStore>((set, get) => ({
       activeNote: null,
       folders: [],
       versions: [],
+      navBackIds: [],
+      navForwardIds: [],
+      splitNoteId: null,
     });
   },
 
@@ -238,6 +257,62 @@ export const useStore = create<AppStore>((set, get) => ({
       return { pinnedNoteIds: pinned };
     });
   },
+
+  sidebarWidth: (() => {
+    const w = parseInt(localStorage.getItem("natia_sidebar_width") ?? "240");
+    return isNaN(w) ? 240 : Math.min(420, Math.max(200, w));
+  })(),
+  setSidebarWidth: (w) => {
+    localStorage.setItem("natia_sidebar_width", String(w));
+    set({ sidebarWidth: w });
+  },
+  aiPanelWidth: (() => {
+    const w = parseInt(localStorage.getItem("natia_ai_panel_width") ?? "320");
+    return isNaN(w) ? 320 : Math.min(560, Math.max(280, w));
+  })(),
+  setAiPanelWidth: (w) => {
+    localStorage.setItem("natia_ai_panel_width", String(w));
+    set({ aiPanelWidth: w });
+  },
+
+  navBackIds: [],
+  navForwardIds: [],
+  goBack: async () => {
+    const s = get();
+    const prevId = s.navBackIds[s.navBackIds.length - 1];
+    if (!prevId) return;
+    try {
+      const note = await invoke<Note>("get_note", { id: prevId });
+      set((st) => ({
+        activeNote: note,
+        navBackIds: st.navBackIds.slice(0, -1),
+        navForwardIds: st.activeNote ? [...st.navForwardIds, st.activeNote.id] : st.navForwardIds,
+      }));
+    } catch {
+      // Note supprimée entre-temps : on la retire de la pile et on continue
+      set((st) => ({ navBackIds: st.navBackIds.slice(0, -1) }));
+      await get().goBack();
+    }
+  },
+  goForward: async () => {
+    const s = get();
+    const nextId = s.navForwardIds[s.navForwardIds.length - 1];
+    if (!nextId) return;
+    try {
+      const note = await invoke<Note>("get_note", { id: nextId });
+      set((st) => ({
+        activeNote: note,
+        navForwardIds: st.navForwardIds.slice(0, -1),
+        navBackIds: st.activeNote ? [...st.navBackIds, st.activeNote.id] : st.navBackIds,
+      }));
+    } catch {
+      set((st) => ({ navForwardIds: st.navForwardIds.slice(0, -1) }));
+      await get().goForward();
+    }
+  },
+
+  splitNoteId: null,
+  setSplitNote: (id) => set({ splitNoteId: id }),
 
   memoryEnabled: localStorage.getItem("natia_memory_enabled") === "1",
   setMemoryEnabled: (v: boolean) => {
@@ -297,7 +372,11 @@ export const useStore = create<AppStore>((set, get) => ({
       set((s) => {
         const recent = [id, ...s.recentNoteIds.filter((r) => r !== id)].slice(0, 10);
         localStorage.setItem("natia_recent", JSON.stringify(recent));
-        return { activeNote: note, recentNoteIds: recent };
+        // Push note quittée dans l'historique arrière, vide l'historique avant
+        const navBackIds = s.activeNote && s.activeNote.id !== id
+          ? [...s.navBackIds, s.activeNote.id].slice(-50)
+          : s.navBackIds;
+        return { activeNote: note, recentNoteIds: recent, navBackIds, navForwardIds: [] };
       });
     } catch (e) {
       console.error(e);
@@ -350,6 +429,9 @@ export const useStore = create<AppStore>((set, get) => ({
     set((state) => ({
       notes: state.notes.filter((n) => n.id !== id),
       activeNote: state.activeNote?.id === id ? null : state.activeNote,
+      navBackIds: state.navBackIds.filter((n) => n !== id),
+      navForwardIds: state.navForwardIds.filter((n) => n !== id),
+      splitNoteId: state.splitNoteId === id ? null : state.splitNoteId,
     }));
   },
 

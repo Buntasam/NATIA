@@ -23,10 +23,13 @@ import {
   Bell,
   BrainCircuit,
   Check,
+  ChevronLeft,
+  ChevronRight,
   Clock,
   Clipboard,
   Code,
-  Download,
+  FileInput,
+  FileOutput,
   Heading1,
   Heading2,
   Heading3,
@@ -38,17 +41,19 @@ import {
   Maximize2,
   Minimize2,
   Minus,
+  MoreHorizontal,
   Quote,
   Save,
   Search,
   StickyNote,
   Table as TableIcon,
-  Upload,
   X,
 } from "lucide-react";
 import TemplatesPanel from "./TemplatesPanel";
 import BacklinksPanel from "./BacklinksPanel";
+import Tip from "./Tooltip";
 import { registerSaveNow } from "./CloseOverlay";
+import { markdownToHtml } from "../lib/markdown";
 
 const lowlight = createLowlight(common);
 import { useStore } from "../store";
@@ -191,7 +196,7 @@ function SlashMenu({
               </span>
               <div>
                 <p className="text-xs font-medium leading-none mb-0.5">{item.label}</p>
-                <p className="text-[10px] text-muted">{item.desc}</p>
+                <p className="text-[11px] text-muted">{item.desc}</p>
               </div>
             </button>
           ))}
@@ -245,7 +250,7 @@ function WikilinkMenu({
             <Link2 size={12} className={i === selectedIdx ? "text-accent shrink-0" : "text-muted shrink-0"} />
             <div className="flex-1 min-w-0">
               <p className="text-xs font-medium truncate">{note.title}</p>
-              {note.folder && <p className="text-[10px] text-muted truncate">{note.folder}</p>}
+              {note.folder && <p className="text-[11px] text-muted truncate">{note.folder}</p>}
             </div>
           </button>
         ))}
@@ -343,7 +348,7 @@ function FindReplaceBar({
         placeholder="Rechercher…"
         className="bg-hover border border-border rounded-md px-2 py-1 text-xs text-primary outline-none focus:border-accent/50 w-40"
       />
-      <span className="text-[10px] text-muted shrink-0 min-w-10">
+      <span className="text-[11px] text-muted shrink-0 min-w-10">
         {matches.length > 0 ? `${idx + 1}/${matches.length}` : search ? "0 résultat" : ""}
       </span>
       <button onClick={() => goTo(idx - 1)} disabled={matches.length === 0} className="p-1 text-muted hover:text-primary disabled:opacity-30 transition-colors text-xs">↑</button>
@@ -412,75 +417,6 @@ function htmlToMarkdown(html: string): string {
   return nodeToMd(div).trim();
 }
 
-function markdownToHtml(md: string): string {
-  const lines = md.split("\n");
-  const result: string[] = [];
-  let i = 0;
-
-  while (i < lines.length) {
-    const line = lines[i];
-
-    if (line.startsWith("```")) {
-      const codeLines: string[] = [];
-      i++;
-      while (i < lines.length && !lines[i].startsWith("```")) {
-        codeLines.push(lines[i]);
-        i++;
-      }
-      result.push(`<pre><code>${codeLines.join("\n")}</code></pre>`);
-      i++;
-      continue;
-    }
-
-    if (line.startsWith("# ")) { result.push(`<h1>${inlineMd(line.slice(2))}</h1>`); i++; continue; }
-    if (line.startsWith("## ")) { result.push(`<h2>${inlineMd(line.slice(3))}</h2>`); i++; continue; }
-    if (line.startsWith("### ")) { result.push(`<h3>${inlineMd(line.slice(4))}</h3>`); i++; continue; }
-    if (line.startsWith("#### ")) { result.push(`<h4>${inlineMd(line.slice(5))}</h4>`); i++; continue; }
-    if (line.startsWith("---")) { result.push("<hr>"); i++; continue; }
-
-    if (line.startsWith("> ")) {
-      result.push(`<blockquote><p>${inlineMd(line.slice(2))}</p></blockquote>`);
-      i++;
-      continue;
-    }
-
-    if (line.match(/^[-*] /)) {
-      const items: string[] = [];
-      while (i < lines.length && lines[i].match(/^[-*] /)) {
-        items.push(`<li><p>${inlineMd(lines[i].slice(2))}</p></li>`);
-        i++;
-      }
-      result.push(`<ul>${items.join("")}</ul>`);
-      continue;
-    }
-
-    if (line.match(/^\d+\. /)) {
-      const items: string[] = [];
-      while (i < lines.length && lines[i].match(/^\d+\. /)) {
-        items.push(`<li><p>${inlineMd(lines[i].replace(/^\d+\. /, ""))}</p></li>`);
-        i++;
-      }
-      result.push(`<ol>${items.join("")}</ol>`);
-      continue;
-    }
-
-    if (line.trim() === "") { i++; continue; }
-
-    result.push(`<p>${inlineMd(line)}</p>`);
-    i++;
-  }
-
-  return result.join("");
-}
-
-function inlineMd(text: string): string {
-  return text
-    .replace(/\*\*(.*?)\*\*/g, "<strong>$1</strong>")
-    .replace(/\*(.*?)\*/g, "<em>$1</em>")
-    .replace(/__(.*?)__/g, "<u>$1</u>")
-    .replace(/`(.*?)`/g, "<code>$1</code>");
-}
-
 function downloadFile(content: string, filename: string, mime: string) {
   const blob = new Blob([content], { type: mime });
   const url = URL.createObjectURL(blob);
@@ -515,15 +451,21 @@ export default function Editor() {
     focusMode,
     toggleFocusMode,
     settings,
+    goBack,
+    goForward,
+    navBackIds,
+    navForwardIds,
   } = useStore();
 
   const [localTitle, setLocalTitle] = useState("");
-  const [showExport, setShowExport] = useState(false);
+  const [showMoreMenu, setShowMoreMenu] = useState(false);
   const [showTemplates, setShowTemplates] = useState(false);
   const [showBacklinks, setShowBacklinks] = useState(false);
   const [showFindReplace, setShowFindReplace] = useState(false);
   const [wordCount, setWordCount] = useState(0);
   const [copied, setCopied] = useState(false);
+  const [lastSavedAt, setLastSavedAt] = useState<Date | null>(null);
+  const wasSavingRef = useRef(false);
 
   // Wikilink hover preview
   const [wikiPreview, setWikiPreview] = useState<{ x: number; y: number; title: string; snippet: string } | null>(null);
@@ -765,6 +707,26 @@ export default function Editor() {
     return () => { editor.off("update", update); };
   }, [editor]);
 
+  // ─── Horodatage de la dernière sauvegarde ──────────────────────────────────
+
+  useEffect(() => {
+    if (wasSavingRef.current && !isSaving) setLastSavedAt(new Date());
+    wasSavingRef.current = isSaving;
+  }, [isSaving]);
+
+  // ─── Insertion depuis la conversation IA ───────────────────────────────────
+
+  useEffect(() => {
+    if (!editor) return;
+    const onInsert = (e: Event) => {
+      const html = (e as CustomEvent<string>).detail;
+      if (!html) return;
+      editor.chain().focus().insertContent(DOMPurify.sanitize(html)).run();
+    };
+    window.addEventListener("natia:insert-from-chat", onInsert);
+    return () => window.removeEventListener("natia:insert-from-chat", onInsert);
+  }, [editor]);
+
   // ─── Load note content ─────────────────────────────────────────────────────
 
   useEffect(() => {
@@ -817,8 +779,9 @@ export default function Editor() {
       // Ctrl+S
       if (ctrl && e.key === "s") { e.preventDefault(); saveNow(); }
 
-      // Ctrl+F / Ctrl+H — find & replace
-      if (ctrl && (e.key === "f" || e.key === "F" || e.key === "h" || e.key === "H")) {
+      // Ctrl+F / Ctrl+H — chercher & remplacer dans la note
+      // (Ctrl+Shift+F = recherche globale, gérée dans Layout)
+      if (ctrl && !e.shiftKey && (e.key === "f" || e.key === "h")) {
         e.preventDefault();
         setShowFindReplace((s) => !s);
       }
@@ -867,24 +830,24 @@ export default function Editor() {
     if (!editor || !activeNote) return;
     const md = htmlToMarkdown(editor.getHTML());
     downloadFile(md, `${safeFilename(activeNote.title)}.md`, "text/markdown");
-    setShowExport(false);
+    setShowMoreMenu(false);
   };
 
   const exportText = () => {
     if (!editor || !activeNote) return;
     downloadFile(editor.getText(), `${safeFilename(activeNote.title)}.txt`, "text/plain");
-    setShowExport(false);
+    setShowMoreMenu(false);
   };
 
   const exportHtml = () => {
     if (!editor || !activeNote) return;
     downloadFile(editor.getHTML(), `${safeFilename(activeNote.title)}.html`, "text/html");
-    setShowExport(false);
+    setShowMoreMenu(false);
   };
 
   const exportPdf = () => {
     if (!editor || !activeNote) return;
-    setShowExport(false);
+    setShowMoreMenu(false);
 
     let printEl = document.getElementById("natia-print");
     if (!printEl) {
@@ -913,7 +876,7 @@ export default function Editor() {
     const md = htmlToMarkdown(editor.getHTML());
     navigator.clipboard.writeText(md).then(() => {
       setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
+      setTimeout(() => { setCopied(false); setShowMoreMenu(false); }, 900);
     });
   };
 
@@ -968,125 +931,107 @@ export default function Editor() {
     <div className="flex flex-col h-full overflow-hidden">
       {/* Note header */}
       <div className="relative flex flex-col px-6 pt-4 pb-2 border-b border-border shrink-0">
-        {/* Breadcrumb */}
+        {/* Breadcrumb — cliquable : révèle le dossier dans la sidebar */}
         {folderParts.length > 0 && (
           <div className="flex items-center gap-1 mb-1.5">
-            {folderParts.map((part, i) => (
-              <span key={i} className="flex items-center gap-1 text-[10px] text-muted">
-                {i > 0 && <span className="opacity-40">/</span>}
-                <span>{part}</span>
-              </span>
-            ))}
+            {folderParts.map((part, i) => {
+              const path = folderParts.slice(0, i + 1).join("/");
+              return (
+                <span key={i} className="flex items-center gap-1 text-[11px] text-muted">
+                  {i > 0 && <span className="opacity-40">/</span>}
+                  <button
+                    onClick={() => window.dispatchEvent(new CustomEvent("natia:reveal-folder", { detail: path }))}
+                    className="hover:text-accent transition-colors"
+                    aria-label={`Afficher le dossier ${path} dans la sidebar`}
+                  >
+                    {part}
+                  </button>
+                </span>
+              );
+            })}
           </div>
         )}
 
         <div className="flex items-center gap-3">
+          {/* Navigation historique */}
+          <div className="flex items-center shrink-0 -ml-2">
+            <Tip label="Note précédente" shortcut="Alt+←">
+              <button
+                onClick={goBack}
+                disabled={navBackIds.length === 0}
+                aria-label="Note précédente"
+                className="p-1 rounded transition-colors text-muted hover:text-primary hover:bg-hover disabled:opacity-25 disabled:pointer-events-none"
+              >
+                <ChevronLeft size={16} />
+              </button>
+            </Tip>
+            <Tip label="Note suivante" shortcut="Alt+→">
+              <button
+                onClick={goForward}
+                disabled={navForwardIds.length === 0}
+                aria-label="Note suivante"
+                className="p-1 rounded transition-colors text-muted hover:text-primary hover:bg-hover disabled:opacity-25 disabled:pointer-events-none"
+              >
+                <ChevronRight size={16} />
+              </button>
+            </Tip>
+          </div>
+
           <input
             type="text"
             value={localTitle}
             onChange={handleTitleChange}
             placeholder="Sans titre"
+            aria-label="Titre de la note"
             className="flex-1 bg-transparent text-xl font-semibold text-primary placeholder-muted outline-none"
           />
           <div className="flex items-center gap-1 shrink-0">
-            <button
-              onClick={() => setShowTemplates(true)}
-              title="Templates"
-              className="p-1.5 rounded transition-colors text-secondary hover:text-primary hover:bg-hover"
-            >
-              <LayoutTemplate size={17} />
-            </button>
-            <button
-              onClick={saveNow}
-              title="Sauvegarder (Ctrl+S)"
-              className={`p-1.5 rounded transition-colors ${
-                isSaving ? "text-accent" : "text-secondary hover:text-primary hover:bg-hover"
-              }`}
-            >
-              <Save size={17} className={isSaving ? "animate-pulse" : ""} />
-            </button>
-
-            {/* Import */}
-            <button
-              onClick={() => importRef.current?.click()}
-              title="Importer un fichier (.md, .txt)"
-              className="p-1.5 rounded transition-colors text-secondary hover:text-primary hover:bg-hover"
-            >
-              <Download size={17} />
-            </button>
-            <input ref={importRef} type="file" accept=".md,.txt" className="hidden" onChange={handleImport} />
-
-            {/* Export */}
-            <div className="relative">
+            {saveMode === "manual" && (
+              <Tip label="Sauvegarder" shortcut="Ctrl+S">
+                <button
+                  onClick={saveNow}
+                  aria-label="Sauvegarder"
+                  className={`p-1.5 rounded transition-colors ${
+                    isSaving ? "text-accent" : "text-secondary hover:text-primary hover:bg-hover"
+                  }`}
+                >
+                  <Save size={17} className={isSaving ? "animate-pulse" : ""} />
+                </button>
+              </Tip>
+            )}
+            <Tip label="Liens & backlinks">
               <button
-                onClick={() => setShowExport((s) => !s)}
-                title="Exporter la note"
+                onClick={() => setShowBacklinks((s) => !s)}
+                aria-label="Liens et backlinks"
                 className={`p-1.5 rounded transition-colors ${
-                  showExport ? "text-accent bg-accent/10" : "text-secondary hover:text-primary hover:bg-hover"
+                  showBacklinks ? "text-accent bg-accent/10" : "text-secondary hover:text-primary hover:bg-hover"
                 }`}
               >
-                <Upload size={17} />
+                <Link2 size={17} />
               </button>
-              {showExport && (
-                <>
-                  <div className="fixed inset-0 z-40" onClick={() => setShowExport(false)} />
-                  <div className="absolute right-0 top-full mt-1 z-50 bg-panel border border-border rounded-lg shadow-xl py-1 min-w-44">
-                    <button onClick={exportMarkdown} className="w-full flex items-center gap-2 px-3 py-2 text-sm text-secondary hover:text-primary hover:bg-hover transition-colors">
-                      Exporter en Markdown
-                    </button>
-                    <button onClick={exportText} className="w-full flex items-center gap-2 px-3 py-2 text-sm text-secondary hover:text-primary hover:bg-hover transition-colors">
-                      Exporter en texte brut
-                    </button>
-                    <button onClick={exportHtml} className="w-full flex items-center gap-2 px-3 py-2 text-sm text-secondary hover:text-primary hover:bg-hover transition-colors">
-                      Exporter en HTML
-                    </button>
-                    <button onClick={exportPdf} className="w-full flex items-center gap-2 px-3 py-2 text-sm text-secondary hover:text-primary hover:bg-hover transition-colors">
-                      Exporter en PDF
-                    </button>
-                  </div>
-                </>
-              )}
-            </div>
-
-            {/* Copy as Markdown */}
-            <button
-              onClick={copyAsMarkdown}
-              title={copied ? "Copié !" : "Copier en Markdown"}
-              className={`p-1.5 rounded transition-colors ${
-                copied ? "text-accent bg-accent/10" : "text-secondary hover:text-primary hover:bg-hover"
-              }`}
-            >
-              {copied ? <Check size={17} /> : <Clipboard size={17} />}
-            </button>
-
-            <button
-              onClick={() => setShowBacklinks((s) => !s)}
-              title="Liens & backlinks"
-              className={`p-1.5 rounded transition-colors ${
-                showBacklinks ? "text-accent bg-accent/10" : "text-secondary hover:text-primary hover:bg-hover"
-              }`}
-            >
-              <Link2 size={17} />
-            </button>
-            <button
-              onClick={handleVersionToggle}
-              title="Historique des versions (Ctrl+Shift+H)"
-              className={`p-1.5 rounded transition-colors ${
-                showVersionPanel ? "text-accent bg-accent/10" : "text-secondary hover:text-primary hover:bg-hover"
-              }`}
-            >
-              <Clock size={17} />
-            </button>
-            {/* Focus mode toggle */}
-            <button
-              onClick={toggleFocusMode}
-              title={focusMode ? "Quitter le mode focus" : "Mode focus (masque la sidebar)"}
-              className={`p-1.5 rounded transition-colors ${
-                focusMode ? "text-accent bg-accent/10" : "text-secondary hover:text-primary hover:bg-hover"
-              }`}
-            >
-              {focusMode ? <Minimize2 size={17} /> : <Maximize2 size={17} />}
-            </button>
+            </Tip>
+            <Tip label="Historique des versions" shortcut="Ctrl+Shift+H">
+              <button
+                onClick={handleVersionToggle}
+                aria-label="Historique des versions"
+                className={`p-1.5 rounded transition-colors ${
+                  showVersionPanel ? "text-accent bg-accent/10" : "text-secondary hover:text-primary hover:bg-hover"
+                }`}
+              >
+                <Clock size={17} />
+              </button>
+            </Tip>
+            <Tip label={focusMode ? "Quitter le mode focus" : "Mode focus"}>
+              <button
+                onClick={toggleFocusMode}
+                aria-label={focusMode ? "Quitter le mode focus" : "Mode focus"}
+                className={`p-1.5 rounded transition-colors ${
+                  focusMode ? "text-accent bg-accent/10" : "text-secondary hover:text-primary hover:bg-hover"
+                }`}
+              >
+                {focusMode ? <Minimize2 size={17} /> : <Maximize2 size={17} />}
+              </button>
+            </Tip>
             <VoiceRecorder
               onInsert={(text) => {
                 if (editor) {
@@ -1094,15 +1039,78 @@ export default function Editor() {
                 }
               }}
             />
-            <button
-              onClick={toggleAiPanel}
-              title="Panneau IA (Ctrl+Shift+A)"
-              className={`p-1.5 rounded transition-colors ${
-                showAiPanel ? "text-accent bg-accent/10" : "text-secondary hover:text-primary hover:bg-hover"
-              }`}
-            >
-              <BrainCircuit size={17} />
-            </button>
+            <Tip label="Panneau IA" shortcut="Ctrl+Shift+A">
+              <button
+                onClick={toggleAiPanel}
+                aria-label="Panneau IA"
+                className={`p-1.5 rounded transition-colors ${
+                  showAiPanel ? "text-accent bg-accent/10" : "text-secondary hover:text-primary hover:bg-hover"
+                }`}
+              >
+                <BrainCircuit size={17} />
+              </button>
+            </Tip>
+
+            {/* Menu ⋯ : actions occasionnelles */}
+            <div className="relative">
+              <Tip label="Plus d'actions">
+                <button
+                  onClick={() => setShowMoreMenu((s) => !s)}
+                  aria-label="Plus d'actions"
+                  className={`p-1.5 rounded transition-colors ${
+                    showMoreMenu ? "text-accent bg-accent/10" : "text-secondary hover:text-primary hover:bg-hover"
+                  }`}
+                >
+                  <MoreHorizontal size={17} />
+                </button>
+              </Tip>
+              {showMoreMenu && (
+                <>
+                  <div className="fixed inset-0 z-40" onClick={() => setShowMoreMenu(false)} />
+                  <div className="absolute right-0 top-full mt-1 z-50 bg-panel border border-border rounded-lg shadow-xl py-1 min-w-52">
+                    <button
+                      onClick={() => { setShowTemplates(true); setShowMoreMenu(false); }}
+                      className="w-full flex items-center gap-2 px-3 py-2 text-sm text-secondary hover:text-primary hover:bg-hover transition-colors"
+                    >
+                      <LayoutTemplate size={14} className="text-muted" />
+                      Templates
+                    </button>
+                    <button
+                      onClick={() => { importRef.current?.click(); setShowMoreMenu(false); }}
+                      className="w-full flex items-center gap-2 px-3 py-2 text-sm text-secondary hover:text-primary hover:bg-hover transition-colors"
+                    >
+                      <FileInput size={14} className="text-muted" />
+                      Importer (.md, .txt)
+                    </button>
+                    <button
+                      onClick={copyAsMarkdown}
+                      className="w-full flex items-center gap-2 px-3 py-2 text-sm text-secondary hover:text-primary hover:bg-hover transition-colors"
+                    >
+                      {copied ? <Check size={14} className="text-accent" /> : <Clipboard size={14} className="text-muted" />}
+                      {copied ? "Copié !" : "Copier en Markdown"}
+                    </button>
+                    <div className="border-t border-border my-1" />
+                    <button onClick={exportMarkdown} className="w-full flex items-center gap-2 px-3 py-2 text-sm text-secondary hover:text-primary hover:bg-hover transition-colors">
+                      <FileOutput size={14} className="text-muted" />
+                      Exporter en Markdown
+                    </button>
+                    <button onClick={exportText} className="w-full flex items-center gap-2 px-3 py-2 text-sm text-secondary hover:text-primary hover:bg-hover transition-colors">
+                      <FileOutput size={14} className="text-muted" />
+                      Exporter en texte brut
+                    </button>
+                    <button onClick={exportHtml} className="w-full flex items-center gap-2 px-3 py-2 text-sm text-secondary hover:text-primary hover:bg-hover transition-colors">
+                      <FileOutput size={14} className="text-muted" />
+                      Exporter en HTML
+                    </button>
+                    <button onClick={exportPdf} className="w-full flex items-center gap-2 px-3 py-2 text-sm text-secondary hover:text-primary hover:bg-hover transition-colors">
+                      <FileOutput size={14} className="text-muted" />
+                      Exporter en PDF
+                    </button>
+                  </div>
+                </>
+              )}
+            </div>
+            <input ref={importRef} type="file" accept=".md,.txt" className="hidden" onChange={handleImport} />
           </div>
         </div>
       </div>
@@ -1209,28 +1217,37 @@ export default function Editor() {
       {/* Status bar */}
       <div className="flex items-center justify-between gap-4 px-4 py-1 border-t border-border bg-sidebar shrink-0 select-none">
         <div className="flex items-center gap-3">
-          {/* Save status */}
-          <span className={`text-[10px] transition-colors ${isSaving ? "text-accent" : "text-muted/50"}`}>
-            {isSaving ? "Sauvegarde…" : saveMode === "manual" ? "Manuel" : "Sauvegardé"}
+          {/* Indicateur de sauvegarde */}
+          <span className={`text-[11px] transition-colors ${isSaving ? "text-accent" : "text-muted/60"}`}>
+            {isSaving
+              ? "Enregistrement…"
+              : saveMode === "manual"
+              ? (lastSavedAt
+                  ? `Manuel — enregistré à ${lastSavedAt.toLocaleTimeString("fr", { hour: "2-digit", minute: "2-digit" })}`
+                  : "Manuel — Ctrl+S pour enregistrer")
+              : lastSavedAt
+              ? `✓ Enregistré à ${lastSavedAt.toLocaleTimeString("fr", { hour: "2-digit", minute: "2-digit" })}`
+              : "✓ Enregistré"}
           </span>
           {/* Provider */}
-          <span className="text-[10px] text-muted/40 capitalize">{settings.ai_provider}</span>
+          <span className="text-[11px] text-muted/40 capitalize">{settings.ai_provider}</span>
         </div>
         <div className="flex items-center gap-3">
-          <span className="text-[10px] text-muted">
+          <span className="text-[11px] text-muted">
             {wordCount} mot{wordCount !== 1 ? "s" : ""}
           </span>
-          <span className="text-[10px] text-muted/60">
+          <span className="text-[11px] text-muted/60">
             {Math.max(1, Math.ceil(wordCount / 200))} min
           </span>
-          <button
-            onClick={() => setShowFindReplace((s) => !s)}
-            title="Chercher & remplacer (Ctrl+F)"
-            aria-label="Chercher et remplacer"
-            className={`transition-colors ${showFindReplace ? "text-accent" : "text-muted/50 hover:text-muted"}`}
-          >
-            <Search size={11} />
-          </button>
+          <Tip label="Chercher & remplacer" shortcut="Ctrl+F" side="top">
+            <button
+              onClick={() => setShowFindReplace((s) => !s)}
+              aria-label="Chercher et remplacer"
+              className={`transition-colors ${showFindReplace ? "text-accent" : "text-muted/50 hover:text-muted"}`}
+            >
+              <Search size={11} />
+            </button>
+          </Tip>
         </div>
       </div>
 
@@ -1285,7 +1302,7 @@ function TagsBar({
   tags: string[];
   folder: string | null;
 }) {
-  const { activeNote, updateNote } = useStore();
+  const { activeNote, updateNote, setSearchQuery } = useStore();
   const [input, setInput] = useState("");
 
   const addTag = () => {
@@ -1309,8 +1326,14 @@ function TagsBar({
           key={tag}
           className="flex items-center gap-1 text-xs px-2 py-0.5 bg-hover rounded-full text-secondary"
         >
-          {tag}
-          <button onClick={() => removeTag(tag)} className="text-muted hover:text-primary transition-colors">
+          <button
+            onClick={() => setSearchQuery(`#${tag}`)}
+            className="hover:text-accent transition-colors"
+            aria-label={`Filtrer les notes par le tag ${tag}`}
+          >
+            {tag}
+          </button>
+          <button onClick={() => removeTag(tag)} aria-label={`Retirer le tag ${tag}`} className="text-muted hover:text-primary transition-colors">
             ×
           </button>
         </span>
