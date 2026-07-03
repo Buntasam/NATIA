@@ -7,6 +7,7 @@ import {
   AlertTriangle,
   ArrowRight,
   Bug,
+  Brain,
   BrainCircuit,
   CheckCheck,
   ChevronDown,
@@ -31,6 +32,7 @@ import { CorrectionModal } from "./ai/CorrectionModal";
 import { OpButton } from "./ai/OpButton";
 import { TraceRow } from "./ai/TraceRow";
 import { aiChat, aiStream, activeModel } from "../lib/aiInvoke";
+import { buildMemoryContext } from "../lib/memoryContext";
 import { useStore } from "../store";
 import DebugConsole from "./DebugConsole";
 import { addAiLog } from "../debug/logger";
@@ -117,7 +119,8 @@ function detectProvider(key: string): string {
 }
 
 export default function AiPanel({ onOpenConv }: { onOpenConv: () => void }) {
-  const { activeNote, settings, saveSettings, folders, toggleAiPanel, updateNote, renameNote, moveNote, createFolder, loadNotes, loadFolders } = useStore();
+  const { activeNote, settings, saveSettings, folders, toggleAiPanel, updateNote, renameNote, moveNote, createFolder, loadNotes, loadFolders, memoryEnabled, memoryNodes } = useStore();
+  const memoryActive = memoryEnabled && memoryNodes.length > 0;
 
   const [activeTab, setActiveTab] = useState<Tab>("ops");
   const [models, setModels] = useState<string[]>([]);
@@ -277,7 +280,8 @@ export default function AiPanel({ onOpenConv }: { onOpenConv: () => void }) {
     setQuickLoading(true);
     setQuickResponse("");
     try {
-      const result = await doChat(shadowPrompt, msg);
+      const sys = memoryActive ? shadowPrompt + buildMemoryContext(memoryNodes) : shadowPrompt;
+      const result = await doChat(sys, msg);
       setQuickResponse(result);
       setQuickInput("");
     } catch (e: unknown) {
@@ -1262,7 +1266,14 @@ Réponds UNIQUEMENT avec ce JSON (rien d'autre, pas de texte, pas de \`\`\`) :
             {/* Quick message */}
             <div className="flex flex-col gap-1.5">
               <div className="flex items-center justify-between">
-                <p className="text-xs text-muted uppercase tracking-wider">Message rapide</p>
+                <div className="flex items-center gap-1.5">
+                  <p className="text-xs text-muted uppercase tracking-wider">Message rapide</p>
+                  {memoryActive && (
+                    <span title={`${memoryNodes.length} nœud${memoryNodes.length !== 1 ? "s" : ""} de mémoire pris en compte`}>
+                      <Brain size={10} className="text-accent/70" />
+                    </span>
+                  )}
+                </div>
                 <button
                   onClick={onOpenConv}
                   className="flex items-center gap-1 text-xs text-accent hover:text-accent/80 transition-colors"

@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import * as d3 from "d3";
-import { Plus, X, Trash2, Brain, GitBranch, List, ChevronRight } from "lucide-react";
+import { Check, ChevronRight, GitBranch, List, Pencil, Plus, Search, Trash2, Brain, X } from "lucide-react";
 import { useStore, MemoryNode, MemoryNodeType } from "../store";
 
 // ── Constants ──────────────────────────────────────────────────────────────────
@@ -121,7 +121,7 @@ function buildNodes(
 type PanelTab = "graph" | "list";
 
 export default function GraphPanel({ onClose }: { onClose: () => void }) {
-  const { notes, folders, settings, memoryEnabled, memoryGraphEnabled, memoryNodes, addMemoryNode, deleteMemoryNode } = useStore();
+  const { notes, folders, settings, memoryEnabled, setMemoryEnabled, memoryGraphEnabled, memoryNodes, addMemoryNode, updateMemoryNode, deleteMemoryNode } = useStore();
   const svgRef = useRef<SVGSVGElement>(null);
   const simRef = useRef<d3.Simulation<SimNode, SimLink> | null>(null);
   const tickleRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -130,11 +130,13 @@ export default function GraphPanel({ onClose }: { onClose: () => void }) {
   const [tab, setTab] = useState<PanelTab>(memoryGraphEnabled ? "graph" : "list");
   const [selected, setSelected] = useState<SimNode | null>(null);
   const [addOpen, setAddOpen] = useState(false);
+  const [editingId, setEditingId] = useState<string | null>(null);
   const [newType, setNewType] = useState<MemoryNodeType>("contexte");
   const [newLabel, setNewLabel] = useState("");
   const [newContent, setNewContent] = useState("");
   const [newStrength, setNewStrength] = useState(0.5);
   const [confirmDelete, setConfirmDelete] = useState<string | null>(null);
+  const [query, setQuery] = useState("");
 
   const allData = buildNodes(
     memoryNodes,
@@ -289,19 +291,45 @@ export default function GraphPanel({ onClose }: { onClose: () => void }) {
     };
   }, [tab, memoryNodes, notes, folders, settings.ai_provider, memoryEnabled]);
 
-  // ── Add node handler ─────────────────────────────────────────────────────────
+  // ── Add / edit node handlers ─────────────────────────────────────────────────
 
-  const handleAdd = () => {
-    if (!newLabel.trim()) return;
-    addMemoryNode({ type: newType, label: newLabel.trim(), content: newContent.trim(), strength: newStrength, connections: [], auto: false });
-    setNewLabel(""); setNewContent(""); setNewStrength(0.5); setAddOpen(false);
+  const resetForm = () => { setNewType("contexte"); setNewLabel(""); setNewContent(""); setNewStrength(0.5); };
+
+  const openCreateForm = () => {
+    setEditingId(null); resetForm(); setAddOpen(true); setSelected(null);
   };
 
-  // ── Grouped list data ────────────────────────────────────────────────────────
+  const openEditForm = (node: { id: string; type: MemoryNodeType; label: string; content: string; strength: number }) => {
+    setEditingId(node.id);
+    setNewType(node.type); setNewLabel(node.label); setNewContent(node.content); setNewStrength(node.strength);
+    setAddOpen(true); setSelected(null);
+  };
+
+  const closeForm = () => { setAddOpen(false); setEditingId(null); resetForm(); };
+
+  const handleSubmit = () => {
+    if (!newLabel.trim()) return;
+    if (editingId) {
+      updateMemoryNode(editingId, { type: newType, label: newLabel.trim(), content: newContent.trim(), strength: newStrength });
+    } else {
+      addMemoryNode({ type: newType, label: newLabel.trim(), content: newContent.trim(), strength: newStrength, connections: [], auto: false });
+    }
+    closeForm();
+  };
+
+  // ── Grouped list data (recherche + tri par importance) ──────────────────────
 
   const grouped = (Object.keys(TYPE_LABEL) as MemoryNodeType[]).map(type => ({
     type,
     nodes: allData.nodes.filter(n => n.type === type),
+  })).filter(g => g.nodes.length > 0);
+
+  const q = query.trim().toLowerCase();
+  const filteredGrouped = grouped.map(({ type, nodes }) => ({
+    type,
+    nodes: [...nodes]
+      .filter(n => !q || n.label.toLowerCase().includes(q) || n.content.toLowerCase().includes(q))
+      .sort((a, b) => b.strength - a.strength),
   })).filter(g => g.nodes.length > 0);
 
   // ── Render ───────────────────────────────────────────────────────────────────
@@ -316,32 +344,36 @@ export default function GraphPanel({ onClose }: { onClose: () => void }) {
           <div className="flex items-center gap-3">
             <Brain size={15} className="text-accent" />
             <span className="font-semibold text-primary text-sm">Mémoire IA</span>
-            <span className="text-[10px] text-muted">{allData.nodes.length} nœud{allData.nodes.length !== 1 ? "s" : ""}</span>
+            {memoryEnabled && (
+              <>
+                <span className="text-[11px] text-muted">{allData.nodes.length} nœud{allData.nodes.length !== 1 ? "s" : ""}</span>
 
-            {/* Tabs */}
-            <div className="flex items-center gap-0.5 ml-2 bg-hover rounded-lg p-0.5">
-              {memoryGraphEnabled && (
-                <button
-                  onClick={() => setTab("graph")}
-                  className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-medium transition-colors ${tab === "graph" ? "bg-panel text-primary shadow-sm" : "text-muted hover:text-secondary"}`}
-                >
-                  <GitBranch size={11} />
-                  Graphe
-                </button>
-              )}
-              <button
-                onClick={() => setTab("list")}
-                className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-medium transition-colors ${tab === "list" ? "bg-panel text-primary shadow-sm" : "text-muted hover:text-secondary"}`}
-              >
-                <List size={11} />
-                Nœuds
-              </button>
-            </div>
+                {/* Tabs */}
+                <div className="flex items-center gap-0.5 ml-2 bg-hover rounded-lg p-0.5">
+                  {memoryGraphEnabled && (
+                    <button
+                      onClick={() => setTab("graph")}
+                      className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-medium transition-colors ${tab === "graph" ? "bg-panel text-primary shadow-sm" : "text-muted hover:text-secondary"}`}
+                    >
+                      <GitBranch size={11} />
+                      Graphe
+                    </button>
+                  )}
+                  <button
+                    onClick={() => setTab("list")}
+                    className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-medium transition-colors ${tab === "list" ? "bg-panel text-primary shadow-sm" : "text-muted hover:text-secondary"}`}
+                  >
+                    <List size={11} />
+                    Nœuds
+                  </button>
+                </div>
+              </>
+            )}
           </div>
 
           <div className="flex items-center gap-2">
             {/* Legend (graph tab only) */}
-            {tab === "graph" && (
+            {memoryEnabled && tab === "graph" && (
               <div className="flex items-center gap-3 mr-2">
                 {(Object.entries(TYPE_COLOR) as [MemoryNodeType, string][]).map(([t, c]) => (
                   <div key={t} className="flex items-center gap-1">
@@ -351,14 +383,16 @@ export default function GraphPanel({ onClose }: { onClose: () => void }) {
                 ))}
               </div>
             )}
-            <button
-              onClick={() => { setAddOpen(o => !o); setSelected(null); }}
-              className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-accent/10 border border-accent/25 text-xs text-accent hover:bg-accent/20 transition-colors"
-            >
-              <Plus size={12} />
-              Ajouter
-            </button>
-            <button onClick={onClose} className="p-1 rounded text-muted hover:text-primary hover:bg-hover transition-colors">
+            {memoryEnabled && (
+              <button
+                onClick={() => { if (addOpen && !editingId) closeForm(); else openCreateForm(); }}
+                className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-accent/10 border border-accent/25 text-xs text-accent hover:bg-accent/20 transition-colors"
+              >
+                <Plus size={12} />
+                Ajouter
+              </button>
+            )}
+            <button onClick={onClose} aria-label="Fermer" className="p-1 rounded text-muted hover:text-primary hover:bg-hover transition-colors">
               <X size={16} />
             </button>
           </div>
@@ -367,16 +401,39 @@ export default function GraphPanel({ onClose }: { onClose: () => void }) {
         {/* Body */}
         <div className="flex-1 overflow-hidden relative">
 
+          {/* ── Écran d'activation ── */}
+          {!memoryEnabled && (
+            <div className="flex flex-col items-center justify-center h-full text-center gap-4 px-10">
+              <div className="w-14 h-14 rounded-2xl bg-accent/10 flex items-center justify-center">
+                <Brain size={26} className="text-accent" />
+              </div>
+              <div className="max-w-sm">
+                <p className="text-sm font-semibold text-primary">Mémoire IA désactivée</p>
+                <p className="text-xs text-muted mt-1.5 leading-relaxed">
+                  Ajoute des informations que tu juges importantes — un projet en cours, tes préférences, du contexte récurrent — et NATIA les rappellera automatiquement à l'IA pendant vos conversations.
+                </p>
+              </div>
+              <button
+                onClick={() => setMemoryEnabled(true)}
+                className="flex items-center gap-1.5 px-4 py-2 rounded-lg bg-accent hover:bg-accent-hover text-white text-sm font-medium transition-colors"
+              >
+                <Brain size={13} />
+                Activer la mémoire IA
+              </button>
+            </div>
+          )}
+
           {/* ── GRAPH TAB ── */}
-          {tab === "graph" && memoryGraphEnabled && (
+          {memoryEnabled && tab === "graph" && memoryGraphEnabled && (
             <>
               <svg ref={svgRef} className="w-full h-full" />
 
-              {/* Add node panel */}
-              {addOpen && <AddNodePanel
+              {/* Add / edit node panel */}
+              {addOpen && <NodeForm
+                variant="floating" mode={editingId ? "edit" : "create"}
                 type={newType} label={newLabel} content={newContent} strength={newStrength}
                 onType={setNewType} onLabel={setNewLabel} onContent={setNewContent} onStrength={setNewStrength}
-                onAdd={handleAdd} onClose={() => setAddOpen(false)}
+                onSubmit={handleSubmit} onClose={closeForm}
               />}
 
               {/* Selected node detail */}
@@ -391,10 +448,16 @@ export default function GraphPanel({ onClose }: { onClose: () => void }) {
                       <p className="text-sm font-semibold text-primary mt-0.5">{selected.label}</p>
                     </div>
                     {!selected.auto && (
-                      <button onClick={() => { deleteMemoryNode(selected.id); setSelected(null); }}
-                        className="p-1 rounded text-muted hover:text-red-400 transition-colors shrink-0">
-                        <Trash2 size={12} />
-                      </button>
+                      <div className="flex items-center gap-1 shrink-0">
+                        <button onClick={() => openEditForm(selected)}
+                          className="p-1 rounded text-muted hover:text-accent transition-colors">
+                          <Pencil size={12} />
+                        </button>
+                        <button onClick={() => { deleteMemoryNode(selected.id); setSelected(null); }}
+                          className="p-1 rounded text-muted hover:text-red-400 transition-colors">
+                          <Trash2 size={12} />
+                        </button>
+                      </div>
                     )}
                   </div>
                   {selected.content && <p className="text-xs text-muted leading-relaxed">{selected.content}</p>}
@@ -410,7 +473,7 @@ export default function GraphPanel({ onClose }: { onClose: () => void }) {
           )}
 
           {/* ── LIST TAB ── */}
-          {tab === "list" && (
+          {memoryEnabled && tab === "list" && (
             <div className="flex h-full">
               {/* Node list */}
               <div className="flex-1 overflow-y-auto p-4 flex flex-col gap-4">
@@ -419,15 +482,37 @@ export default function GraphPanel({ onClose }: { onClose: () => void }) {
                     <Brain size={28} className="text-muted/40" />
                     <div>
                       <p className="text-sm text-muted font-medium">Aucun nœud en mémoire</p>
-                      <p className="text-xs text-muted/60 mt-1">Active la mémoire dans les Paramètres ou ajoute un nœud manuellement</p>
+                      <p className="text-xs text-muted/60 mt-1">Ajoute un nœud manuellement, ou active le graphe dans les Paramètres pour dériver des nœuds de tes dossiers et tags</p>
                     </div>
-                    <button onClick={() => setAddOpen(true)} className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-accent/10 border border-accent/25 text-xs text-accent hover:bg-accent/20 transition-colors">
+                    <button onClick={openCreateForm} className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-accent/10 border border-accent/25 text-xs text-accent hover:bg-accent/20 transition-colors">
                       <Plus size={11} />Ajouter un nœud
                     </button>
                   </div>
                 )}
 
-                {grouped.map(({ type, nodes }) => (
+                {grouped.length > 0 && (
+                  <div className="flex items-center gap-2 bg-hover rounded-lg px-2.5 py-1.5 shrink-0">
+                    <Search size={12} className="text-muted shrink-0" />
+                    <input
+                      value={query}
+                      onChange={(e) => setQuery(e.target.value)}
+                      placeholder="Chercher un nœud…"
+                      aria-label="Chercher un nœud de mémoire"
+                      className="flex-1 bg-transparent text-xs text-primary placeholder-muted outline-none"
+                    />
+                    {query && (
+                      <button onClick={() => setQuery("")} aria-label="Effacer" className="text-muted hover:text-primary transition-colors shrink-0">
+                        <X size={11} />
+                      </button>
+                    )}
+                  </div>
+                )}
+
+                {grouped.length > 0 && filteredGrouped.length === 0 && (
+                  <p className="text-xs text-muted text-center py-6">Aucun nœud ne correspond à « {query} »</p>
+                )}
+
+                {filteredGrouped.map(({ type, nodes }) => (
                   <div key={type}>
                     <div className="flex items-center gap-2 mb-2">
                       <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: TYPE_COLOR[type] }} />
@@ -469,10 +554,16 @@ export default function GraphPanel({ onClose }: { onClose: () => void }) {
                                   </button>
                                 </>
                               ) : (
-                                <button onClick={() => setConfirmDelete(node.id)}
-                                  className="p-1 rounded text-muted hover:text-red-400 transition-colors">
-                                  <Trash2 size={12} />
-                                </button>
+                                <>
+                                  <button onClick={() => openEditForm(node)}
+                                    className="p-1 rounded text-muted hover:text-accent transition-colors">
+                                    <Pencil size={12} />
+                                  </button>
+                                  <button onClick={() => setConfirmDelete(node.id)}
+                                    className="p-1 rounded text-muted hover:text-red-400 transition-colors">
+                                    <Trash2 size={12} />
+                                  </button>
+                                </>
                               )}
                             </div>
                           )}
@@ -483,124 +574,109 @@ export default function GraphPanel({ onClose }: { onClose: () => void }) {
                 ))}
               </div>
 
-              {/* Add node form (right panel) */}
+              {/* Add / edit node form (right panel) */}
               {addOpen && (
-                <div className="w-64 border-l border-border bg-panel flex flex-col p-4 gap-3 shrink-0">
-                  <div className="flex items-center justify-between">
-                    <p className="text-xs font-semibold text-primary">Nouveau nœud</p>
-                    <button onClick={() => setAddOpen(false)} className="p-0.5 rounded text-muted hover:text-primary transition-colors"><X size={13} /></button>
-                  </div>
-
-                  <div className="flex flex-col gap-1">
-                    <label className="text-[10px] text-muted uppercase tracking-wide">Type</label>
-                    <div className="grid grid-cols-2 gap-1">
-                      {(Object.entries(TYPE_LABEL) as [MemoryNodeType, string][]).map(([t, l]) => (
-                        <button key={t} onClick={() => setNewType(t)}
-                          className={`py-1.5 px-2 rounded-lg text-xs font-medium border transition-colors ${newType === t ? "border-current" : "bg-hover border-border text-muted hover:text-secondary"}`}
-                          style={newType === t ? { backgroundColor: TYPE_COLOR[t] + "18", borderColor: TYPE_COLOR[t] + "55", color: TYPE_COLOR[t] } : {}}>
-                          {l}
-                        </button>
-                      ))}
-                    </div>
-                    <p className="text-[10px] text-muted mt-0.5">{TYPE_DESC[newType]}</p>
-                  </div>
-
-                  <div className="flex flex-col gap-1">
-                    <label className="text-[10px] text-muted uppercase tracking-wide">Label</label>
-                    <input value={newLabel} onChange={e => setNewLabel(e.target.value)}
-                      onKeyDown={e => { if (e.key === "Enter") handleAdd(); }}
-                      placeholder="Ex : Projet Alpha…"
-                      className="bg-hover border border-border rounded-lg px-2.5 py-1.5 text-xs text-primary outline-none focus:border-accent/50 transition-colors" />
-                  </div>
-
-                  <div className="flex flex-col gap-1">
-                    <label className="text-[10px] text-muted uppercase tracking-wide">Description</label>
-                    <textarea value={newContent} onChange={e => setNewContent(e.target.value)}
-                      placeholder="Informations contextuelles…" rows={3}
-                      className="bg-hover border border-border rounded-lg px-2.5 py-1.5 text-xs text-primary outline-none focus:border-accent/50 transition-colors resize-none" />
-                  </div>
-
-                  <div className="flex flex-col gap-1">
-                    <div className="flex items-center justify-between">
-                      <label className="text-[10px] text-muted uppercase tracking-wide">Importance</label>
-                      <span className="text-[10px] text-accent font-mono">{Math.round(newStrength * 10)}/10</span>
-                    </div>
-                    <input type="range" min={0.1} max={1} step={0.1} value={newStrength}
-                      onChange={e => setNewStrength(parseFloat(e.target.value))}
-                      className="w-full accent-accent" />
-                  </div>
-
-                  <button onClick={handleAdd} disabled={!newLabel.trim()}
-                    className="w-full py-2 rounded-lg bg-accent hover:bg-accent/90 disabled:opacity-40 text-white text-xs font-semibold transition-colors flex items-center justify-center gap-1.5">
-                    <Plus size={11} />
-                    Ajouter le nœud
-                  </button>
-                </div>
+                <NodeForm
+                  variant="panel" mode={editingId ? "edit" : "create"}
+                  type={newType} label={newLabel} content={newContent} strength={newStrength}
+                  onType={setNewType} onLabel={setNewLabel} onContent={setNewContent} onStrength={setNewStrength}
+                  onSubmit={handleSubmit} onClose={closeForm}
+                />
               )}
             </div>
           )}
         </div>
 
         {/* Footer */}
-        <div className="px-5 py-2 border-t border-border shrink-0 flex items-center gap-4">
-          {tab === "graph" ? (
-            <span className="text-[10px] text-muted">Scroll = zoom · Drag = déplacer · Clic = détails</span>
-          ) : (
-            <span className="text-[10px] text-muted">
-              Les nœuds <span className="text-secondary">auto</span> sont générés depuis tes dossiers, tags et fournisseur IA
+        {memoryEnabled && (
+          <div className="px-5 py-2 border-t border-border shrink-0 flex items-center gap-4">
+            {tab === "graph" ? (
+              <span className="text-[11px] text-muted">Scroll = zoom · Drag = déplacer · Clic = détails</span>
+            ) : (
+              <span className="text-[11px] text-muted">
+                Les nœuds <span className="text-secondary">auto</span> sont générés depuis tes dossiers, tags et fournisseur IA · les nœuds{" "}
+                <span className="text-secondary">manuels</span> les plus importants sont transmis à l'IA
+              </span>
+            )}
+            <span className="text-[11px] text-muted ml-auto">
+              {memoryNodes.length} manuel{memoryNodes.length !== 1 ? "s" : ""} ·{" "}
+              {allData.nodes.length - memoryNodes.length} auto
             </span>
-          )}
-          <span className="text-[10px] text-muted ml-auto">
-            {memoryNodes.length} manuel{memoryNodes.length !== 1 ? "s" : ""} ·{" "}
-            {allData.nodes.length - memoryNodes.length} auto
-          </span>
-        </div>
+          </div>
+        )}
       </div>
     </div>
   );
 }
 
-// ── Add node floating panel (graph tab) ───────────────────────────────────────
+// ── Add / edit node form — shared by graph tab (floating) and list tab (panel) ─
 
-function AddNodePanel({
+function NodeForm({
+  variant, mode,
   type, label, content, strength,
   onType, onLabel, onContent, onStrength,
-  onAdd, onClose,
+  onSubmit, onClose,
 }: {
+  variant: "floating" | "panel";
+  mode: "create" | "edit";
   type: MemoryNodeType; label: string; content: string; strength: number;
   onType: (t: MemoryNodeType) => void; onLabel: (v: string) => void;
   onContent: (v: string) => void; onStrength: (v: number) => void;
-  onAdd: () => void; onClose: () => void;
+  onSubmit: () => void; onClose: () => void;
 }) {
+  const wrapperClass = variant === "floating"
+    ? "absolute top-3 right-3 bg-panel border border-border rounded-xl shadow-xl p-4 w-64 z-20 flex flex-col gap-3"
+    : "w-64 border-l border-border bg-panel flex flex-col p-4 gap-3 shrink-0";
+
   return (
-    <div className="absolute top-3 right-3 bg-panel border border-border rounded-xl shadow-xl p-4 w-64 z-20 flex flex-col gap-3">
+    <div className={wrapperClass}>
       <div className="flex items-center justify-between">
-        <p className="text-xs font-semibold text-primary">Nouveau nœud</p>
-        <button onClick={onClose} className="p-0.5 rounded text-muted hover:text-primary transition-colors"><X size={13} /></button>
+        <p className="text-xs font-semibold text-primary">{mode === "edit" ? "Modifier le nœud" : "Nouveau nœud"}</p>
+        <button onClick={onClose} aria-label="Fermer" className="p-0.5 rounded text-muted hover:text-primary transition-colors"><X size={13} /></button>
       </div>
-      <div className="grid grid-cols-2 gap-1">
-        {(Object.entries(TYPE_LABEL) as [MemoryNodeType, string][]).map(([t, l]) => (
-          <button key={t} onClick={() => onType(t)}
-            className={`py-1.5 rounded-lg text-xs font-medium border transition-colors ${type === t ? "border-current" : "bg-hover border-border text-muted"}`}
-            style={type === t ? { backgroundColor: TYPE_COLOR[t] + "18", borderColor: TYPE_COLOR[t] + "55", color: TYPE_COLOR[t] } : {}}>
-            {l}
-          </button>
-        ))}
+
+      <div className="flex flex-col gap-1">
+        <label className="text-[11px] text-muted uppercase tracking-wide">Type</label>
+        <div className="grid grid-cols-2 gap-1">
+          {(Object.entries(TYPE_LABEL) as [MemoryNodeType, string][]).map(([t, l]) => (
+            <button key={t} onClick={() => onType(t)}
+              className={`py-1.5 px-2 rounded-lg text-xs font-medium border transition-colors ${type === t ? "border-current" : "bg-hover border-border text-muted hover:text-secondary"}`}
+              style={type === t ? { backgroundColor: TYPE_COLOR[t] + "18", borderColor: TYPE_COLOR[t] + "55", color: TYPE_COLOR[t] } : {}}>
+              {l}
+            </button>
+          ))}
+        </div>
+        <p className="text-[11px] text-muted mt-0.5">{TYPE_DESC[type]}</p>
       </div>
-      <input value={label} onChange={e => onLabel(e.target.value)} onKeyDown={e => { if (e.key === "Enter") onAdd(); }}
-        placeholder="Label…"
-        className="bg-hover border border-border rounded-lg px-2.5 py-1.5 text-xs text-primary outline-none focus:border-accent/50 transition-colors" />
-      <textarea value={content} onChange={e => onContent(e.target.value)} placeholder="Description…" rows={2}
-        className="bg-hover border border-border rounded-lg px-2.5 py-1.5 text-xs text-primary outline-none focus:border-accent/50 transition-colors resize-none" />
-      <div className="flex items-center gap-2">
-        <span className="text-[10px] text-muted shrink-0">Importance</span>
+
+      <div className="flex flex-col gap-1">
+        <label className="text-[11px] text-muted uppercase tracking-wide">Label</label>
+        <input value={label} onChange={e => onLabel(e.target.value)} onKeyDown={e => { if (e.key === "Enter") onSubmit(); }}
+          placeholder="Ex : Projet Alpha…"
+          className="bg-hover border border-border rounded-lg px-2.5 py-1.5 text-xs text-primary outline-none focus:border-accent/50 transition-colors" />
+      </div>
+
+      <div className="flex flex-col gap-1">
+        <label className="text-[11px] text-muted uppercase tracking-wide">Description</label>
+        <textarea value={content} onChange={e => onContent(e.target.value)}
+          placeholder="Informations contextuelles…" rows={3}
+          className="bg-hover border border-border rounded-lg px-2.5 py-1.5 text-xs text-primary outline-none focus:border-accent/50 transition-colors resize-none" />
+      </div>
+
+      <div className="flex flex-col gap-1">
+        <div className="flex items-center justify-between">
+          <label className="text-[11px] text-muted uppercase tracking-wide">Importance</label>
+          <span className="text-[11px] text-accent font-mono">{Math.round(strength * 10)}/10</span>
+        </div>
         <input type="range" min={0.1} max={1} step={0.1} value={strength}
-          onChange={e => onStrength(parseFloat(e.target.value))} className="flex-1 accent-accent" />
-        <span className="text-[10px] text-accent font-mono w-6">{Math.round(strength * 10)}</span>
+          onChange={e => onStrength(parseFloat(e.target.value))}
+          className="w-full accent-accent" />
+        <p className="text-[10px] text-muted/70 leading-relaxed">Priorité de rappel à l'IA — les nœuds les plus importants sont transmis en premier</p>
       </div>
-      <button onClick={onAdd} disabled={!label.trim()}
-        className="w-full py-1.5 rounded-lg bg-accent hover:bg-accent/90 disabled:opacity-40 text-white text-xs font-semibold transition-colors">
-        Ajouter
+
+      <button onClick={onSubmit} disabled={!label.trim()}
+        className="w-full py-2 rounded-lg bg-accent hover:bg-accent/90 disabled:opacity-40 text-white text-xs font-semibold transition-colors flex items-center justify-center gap-1.5">
+        {mode === "edit" ? <><Check size={11} />Enregistrer</> : <><Plus size={11} />Ajouter le nœud</>}
       </button>
     </div>
   );

@@ -3,12 +3,13 @@ import { listen } from "@tauri-apps/api/event";
 import { invoke } from "@tauri-apps/api/core";
 import DOMPurify from "dompurify";
 import {
-  Check, CheckCheck, ChevronRight, Copy, FilePlus2, FileText, Loader2,
+  Brain, Check, CheckCheck, ChevronRight, Copy, FilePlus2, FileText, Loader2,
   MessagesSquare, Search, Send, Sparkles, Tag, Terminal, X,
 } from "lucide-react";
 import { useStore } from "../store";
 import { aiStream } from "../lib/aiInvoke";
 import { markdownToHtml } from "../lib/markdown";
+import { buildMemoryContext } from "../lib/memoryContext";
 import AiPanel from "./AiPanel";
 import D20Roller from "./D20Roller";
 import Editor from "./Editor";
@@ -384,7 +385,8 @@ function ConvPanel({
   onClose: () => void;
   historyRef: React.MutableRefObject<Map<string, ConvMessage[]>>;
 }) {
-  const { settings, activeNote, aiPanelWidth, setAiPanelWidth } = useStore();
+  const { settings, activeNote, aiPanelWidth, setAiPanelWidth, memoryEnabled, memoryNodes } = useStore();
+  const memoryActive = memoryEnabled && memoryNodes.length > 0;
   const [messages, setMessages] = useState<ConvMessage[]>([]);
   const [input, setInput] = useState("");
   const [isStreaming, setIsStreaming] = useState(false);
@@ -432,6 +434,7 @@ function ConvPanel({
 
   const buildSystem = () => {
     let sys = settings.global_shadow_prompt;
+    if (memoryActive) sys += buildMemoryContext(memoryNodes);
     if (activeNote) {
       const div = document.createElement("div");
       div.innerHTML = activeNote.content;
@@ -499,6 +502,14 @@ function ConvPanel({
       <div className="shrink-0 border-b border-border px-3 py-2.5 flex items-center gap-2">
         <MessagesSquare size={14} className="text-accent" />
         <span className="text-xs font-medium text-primary flex-1">Conversation IA</span>
+        {memoryActive && (
+          <span
+            className="flex items-center gap-1 text-[10px] text-accent/80 shrink-0"
+            title={`${memoryNodes.length} nœud${memoryNodes.length !== 1 ? "s" : ""} de mémoire pris en compte`}
+          >
+            <Brain size={10} />
+          </span>
+        )}
         {messages.length > 0 && (
           <button
             onClick={() => {
