@@ -1,17 +1,31 @@
 import { useState, useEffect, useRef } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { save } from "@tauri-apps/plugin-dialog";
-import { getCurrentWindow } from "@tauri-apps/api/window";
-import { BarChart2, BookMarked, CheckCircle2, Download, Eye, EyeOff, FolderOpen, Leaf, Lock, LogOut, Minus, Plus, RotateCcw, Shield, ShieldOff, Terminal, Trash2 as TrashIcon, TrendingUp, X, ChevronDown, Clock, Trash2, XCircle, Zap, Activity } from "lucide-react";
+import { BarChart2, BookMarked, BrainCircuit, CheckCircle2, Database, Download, Eye, EyeOff, FolderOpen, Leaf, Lock, LogOut, Minus, Palette, Plus, RotateCcw, ScrollText, Search, Shield, ShieldOff, Sparkles, Terminal, Trash2 as TrashIcon, TrendingUp, Wrench, X, ChevronDown, Clock, Trash2, XCircle, Zap, Activity } from "lucide-react";
 import { useStore } from "../store";
 import { DEFAULT_SETTINGS } from "../store";
 import { Settings as SettingsType, PromptVersion } from "../types";
 import ApiKeysPanel from "./ApiKeysPanel";
 import StatsPanel from "./StatsPanel";
 import React from "react";
-import { TabBtn, Section, Field, Input, SecInput } from "./settings/SettingsWidgets";
+import { Section, Field, Input, SecInput } from "./settings/SettingsWidgets";
 
-type Tab = "general" | "advanced" | "stats";
+// ─── Catégories de la navigation latérale ─────────────────────────────────────
+
+type SettingsCat = "appearance" | "ai" | "prompts" | "memory" | "security" | "data" | "app" | "stats";
+
+const NAV: { key: SettingsCat; label: string; desc: string; icon: React.ReactNode; keywords: string }[] = [
+  { key: "appearance", label: "Apparence",                 desc: "Thème, typographie de l'éditeur, extras",              icon: <Palette size={14} />,      keywords: "theme couleur sombre clair police taille largeur editeur de d20 dice" },
+  { key: "ai",         label: "Intelligence artificielle", desc: "Fournisseur, clés API, modèles et comportement",       icon: <Sparkles size={14} />,     keywords: "ia modele cle api ollama claude openai gemini mistral cli temperature contexte tokens fournisseur connexion historique conversation" },
+  { key: "prompts",    label: "Prompts",                   desc: "Prompts système des opérations IA",                    icon: <ScrollText size={14} />,   keywords: "prompt correction resume traduction titre tri email continuation bibliotheque historique systeme shadow" },
+  { key: "memory",     label: "Mémoire IA",                desc: "Mémoire persistante et graphe neuronal",               icon: <BrainCircuit size={14} />, keywords: "memoire graphe noeud neuronal collecte" },
+  { key: "security",   label: "Sécurité",                  desc: "Mot de passe, chiffrement, verrouillage automatique",  icon: <Shield size={14} />,       keywords: "securite mot de passe pin verrouillage chiffrement aes argon lock" },
+  { key: "data",       label: "Données",                   desc: "Export, dossier de données, désinstallation",          icon: <Database size={14} />,     keywords: "export zip sauvegarde donnees dossier desinstaller backup archive" },
+  { key: "app",        label: "Application",               desc: "Disclaimer et outils de développement",                icon: <Wrench size={14} />,       keywords: "disclaimer avertissement debogage debug developpement demarrage" },
+  { key: "stats",      label: "Statistiques",              desc: "Activité et métriques de tes notes",                   icon: <BarChart2 size={14} />,    keywords: "statistiques graphique mots notes activite tags kpi" },
+];
+
+const normalize = (s: string) => s.toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "");
 
 const PROMPT_FIELDS: { key: keyof SettingsType; label: string; rows: number }[] = [
   { key: "global_shadow_prompt", label: "Prompt global (injecté dans chaque requête)", rows: 3 },
@@ -115,7 +129,12 @@ export default function Settings() {
   const { settings, saveSettings, toggleSettings, theme, setTheme, isDark, hasPassword, passwordType, lock, setupPassword, changePassword, removePassword, memoryEnabled, setMemoryEnabled, memoryGraphEnabled, setMemoryGraphEnabled, memoryNodes, clearMemoryNodes } = useStore();
   const [confirmClear, setConfirmClear] = React.useState(false);
   const [form, setForm] = useState<SettingsType>({ ...settings });
-  const [tab, setTab] = useState<Tab>("general");
+  const [cat, setCat] = useState<SettingsCat>(() => {
+    const saved = localStorage.getItem("natia_settings_cat") as SettingsCat | null;
+    return saved && NAV.some((n) => n.key === saved) ? saved : "appearance";
+  });
+  const [navQuery, setNavQuery] = useState("");
+  const [closeAttempt, setCloseAttempt] = useState(false);
   const [disclaimerReset, setDisclaimerReset] = useState(false);
   const [exporting, setExporting] = useState(false);
   const [exportDone, setExportDone] = useState(false);
@@ -176,19 +195,48 @@ export default function Settings() {
     await invoke("reveal_data_dir");
   };
 
-  // Wide layout detection (fullscreen or maximized)
-  const [isWide, setIsWide] = useState(false);
+  // ── Navigation, recherche et détection de modifications ─────────────────────
+
+  const selectCat = (key: SettingsCat) => {
+    setCat(key);
+    localStorage.setItem("natia_settings_cat", key);
+  };
+
+  const filteredNav = navQuery.trim()
+    ? NAV.filter((n) => normalize(`${n.label} ${n.desc} ${n.keywords}`).includes(normalize(navQuery)))
+    : NAV;
+
+  // Si la catégorie sélectionnée sort du filtre, bascule sur le premier résultat
   useEffect(() => {
-    const win = getCurrentWindow();
-    const check = async () => {
-      const [fs, max] = await Promise.all([win.isFullscreen(), win.isMaximized()]);
-      setIsWide(fs || max);
+    if (filteredNav.length > 0 && !filteredNav.some((n) => n.key === cat)) {
+      setCat(filteredNav[0].key);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [navQuery]);
+
+  const dirty = JSON.stringify(form) !== JSON.stringify(settings);
+
+  useEffect(() => {
+    if (!dirty) setCloseAttempt(false);
+  }, [dirty]);
+
+  const requestClose = () => {
+    if (dirty) setCloseAttempt(true);
+    else toggleSettings();
+  };
+
+  // Escape : intercepté ici (capture) pour protéger les modifications non sauvegardées
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== "Escape") return;
+      e.preventDefault();
+      e.stopPropagation();
+      if (dirty) setCloseAttempt(true);
+      else toggleSettings();
     };
-    check();
-    let unlisten: (() => void) | undefined;
-    win.listen("tauri://resize", check).then((fn) => { unlisten = fn; });
-    return () => { unlisten?.(); };
-  }, []);
+    window.addEventListener("keydown", onKey, true);
+    return () => window.removeEventListener("keydown", onKey, true);
+  }, [dirty, toggleSettings]);
 
   const handleExport = async () => {
     const filePath = await save({
@@ -410,11 +458,11 @@ export default function Settings() {
     </Section>
   );
 
-  // ── Content blocks (shared between tabbed and wide layouts) ─────────────────
+  // ── Contenus par catégorie ──────────────────────────────────────────────────
 
-  const generalContent = (
+  const aiContent = (
     <>
-      <Section title="Clés API">
+      <Section title="Clés API & connexions">
         <ApiKeysPanel />
       </Section>
 
@@ -631,7 +679,7 @@ export default function Settings() {
           <div className="mt-2 flex items-start gap-2 px-3 py-2 rounded-lg bg-amber-400/10 border border-amber-400/20">
             <span className="text-amber-400 mt-0.5 shrink-0">⚠</span>
             <p className="text-[10px] text-amber-300/90 leading-relaxed">
-              Ce curseur modifie automatiquement les prompts de <strong className="text-amber-300">toutes les tâches</strong>. Ajuste-les individuellement dans l'onglet <strong className="text-amber-300">Avancé</strong> pour un comportement optimal.
+              Ce curseur modifie automatiquement les prompts de <strong className="text-amber-300">toutes les tâches</strong>. Ajuste-les individuellement dans la section <strong className="text-amber-300">Prompts</strong> pour un comportement optimal.
             </p>
           </div>
         </div>
@@ -684,8 +732,12 @@ export default function Settings() {
           </div>
         </div>
       </Section>
+    </>
+  );
 
-      <Section title="Données">
+  const dataContent = (
+    <>
+      <Section title="Sauvegarde">
         <div className="flex items-center justify-between">
           <div>
             <p className="text-sm text-secondary">Exporter toutes les notes</p>
@@ -697,9 +749,11 @@ export default function Settings() {
           </button>
         </div>
       </Section>
+    </>
+  );
 
-      {securitySection}
-
+  const memoryContent = (
+    <>
       <Section title="Mémoire IA">
         <div className="flex items-center justify-between">
           <div>
@@ -758,7 +812,11 @@ export default function Settings() {
           </>
         )}
       </Section>
+    </>
+  );
 
+  const appearanceContent = (
+    <>
       <Section title="Apparence">
         <div className="flex flex-col gap-2">
           <p className="text-sm text-secondary">Thème</p>
@@ -856,7 +914,11 @@ export default function Settings() {
           </button>
         </div>
       </Section>
+    </>
+  );
 
+  const uninstallSection = (
+    <>
       <Section title="Désinstallation">
         <div className="flex flex-col gap-2">
           <p className="text-xs text-muted leading-relaxed">
@@ -895,7 +957,7 @@ export default function Settings() {
     </>
   );
 
-  const advancedContent = (
+  const promptsContent = (
     <>
       <Section title="Prompts système">
         <div className="flex flex-col gap-7">
@@ -1061,7 +1123,11 @@ export default function Settings() {
           </div>
         </div>
       </Section>
+    </>
+  );
 
+  const appContent = (
+    <>
       <Section title="Application">
         <div className="flex items-center justify-between">
           <div>
@@ -1094,102 +1160,141 @@ export default function Settings() {
     </>
   );
 
-  const statsContent = (
-    <Section title="Vue d'ensemble">
-      <StatsPanel />
-    </Section>
-  );
+  const current = NAV.find((n) => n.key === cat) ?? NAV[0];
 
-  // ── Footer (shared) ─────────────────────────────────────────────────────────
-  const footer = (
-    <div className="flex justify-end gap-2 px-5 py-3 border-t border-border shrink-0">
-      <button onClick={toggleSettings} className="px-4 py-2 rounded-lg text-sm text-secondary hover:text-primary hover:bg-hover transition-colors">Annuler</button>
-      <button onClick={handleSave} className="px-4 py-2 rounded-lg text-sm bg-accent hover:bg-accent-hover text-white transition-colors">Sauvegarder</button>
-    </div>
-  );
-
-  // ── Wide layout (fullscreen / maximized) ────────────────────────────────────
-  if (isWide) {
-    return (
-      <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60">
-        <div className="bg-panel border border-border rounded-xl w-[90vw] max-w-[1360px] max-h-[90vh] overflow-hidden flex flex-col shadow-2xl">
-
-          {/* Header */}
-          <div className="flex items-center justify-between px-6 py-4 border-b border-border shrink-0">
-            <h2 className="text-base font-semibold text-primary">Paramètres</h2>
-            <button onClick={toggleSettings} className="text-muted hover:text-primary transition-colors"><X size={16} /></button>
-          </div>
-
-          {/* Two-column body */}
-          <div className="flex flex-1 min-h-0 overflow-hidden">
-
-            {/* Left — Général */}
-            <div className="flex-1 flex flex-col min-h-0 border-r border-border">
-              <div className="px-6 h-9 flex items-center border-b border-border/60 shrink-0">
-                <span className="text-[10px] text-muted uppercase tracking-wider font-semibold">Général</span>
-              </div>
-              <div className="flex-1 overflow-y-auto px-6 py-4 flex flex-col gap-5">
-                {generalContent}
-              </div>
-            </div>
-
-            {/* Center — Avancé */}
-            <div className="flex-1 flex flex-col min-h-0 border-r border-border">
-              <div className="px-6 h-9 flex items-center border-b border-border/60 shrink-0">
-                <span className="text-[10px] text-muted uppercase tracking-wider font-semibold">Avancé</span>
-              </div>
-              <div className="flex-1 overflow-y-auto px-6 py-4 flex flex-col gap-5">
-                {advancedContent}
-              </div>
-            </div>
-
-            {/* Right — Statistiques */}
-            <div className="flex-1 flex flex-col min-h-0">
-              <div className="px-6 h-9 flex items-center gap-1.5 border-b border-border/60 shrink-0">
-                <BarChart2 size={11} className="text-muted" />
-                <span className="text-[10px] text-muted uppercase tracking-wider font-semibold">Statistiques</span>
-              </div>
-              <div className="flex-1 overflow-y-auto px-6 py-4 flex flex-col gap-5">
-                <StatsPanel />
-              </div>
-            </div>
-
-          </div>
-
-          {footer}
-        </div>
-      </div>
-    );
-  }
-
-  // ── Normal layout (tabbed) ──────────────────────────────────────────────────
+  // ── Layout : navigation latérale + contenu + footer ─────────────────────────
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60">
-      <div className="bg-panel border border-border rounded-xl w-[600px] max-h-[88vh] overflow-hidden flex flex-col shadow-2xl">
+      <div className="bg-panel border border-border rounded-xl w-[880px] max-w-[95vw] h-[85vh] max-h-[720px] overflow-hidden flex flex-col shadow-2xl">
 
         {/* Header */}
-        <div className="flex items-center justify-between px-5 py-4 border-b border-border shrink-0">
+        <div className="flex items-center justify-between px-5 py-3.5 border-b border-border shrink-0">
           <h2 className="text-base font-semibold text-primary">Paramètres</h2>
-          <button onClick={toggleSettings} className="text-muted hover:text-primary transition-colors"><X size={16} /></button>
+          <button
+            onClick={requestClose}
+            aria-label="Fermer les paramètres"
+            className="text-muted hover:text-primary transition-colors p-1"
+          >
+            <X size={16} />
+          </button>
         </div>
 
-        {/* Tabs */}
-        <div className="flex gap-0.5 px-5 pt-3 pb-0 shrink-0 border-b border-border">
-          <TabBtn active={tab === "general"} onClick={() => setTab("general")}>Général</TabBtn>
-          <TabBtn active={tab === "advanced"} onClick={() => setTab("advanced")}>Avancé</TabBtn>
-          <TabBtn active={tab === "stats"} onClick={() => setTab("stats")}>
-            <span className="flex items-center gap-1"><BarChart2 size={11} />Statistiques</span>
-          </TabBtn>
+        <div className="flex flex-1 min-h-0">
+          {/* Navigation latérale */}
+          <nav className="w-56 shrink-0 border-r border-border flex flex-col bg-sidebar/40">
+            <div className="p-3 pb-2 shrink-0">
+              <div className="flex items-center gap-2 bg-hover rounded-lg px-2.5 py-1.5">
+                <Search size={13} className="text-muted shrink-0" />
+                <input
+                  value={navQuery}
+                  onChange={(e) => setNavQuery(e.target.value)}
+                  placeholder="Chercher un réglage…"
+                  aria-label="Chercher un réglage"
+                  className="bg-transparent text-xs text-primary placeholder-muted outline-none w-full"
+                />
+                {navQuery && (
+                  <button onClick={() => setNavQuery("")} aria-label="Effacer" className="text-muted hover:text-primary transition-colors shrink-0">
+                    <X size={11} />
+                  </button>
+                )}
+              </div>
+            </div>
+            <div className="flex-1 overflow-y-auto px-2 pb-2 flex flex-col gap-0.5">
+              {filteredNav.length === 0 && (
+                <p className="text-xs text-muted text-center py-4 px-2">Aucun réglage ne correspond</p>
+              )}
+              {filteredNav.map((item) => {
+                const active = cat === item.key;
+                return (
+                  <button
+                    key={item.key}
+                    onClick={() => selectCat(item.key)}
+                    aria-current={active ? "page" : undefined}
+                    className={`flex items-center gap-2.5 w-full px-3 py-2 rounded-lg text-left text-sm transition-colors ${
+                      active
+                        ? "bg-accent/10 text-accent font-medium"
+                        : "text-secondary hover:bg-hover hover:text-primary"
+                    }`}
+                  >
+                    <span className={active ? "text-accent" : "text-muted"}>{item.icon}</span>
+                    <span className="truncate">{item.label}</span>
+                  </button>
+                );
+              })}
+            </div>
+          </nav>
+
+          {/* Contenu de la catégorie */}
+          <div className="flex-1 min-w-0 overflow-y-auto px-6 py-5 flex flex-col gap-5">
+            <div className="pb-1 border-b border-border/50">
+              <h3 className="text-sm font-semibold text-primary flex items-center gap-2">
+                <span className="text-accent">{current.icon}</span>
+                {current.label}
+              </h3>
+              <p className="text-xs text-muted mt-1">{current.desc}</p>
+            </div>
+            {cat === "appearance" && appearanceContent}
+            {cat === "ai" && aiContent}
+            {cat === "prompts" && promptsContent}
+            {cat === "memory" && memoryContent}
+            {cat === "security" && securitySection}
+            {cat === "data" && <>{dataContent}{uninstallSection}</>}
+            {cat === "app" && appContent}
+            {cat === "stats" && (
+              <Section title="Vue d'ensemble">
+                <StatsPanel />
+              </Section>
+            )}
+          </div>
         </div>
 
-        {/* Body */}
-        <div className="flex-1 overflow-y-auto px-5 py-4 flex flex-col gap-5">
-          {tab === "general" && generalContent}
-          {tab === "advanced" && advancedContent}
-          {tab === "stats" && statsContent}
+        {/* Footer : état des modifications + actions */}
+        <div className="flex items-center gap-2 px-5 py-3 border-t border-border shrink-0">
+          {closeAttempt ? (
+            <>
+              <span className="flex-1 text-xs text-amber-700 dark:text-amber-300 flex items-center gap-1.5">
+                ⚠ Modifications non sauvegardées — que faire ?
+              </span>
+              <button
+                onClick={() => setCloseAttempt(false)}
+                className="px-3 py-2 rounded-lg text-sm text-secondary hover:text-primary hover:bg-hover transition-colors"
+              >
+                Continuer l'édition
+              </button>
+              <button
+                onClick={toggleSettings}
+                className="px-3 py-2 rounded-lg text-sm text-red-400 hover:bg-red-400/10 transition-colors"
+              >
+                Ignorer et fermer
+              </button>
+              <button
+                onClick={handleSave}
+                className="px-4 py-2 rounded-lg text-sm bg-accent hover:bg-accent-hover text-white transition-colors"
+              >
+                Sauvegarder et fermer
+              </button>
+            </>
+          ) : (
+            <>
+              <span className={`flex-1 text-xs transition-colors ${dirty ? "text-amber-700 dark:text-amber-300" : "text-muted/50"}`}>
+                {dirty ? "● Modifications non sauvegardées" : "Aucune modification en attente"}
+              </span>
+              <button
+                onClick={requestClose}
+                className="px-4 py-2 rounded-lg text-sm text-secondary hover:text-primary hover:bg-hover transition-colors"
+              >
+                {dirty ? "Annuler" : "Fermer"}
+              </button>
+              <button
+                onClick={handleSave}
+                disabled={!dirty}
+                className="px-4 py-2 rounded-lg text-sm bg-accent hover:bg-accent-hover text-white transition-colors disabled:opacity-40"
+              >
+                Sauvegarder
+              </button>
+            </>
+          )}
         </div>
-
-        {footer}
       </div>
     </div>
   );
