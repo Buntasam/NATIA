@@ -57,6 +57,8 @@ NATIA est une application de bureau **cross-platform** (Windows, macOS, Linux) c
 - **Streaming** — réponses affichées token par token pour tous les providers
 - **Mode debug** — panneau de trace complet (prompt, réponse, temps, modèle)
 
+![Paramètres → Intelligence artificielle : choix du fournisseur (Ollama, Claude, OpenAI, Gemini, Mistral, Claude CLI), URL du serveur et modèle](docs/screenshot-ia.png)
+
 ### Recherche et navigation
 - **Recherche plein texte** — recherche dans les titres et contenus en temps réel
 - **Quick open** — `Ctrl+P` pour ouvrir une note par nom (notes récentes en priorité)
@@ -65,13 +67,20 @@ NATIA est une application de bureau **cross-platform** (Windows, macOS, Linux) c
 - **Versionnage Git** — chaque sauvegarde crée un commit ; navigation dans l'historique et restauration
 - **Diff** — comparaison entre versions
 
+![Panneau Versions : historique Git par note, nombre de versions conservées et mode de sauvegarde (équilibré, automatique ou manuel)](docs/screenshot-versionnage.png)
+
 ### Sécurité et données
 - **Chiffrement AES-256-GCM** — toutes les données chiffrées au repos avec dérivation Argon2id
 - **Protection par mot de passe** — PIN numérique (4-8 chiffres) ou mot de passe alphanumérique
 - **Verrouillage automatique** — verrou après N minutes d'inactivité (configurable)
 - **Export ZIP** — export complet ou note par note
-- **Dark mode** — thème clair/sombre persistant, synchronisé avec la barre de titre native
+- **Thèmes** — 9 thèmes (Clair, Sombre, Minuit, Encre, Forêt, Brume, Sakura, Crépuscule, Océan), persistants et synchronisés avec la barre de titre native
+- **Indice de récupération** — indice optionnel affiché sur l'écran de verrouillage + réinitialisation en cas de code oublié
 - **Hors ligne first** — aucune dépendance cloud, données 100 % locales (SQLite + fichiers HTML)
+
+![Paramètres → Sécurité : chiffrement AES-256-GCM, code PIN, indice de récupération et verrouillage automatique](docs/screenshot-securite.png)
+
+![Paramètres → Apparence : sélecteur de thème (9 thèmes), police, taille et largeur de l'éditeur](docs/screenshot-apparence.png)
 
 ### Divers
 - **Enregistreur vocal** — transcription audio via IA
