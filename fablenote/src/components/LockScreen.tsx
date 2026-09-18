@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from "react";
-import { Delete, Lock, Plus } from "lucide-react";
+import { AlertTriangle, Delete, HelpCircle, Lock, Plus } from "lucide-react";
 import { useStore } from "../store";
 import D20Roller from "./D20Roller";
 
@@ -46,11 +46,14 @@ function loadPostIts(): LockPostIt[] {
 // ─── LockScreen ──────────────────────────────────────────────────────────────
 
 export default function LockScreen() {
-  const { unlock, passwordType } = useStore();
+  const { unlock, passwordType, getPasswordHint, resetAllData } = useStore();
   const [value, setValue] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const [postIts, setPostIts] = useState<LockPostIt[]>(loadPostIts);
+  const [hint, setHint] = useState<string | null>(null);
+  const [showReset, setShowReset] = useState(false);
+  const [resetting, setResetting] = useState(false);
 
   // Attempts persisted in localStorage to survive app restarts
   const [lockout, setLockout] = useState<PersistedLockout>(() => {
@@ -155,6 +158,88 @@ export default function LockScreen() {
   }, [passwordType, loading, value]);
 
   const handleBackspace = () => setValue((v) => v.slice(0, -1));
+
+  // ── Indice & réinitialisation (mot de passe oublié) ──────────────────────────
+
+  const revealHint = async () => {
+    if (hint !== null) { setHint(null); return; } // toggle off
+    try {
+      const h = await getPasswordHint();
+      setHint(h && h.trim() ? h : "Aucun indice n'a été défini.");
+    } catch {
+      setHint("Aucun indice n'a été défini.");
+    }
+  };
+
+  const doReset = async () => {
+    setResetting(true);
+    try {
+      await resetAllData();
+      // store flips isLocked/hasPassword → App unmounts the LockScreen
+    } catch (e: unknown) {
+      setError(String(e));
+      setResetting(false);
+      setShowReset(false);
+    }
+  };
+
+  // Footer commun aux deux modes : indice + échappatoire "code oublié"
+  const helpFooter = (
+    <div className="flex flex-col items-center gap-2 mt-6 max-w-xs text-center">
+      <button
+        onClick={revealHint}
+        className="flex items-center gap-1.5 text-muted hover:text-primary text-xs transition-colors"
+      >
+        <HelpCircle size={12} />
+        {hint !== null ? "Masquer l'indice" : "Voir l'indice"}
+      </button>
+      {hint !== null && (
+        <p className="text-secondary text-xs leading-relaxed px-3 py-2 rounded-lg bg-hover border border-border">
+          💡 {hint}
+        </p>
+      )}
+      <button
+        onClick={() => setShowReset(true)}
+        className="text-muted/60 hover:text-red-400 text-[11px] transition-colors mt-1"
+      >
+        Code oublié ? Réinitialiser NATIA
+      </button>
+    </div>
+  );
+
+  // Modale de confirmation de réinitialisation (destructif)
+  const resetModal = showReset && (
+    <div className="fixed inset-0 z-[230] flex items-center justify-center bg-black/60 backdrop-blur-sm">
+      <div className="bg-panel border border-border rounded-2xl p-6 mx-4 max-w-sm flex flex-col gap-4 shadow-2xl">
+        <div className="flex items-center gap-2 text-red-400">
+          <AlertTriangle size={16} />
+          <span className="font-semibold text-sm">Réinitialiser NATIA ?</span>
+        </div>
+        <p className="text-xs text-muted leading-relaxed">
+          Tes données sont chiffrées avec ton code. Sans lui, elles sont
+          <b className="text-secondary"> définitivement irrécupérables</b>. La
+          réinitialisation <b className="text-secondary">supprime toutes les notes,
+          dossiers et clés API</b> et repart d'une base vierge, sans mot de passe.
+        </p>
+        <div className="flex gap-2">
+          <button
+            onClick={() => setShowReset(false)}
+            disabled={resetting}
+            className="flex-1 py-2 rounded-lg bg-hover border border-border text-xs text-secondary hover:text-primary transition-colors disabled:opacity-50"
+          >
+            Annuler
+          </button>
+          <button
+            onClick={doReset}
+            disabled={resetting}
+            className="flex-1 py-2 rounded-lg bg-red-400/80 hover:bg-red-400 text-white text-xs font-medium transition-colors disabled:opacity-50"
+          >
+            {resetting ? "Réinitialisation…" : "Tout supprimer"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
 
   // ── Post-its layer (partagé entre les deux modes) ────────────────────────────
 
@@ -267,6 +352,8 @@ export default function LockScreen() {
 
         {loading && <p className="text-muted text-xs">Vérification…</p>}
 
+        {helpFooter}
+        {resetModal}
         {postItsLayer}
         <D20Roller />
       </div>
@@ -306,6 +393,8 @@ export default function LockScreen() {
         </button>
       </div>
 
+      {helpFooter}
+      {resetModal}
       {postItsLayer}
       <D20Roller />
     </div>

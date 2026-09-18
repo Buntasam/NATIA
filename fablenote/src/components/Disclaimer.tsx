@@ -1,6 +1,7 @@
 import React, { useState } from "react";
-import { AlertTriangle, Bug, Copy, ExternalLink, Github, Lightbulb, Lock, Mail, ShieldAlert, Star, Terminal } from "lucide-react";
+import { AlertTriangle, BookOpen, Bug, Copy, ExternalLink, Github, Lightbulb, Lock, Mail, ShieldAlert, Star, Terminal } from "lucide-react";
 import { useStore } from "../store";
+import { AiManualOverlay } from "./AiManual";
 
 const KEY = "natia_disclaimer_v1";
 const CONTACT_EMAIL = "email@test.fr";
@@ -69,6 +70,7 @@ export default function Disclaimer() {
   const [closed, setClosed] = useState(false);
   const [copied, setCopied] = useState(false);
   const [copiedEmail, setCopiedEmail] = useState(false);
+  const [showManual, setShowManual] = useState(false);
 
   const date = new Date().toLocaleDateString("fr-FR");
   const template = REPORT_TEMPLATE(date);
@@ -93,6 +95,8 @@ export default function Disclaimer() {
   };
 
   return (
+    <>
+    {showManual && <AiManualOverlay onClose={() => setShowManual(false)} />}
     <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/70 backdrop-blur-sm">
       <div className="bg-panel border border-border rounded-xl w-[780px] max-h-[90vh] overflow-hidden shadow-2xl flex flex-col">
 
@@ -136,6 +140,24 @@ export default function Disclaimer() {
               <p className="text-xs text-secondary/80 leading-relaxed">
                 Si vous avez un abonnement Claude, vous pouvez utiliser <strong className="text-primary">Claude Code CLI</strong> directement dans NATIA — sans clé API, en utilisant vos crédits Claude. Activez-le dans <strong className="text-primary">Paramètres → IA → Claude CLI</strong>.
               </p>
+            </div>
+
+            {/* ── Encart manuel IA ───────────────────────────────────────────── */}
+            <div className="flex flex-col gap-2 rounded-xl border border-accent/25 bg-accent/5 px-4 py-3">
+              <div className="flex items-center gap-2">
+                <BookOpen size={13} className="text-accent shrink-0" />
+                <span className="text-xs font-semibold text-accent">Nouveau : un manuel pour brancher l'IA</span>
+              </div>
+              <p className="text-xs text-secondary/80 leading-relaxed">
+                NATIA fonctionne avec l'IA de ton choix — locale (Ollama, gratuit) ou cloud (Claude, OpenAI, Gemini, Mistral…). Le manuel détaille, pas à pas, comment configurer chaque type d'IA.
+              </p>
+              <button
+                onClick={() => setShowManual(true)}
+                className="self-start flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-accent/15 hover:bg-accent/25 border border-accent/30 text-accent text-xs font-medium transition-colors"
+              >
+                <BookOpen size={11} />
+                Ouvrir le manuel
+              </button>
             </div>
 
             {/* ── Encart chiffrement ─────────────────────────────────────────── */}
@@ -314,5 +336,6 @@ export default function Disclaimer() {
 
       </div>
     </div>
+    </>
   );
 }

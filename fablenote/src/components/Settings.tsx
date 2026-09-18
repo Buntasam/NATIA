@@ -1,22 +1,24 @@
 import { useState, useEffect, useRef } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { save } from "@tauri-apps/plugin-dialog";
-import { BarChart2, BookMarked, BrainCircuit, CheckCircle2, Database, Download, Eye, EyeOff, FolderOpen, Leaf, Lock, LogOut, Minus, Palette, Plus, RotateCcw, ScrollText, Search, Shield, ShieldOff, Sparkles, Terminal, Trash2 as TrashIcon, TrendingUp, Wrench, X, ChevronDown, Clock, Trash2, XCircle, Zap, Activity } from "lucide-react";
+import { BarChart2, BookMarked, BookOpen, BrainCircuit, CheckCircle2, Database, Download, Eye, EyeOff, FolderOpen, Leaf, Lock, LogOut, Minus, Palette, Plus, RotateCcw, ScrollText, Search, Shield, ShieldOff, Sparkles, Terminal, Trash2 as TrashIcon, TrendingUp, Wrench, X, ChevronDown, Clock, Trash2, XCircle, Zap, Activity } from "lucide-react";
 import { useStore } from "../store";
 import { DEFAULT_SETTINGS } from "../store";
 import { Settings as SettingsType, PromptVersion } from "../types";
 import ApiKeysPanel from "./ApiKeysPanel";
 import StatsPanel from "./StatsPanel";
+import AiManual from "./AiManual";
 import React from "react";
 import { Section, Field, Input, SecInput } from "./settings/SettingsWidgets";
 
 // ─── Catégories de la navigation latérale ─────────────────────────────────────
 
-type SettingsCat = "appearance" | "ai" | "prompts" | "memory" | "security" | "data" | "app" | "stats";
+type SettingsCat = "appearance" | "ai" | "manual" | "prompts" | "memory" | "security" | "data" | "app" | "stats";
 
 const NAV: { key: SettingsCat; label: string; desc: string; icon: React.ReactNode; keywords: string }[] = [
   { key: "appearance", label: "Apparence",                 desc: "Thème, typographie de l'éditeur, extras",              icon: <Palette size={14} />,      keywords: "theme couleur sombre clair police taille largeur editeur de d20 dice" },
   { key: "ai",         label: "Intelligence artificielle", desc: "Fournisseur, clés API, modèles et comportement",       icon: <Sparkles size={14} />,     keywords: "ia modele cle api ollama claude openai gemini mistral cli temperature contexte tokens fournisseur connexion historique conversation" },
+  { key: "manual",     label: "Manuel",                    desc: "Guide : configurer chaque type d'IA",                  icon: <BookOpen size={14} />,     keywords: "manuel guide aide documentation configurer ia ollama claude openai gemini mistral cli connexion cle api tutoriel comment" },
   { key: "prompts",    label: "Prompts",                   desc: "Prompts système des opérations IA",                    icon: <ScrollText size={14} />,   keywords: "prompt correction resume traduction titre tri email continuation bibliotheque historique systeme shadow" },
   { key: "memory",     label: "Mémoire IA",                desc: "Mémoire persistante et graphe neuronal",               icon: <BrainCircuit size={14} />, keywords: "memoire graphe noeud neuronal collecte" },
   { key: "security",   label: "Sécurité",                  desc: "Mot de passe, chiffrement, verrouillage automatique",  icon: <Shield size={14} />,       keywords: "securite mot de passe pin verrouillage chiffrement aes argon lock" },
@@ -126,7 +128,7 @@ function fmtDate(iso: string) {
 }
 
 export default function Settings() {
-  const { settings, saveSettings, toggleSettings, theme, setTheme, isDark, hasPassword, passwordType, lock, setupPassword, changePassword, removePassword, memoryEnabled, setMemoryEnabled, memoryGraphEnabled, setMemoryGraphEnabled, memoryNodes, clearMemoryNodes } = useStore();
+  const { settings, saveSettings, toggleSettings, theme, setTheme, isDark, hasPassword, passwordType, lock, setupPassword, changePassword, removePassword, getPasswordHint, setPasswordHint, memoryEnabled, setMemoryEnabled, memoryGraphEnabled, setMemoryGraphEnabled, memoryNodes, clearMemoryNodes } = useStore();
   const [confirmClear, setConfirmClear] = React.useState(false);
   const [form, setForm] = useState<SettingsType>({ ...settings });
   const [cat, setCat] = useState<SettingsCat>(() => {
@@ -152,6 +154,8 @@ export default function Settings() {
   const [secLoading, setSecLoading] = useState(false);
   const [secShowA, setSecShowA] = useState(false);
   const [secShowB, setSecShowB] = useState(false);
+  const [secHint, setSecHint] = useState("");
+  const [hintSaved, setHintSaved] = useState(false);
 
   // Shadow prompt library
   const [shadowLib, setShadowLib] = useState<ShadowLibEntry[]>(loadLib);
@@ -268,14 +272,14 @@ export default function Settings() {
     localStorage.setItem("natia_shadow_prompt_library", JSON.stringify(next));
   };
 
-  const cancelSec = () => { setSecMode("idle"); setSecA(""); setSecB(""); setSecC(""); setSecError(""); };
+  const cancelSec = () => { setSecMode("idle"); setSecA(""); setSecB(""); setSecC(""); setSecError(""); setSecHint(""); };
 
   const doSetup = async () => {
     if (secPwType === "pin" && !/^\d{4,8}$/.test(secA)) { setSecError("PIN : 4 à 8 chiffres requis"); return; }
     if (secPwType === "alpha" && secA.length < 6) { setSecError("Minimum 6 caractères"); return; }
     if (secA !== secB) { setSecError("Les mots de passe ne correspondent pas"); return; }
     setSecLoading(true); setSecError("");
-    try { await setupPassword(secA, secPwType); cancelSec(); }
+    try { await setupPassword(secA, secPwType, secHint); cancelSec(); }
     catch (e) { setSecError(String(e)); }
     finally { setSecLoading(false); }
   };
@@ -285,9 +289,25 @@ export default function Settings() {
     if (secPwType === "pin" && !/^\d{4,8}$/.test(secA)) { setSecError("PIN : 4 à 8 chiffres requis"); return; }
     if (secPwType === "alpha" && secA.length < 6) { setSecError("Minimum 6 caractères"); return; }
     setSecLoading(true); setSecError("");
-    try { await changePassword(secC, secA); cancelSec(); }
+    try { await changePassword(secC, secA, secHint); cancelSec(); }
     catch (e) { setSecError(String(e)); }
     finally { setSecLoading(false); }
+  };
+
+  // Charger l'indice existant quand la protection est active (édition directe)
+  // ou quand on entre en mode "changer".
+  useEffect(() => {
+    if (hasPassword && (secMode === "idle" || secMode === "change")) {
+      getPasswordHint().then((h) => setSecHint(h)).catch(() => {});
+    }
+  }, [hasPassword, secMode]);
+
+  const saveHint = async () => {
+    try {
+      await setPasswordHint(secHint);
+      setHintSaved(true);
+      setTimeout(() => setHintSaved(false), 2000);
+    } catch (e) { setSecError(String(e)); }
   };
 
   const doRemove = async () => {
@@ -379,6 +399,22 @@ export default function Settings() {
               <ShieldOff size={11} />Désactiver
             </button>
           </div>
+          <div className="flex flex-col gap-1.5 pt-1">
+            <p className="text-xs text-secondary">Indice de récupération</p>
+            <div className="flex gap-2">
+              <input
+                value={secHint}
+                onChange={(e) => setSecHint(e.target.value)}
+                placeholder="Ex : mon année de naissance à l'envers"
+                maxLength={120}
+                className="flex-1 px-3 py-2 rounded-lg bg-hover border border-border text-xs text-primary placeholder-muted outline-none focus:border-accent/50 transition-colors"
+              />
+              <button onClick={saveHint} className="px-3 py-2 rounded-lg bg-accent/10 border border-accent/30 text-xs text-accent hover:bg-accent/20 transition-colors shrink-0">
+                {hintSaved ? "✓ Enregistré" : "Enregistrer"}
+              </button>
+            </div>
+            <p className="text-[10px] text-muted">Affiché sur l'écran de verrouillage pour t'aider à te souvenir. Ne contient jamais le code.</p>
+          </div>
         </div>
       )}
 
@@ -394,6 +430,16 @@ export default function Settings() {
           </div>
           <SecInput label={secPwType === "pin" ? "Code PIN (4–8 chiffres)" : "Mot de passe (min. 6 car.)"} value={secA} onChange={setSecA} show={secShowA} onToggleShow={() => setSecShowA(s => !s)} />
           <SecInput label="Confirmer" value={secB} onChange={setSecB} show={secShowB} onToggleShow={() => setSecShowB(s => !s)} />
+          <div className="flex flex-col gap-1">
+            <input
+              value={secHint}
+              onChange={(e) => setSecHint(e.target.value)}
+              placeholder="Indice (optionnel) — pour t'aider si tu oublies"
+              maxLength={120}
+              className="w-full px-3 py-2 rounded-lg bg-hover border border-border text-xs text-primary placeholder-muted outline-none focus:border-accent/50 transition-colors"
+            />
+            <p className="text-[10px] text-muted">Visible sur l'écran de verrouillage. N'y mets jamais le code lui-même.</p>
+          </div>
           {secError && <p className="text-xs text-red-400">{secError}</p>}
           <div className="flex gap-2">
             <button onClick={cancelSec} className="flex-1 py-2 rounded-lg bg-hover border border-border text-xs text-secondary hover:text-primary transition-colors">Annuler</button>
@@ -414,6 +460,13 @@ export default function Settings() {
           </div>
           <SecInput label={secPwType === "pin" ? "Nouveau PIN (4–8 chiffres)" : "Nouveau mot de passe"} value={secA} onChange={setSecA} show={secShowB} onToggleShow={() => setSecShowB(s => !s)} />
           <SecInput label="Confirmer le nouveau" value={secB} onChange={setSecB} show={secShowB} onToggleShow={() => setSecShowB(s => !s)} />
+          <input
+            value={secHint}
+            onChange={(e) => setSecHint(e.target.value)}
+            placeholder="Indice (optionnel)"
+            maxLength={120}
+            className="w-full px-3 py-2 rounded-lg bg-hover border border-border text-xs text-primary placeholder-muted outline-none focus:border-accent/50 transition-colors"
+          />
           {secError && <p className="text-xs text-red-400">{secError}</p>}
           <div className="flex gap-2">
             <button onClick={cancelSec} className="flex-1 py-2 rounded-lg bg-hover border border-border text-xs text-secondary hover:text-primary transition-colors">Annuler</button>
@@ -1235,6 +1288,11 @@ export default function Settings() {
             </div>
             {cat === "appearance" && appearanceContent}
             {cat === "ai" && aiContent}
+            {cat === "manual" && (
+              <Section title="Manuel — faire fonctionner l'IA">
+                <AiManual />
+              </Section>
+            )}
             {cat === "prompts" && promptsContent}
             {cat === "memory" && memoryContent}
             {cat === "security" && securitySection}

@@ -33,7 +33,7 @@ pub fn get_password_type(state: State<AppState>) -> Result<String, String> {
 }
 
 #[tauri::command]
-pub fn setup_password(password: String, pw_type: String, state: State<AppState>) -> Result<(), String> {
+pub fn setup_password(password: String, pw_type: String, hint: Option<String>, state: State<AppState>) -> Result<(), String> {
     let mut salt = [0u8; 16];
     rand::thread_rng().fill_bytes(&mut salt);
     let salt_b64 = B64.encode(&salt);
@@ -50,12 +50,46 @@ pub fn setup_password(password: String, pw_type: String, state: State<AppState>)
                 params![k, v],
             ).map_err(|e| e.to_string())?;
         }
+        write_hint(&db, hint.as_deref())?;
         let notes_dir = state.notes_dir.clone();
         encrypt_all_data(&db, &notes_dir, &enc_key)?;
     }
     let mut guard = state.enc_key.lock().map_err(|e| e.to_string())?;
     *guard = Some(enc_key);
     Ok(())
+}
+
+// The password hint is stored in clear text (never derived from the secret) so
+// it can be shown on the lock screen while the app is still locked. Keep it
+// intentionally vague — it is a memory jog, not a second factor.
+fn write_hint(db: &rusqlite::Connection, hint: Option<&str>) -> Result<(), String> {
+    match hint.map(|h| h.trim()).filter(|h| !h.is_empty()) {
+        Some(h) => {
+            db.execute(
+                "INSERT INTO app_config(key,value) VALUES('password_hint',?1) ON CONFLICT(key) DO UPDATE SET value=?1",
+                params![h],
+            ).map_err(|e| e.to_string())?;
+        }
+        None => {
+            db.execute("DELETE FROM app_config WHERE key='password_hint'", []).map_err(|e| e.to_string())?;
+        }
+    }
+    Ok(())
+}
+
+#[tauri::command]
+pub fn get_password_hint(state: State<AppState>) -> Result<String, String> {
+    let db = state.db.lock().map_err(|e| e.to_string())?;
+    let hint = db
+        .query_row("SELECT value FROM app_config WHERE key='password_hint'", [], |r| r.get::<_, String>(0))
+        .unwrap_or_default();
+    Ok(hint)
+}
+
+#[tauri::command]
+pub fn set_password_hint(hint: Option<String>, state: State<AppState>) -> Result<(), String> {
+    let db = state.db.lock().map_err(|e| e.to_string())?;
+    write_hint(&db, hint.as_deref())
 }
 
 #[tauri::command]
@@ -116,7 +150,7 @@ pub fn verify_password(password: String, state: State<AppState>) -> Result<bool,
 }
 
 #[tauri::command]
-pub fn change_password(old_pass: String, new_pass: String, state: State<AppState>) -> Result<(), String> {
+pub fn change_password(old_pass: String, new_pass: String, hint: Option<String>, state: State<AppState>) -> Result<(), String> {
     let (salt_b64, verif_b64) = {
         let db = state.db.lock().map_err(|e| e.to_string())?;
         let s = db.query_row("SELECT value FROM app_config WHERE key='password_salt'", [], |r| r.get::<_, String>(0)).map_err(|e| e.to_string())?;
@@ -148,9 +182,60 @@ pub fn change_password(old_pass: String, new_pass: String, state: State<AppState
         encrypt_all_data(&db, &notes_dir, &new_key)?;
         db.execute("UPDATE app_config SET value=?1 WHERE key='password_salt'", [&new_salt_b64]).map_err(|e| e.to_string())?;
         db.execute("UPDATE app_config SET value=?1 WHERE key='password_hash'", [&new_verif_b64]).map_err(|e| e.to_string())?;
+        if let Some(h) = hint.as_deref() { write_hint(&db, Some(h))?; }
     }
     let mut guard = state.enc_key.lock().map_err(|e| e.to_string())?;
     *guard = Some(new_key);
+    Ok(())
+}
+
+/// Factory reset — the escape hatch for a forgotten PIN/password.
+///
+/// Because every note is encrypted with a key derived from the secret, a lost
+/// secret means the data is mathematically unrecoverable. This wipes everything
+/// back to a clean first-launch state so the user can start over.
+#[tauri::command]
+pub fn reset_all_data(state: State<AppState>) -> Result<(), String> {
+    {
+        let db = state.db.lock().map_err(|e| e.to_string())?;
+        for table in ["notes", "folders", "item_colors", "api_keys", "prompt_versions", "note_versions", "settings", "app_config"] {
+            db.execute(&format!("DELETE FROM {}", table), []).map_err(|e| e.to_string())?;
+        }
+    }
+
+    // Remove the on-disk note files and reset the internal Git repo.
+    let notes_dir = state.notes_dir.clone();
+    if let Ok(entries) = std::fs::read_dir(&notes_dir) {
+        for entry in entries.flatten() {
+            let path = entry.path();
+            if path.is_dir() {
+                let _ = std::fs::remove_dir_all(&path);
+            } else {
+                let _ = std::fs::remove_file(&path);
+            }
+        }
+    }
+    crate::db::init_git(&notes_dir);
+
+    // Drop any API keys stored in the OS keychain.
+    for name in API_KEY_NAMES {
+        let _ = keychain_set(name, "");
+    }
+
+    // Clear in-memory security state.
+    {
+        let mut guard = state.enc_key.lock().map_err(|e| e.to_string())?;
+        if let Some(ref mut key) = *guard { key.zeroize(); }
+        *guard = None;
+    }
+    {
+        let mut attempts = state.failed_attempts.lock().map_err(|e| e.to_string())?;
+        *attempts = 0;
+    }
+    {
+        let mut lock_until = state.lock_until.lock().map_err(|e| e.to_string())?;
+        *lock_until = None;
+    }
     Ok(())
 }
 

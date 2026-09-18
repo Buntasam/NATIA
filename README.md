@@ -15,6 +15,8 @@
 
 NATIA est une application de bureau **cross-platform** (Windows, macOS, Linux) construite avec **Tauri 2** (backend Rust) et **React 18** (frontend TypeScript). Toutes les données sont stockées localement — aucun cloud requis.
 
+![Aperçu de NATIA — éditeur, arborescence des notes et panneau IA en mode sombre](docs/screenshot.png)
+
 ---
 
 ## Fonctionnalités

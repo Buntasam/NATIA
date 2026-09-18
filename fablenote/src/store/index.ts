@@ -31,9 +31,12 @@ interface AppStore {
   checkSecurity: () => Promise<void>;
   unlock: (password: string) => Promise<boolean>;
   lock: () => Promise<void>;
-  setupPassword: (password: string, pwType: string) => Promise<void>;
-  changePassword: (oldPass: string, newPass: string) => Promise<void>;
+  setupPassword: (password: string, pwType: string, hint?: string) => Promise<void>;
+  changePassword: (oldPass: string, newPass: string, hint?: string) => Promise<void>;
   removePassword: (password: string) => Promise<void>;
+  getPasswordHint: () => Promise<string>;
+  setPasswordHint: (hint: string) => Promise<void>;
+  resetAllData: () => Promise<void>;
 
   // UI state
   searchQuery: string;
@@ -212,18 +215,42 @@ export const useStore = create<AppStore>((set, get) => ({
     });
   },
 
-  setupPassword: async (password: string, pwType: string) => {
-    await invoke("setup_password", { password, pwType });
+  setupPassword: async (password: string, pwType: string, hint?: string) => {
+    await invoke("setup_password", { password, pwType, hint: hint ?? null });
     set({ hasPassword: true, passwordType: pwType as "pin" | "alpha" });
   },
 
-  changePassword: async (oldPass: string, newPass: string) => {
-    await invoke("change_password", { oldPass, newPass });
+  changePassword: async (oldPass: string, newPass: string, hint?: string) => {
+    await invoke("change_password", { oldPass, newPass, hint: hint ?? null });
   },
 
   removePassword: async (password: string) => {
     await invoke("remove_password", { password });
     set({ hasPassword: false, passwordType: "alpha" });
+  },
+
+  getPasswordHint: () => invoke<string>("get_password_hint"),
+
+  setPasswordHint: async (hint: string) => {
+    await invoke("set_password_hint", { hint: hint.trim() ? hint.trim() : null });
+  },
+
+  resetAllData: async () => {
+    await invoke("reset_all_data");
+    // Wipe local lockout/post-it state so the fresh start is truly clean.
+    try {
+      localStorage.removeItem("natia_failed_attempts");
+      localStorage.removeItem("natia_lock_postits");
+    } catch { /* ignore */ }
+    set({
+      hasPassword: false,
+      isLocked: false,
+      passwordType: "alpha",
+      notes: [],
+      activeNote: null,
+      folders: [],
+      versions: [],
+    });
   },
 
   searchQuery: "",
