@@ -33,6 +33,7 @@ import GraphPanel from "./GraphPanel";
 import ResizeHandle from "./ResizeHandle";
 import Tip from "./Tooltip";
 import { useStore } from "../store";
+import { useT } from "../i18n";
 import { NoteMetadata } from "../types";
 
 // ─── Module-level drag state (dataTransfer is unreliable in WebView2) ────────
@@ -157,6 +158,7 @@ export default function Sidebar() {
   const [showTreeMap, setShowTreeMap] = useState(false);
   const [showCalendar, setShowCalendar] = useState(false);
   const { showGraph, toggleGraph } = useStore();
+  const t = useT();
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
 
   // Full-text search
@@ -380,7 +382,7 @@ export default function Sidebar() {
             <Search size={14} className="text-muted shrink-0" />
             <input
               type="text"
-              placeholder="Rechercher… (#tag)"
+              placeholder={t("Rechercher… (#tag)")}
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               data-global-search
@@ -405,7 +407,7 @@ export default function Sidebar() {
             className="flex-1 flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm text-secondary hover:text-primary hover:bg-hover transition-colors"
           >
             <FilePlus size={14} />
-            Nouvelle note
+            {t("Nouvelle note")}
           </button>
           <Tip label="Nouveau dossier">
             <button
@@ -428,7 +430,7 @@ export default function Sidebar() {
             >
               <ChevronRight size={11} className={`transition-transform ${tagsOpen ? "rotate-90" : ""}`} />
               <Tag size={11} />
-              <span className="text-[11px] uppercase tracking-wider">Tags</span>
+              <span className="text-[11px] uppercase tracking-wider">{t("Tags")}</span>
               <span className="text-[11px] opacity-60">({tagCounts.length})</span>
             </button>
             {tagsOpen && (
@@ -484,7 +486,7 @@ export default function Sidebar() {
             }}
           >
             {isLoading && (
-              <p className="text-muted text-xs text-center py-4">Chargement…</p>
+              <p className="text-muted text-xs text-center py-4">{t("Chargement…")}</p>
             )}
             {/* Résultats par tag (#tag) */}
             {tagQuery !== null && (
@@ -496,7 +498,7 @@ export default function Sidebar() {
                   </span>
                 </div>
                 {tagResults.length === 0 && (
-                  <p className="text-xs text-muted text-center py-3">Aucune note avec ce tag</p>
+                  <p className="text-xs text-muted text-center py-3">{t("Aucune note avec ce tag")}</p>
                 )}
                 {tagResults.map((note) => (
                   <NoteItem
@@ -513,9 +515,9 @@ export default function Sidebar() {
             {/* Full-text search results */}
             {searchQuery.trim() && tagQuery === null && (
               <div className="pb-1">
-                {ftLoading && <p className="text-xs text-muted text-center py-3">Recherche…</p>}
+                {ftLoading && <p className="text-xs text-muted text-center py-3">{t("Recherche…")}</p>}
                 {!ftLoading && ftResults.length === 0 && (
-                  <p className="text-xs text-muted text-center py-3">Aucun résultat</p>
+                  <p className="text-xs text-muted text-center py-3">{t("Aucun résultat")}</p>
                 )}
                 {!ftLoading && ftResults.map((r) => (
                   <button
@@ -539,8 +541,8 @@ export default function Sidebar() {
 
             {!searchQuery.trim() && !isLoading && notes.length === 0 && folders.length === 0 && (
               <div className="text-center py-8 px-4">
-                <p className="text-muted text-sm">Aucune note</p>
-                <p className="text-muted text-xs mt-1">Crée ta première note</p>
+                <p className="text-muted text-sm">{t("Aucune note")}</p>
+                <p className="text-muted text-xs mt-1">{t("Crée ta première note")}</p>
               </div>
             )}
 
@@ -552,7 +554,7 @@ export default function Sidebar() {
                 <div className="mb-1">
                   <div className="flex items-center gap-1 px-2 py-1">
                     <Pin size={9} className="text-muted" />
-                    <span className="text-[11px] text-muted uppercase tracking-wider">Épinglées</span>
+                    <span className="text-[11px] text-muted uppercase tracking-wider">{t("Épinglées")}</span>
                   </div>
                   {pinned.map((note) => (
                     <NoteItem
@@ -638,12 +640,12 @@ export default function Sidebar() {
             className="flex-1 flex items-center gap-2 px-2 py-1.5 rounded text-muted hover:text-primary hover:bg-hover transition-colors text-sm"
           >
             <Settings size={15} />
-            Paramètres
+            {t("Paramètres")}
           </button>
-          <Tip label="Corbeille" side="top">
+          <Tip label={t("Corbeille")} side="top">
             <button
               onClick={toggleTrash}
-              aria-label="Corbeille"
+              aria-label={t("Corbeille")}
               className="p-1.5 rounded text-muted hover:text-primary hover:bg-hover transition-colors"
             >
               <Trash2 size={15} />
@@ -664,7 +666,7 @@ export default function Sidebar() {
             <button
               onClick={toggleTheme}
               className="p-1.5 rounded text-muted hover:text-primary hover:bg-hover transition-colors"
-              aria-label="Basculer le thème"
+              aria-label={t("Basculer le thème")}
             >
               {isDark ? <Sun size={15} /> : <Moon size={15} />}
             </button>
@@ -703,7 +705,7 @@ export default function Sidebar() {
                   onClick={() => { setSplitNote(menu.note.id); closeMenu(); }}
                 >
                   <Columns2 size={13} />
-                  Ouvrir côte à côte
+                  {t("Ouvrir côte à côte")}
                 </button>
                 <div className="border-t border-border my-1" />
 
@@ -743,7 +745,7 @@ export default function Sidebar() {
                 <div className="relative group">
                   <button className="w-full flex items-center gap-2 px-3 py-2 text-sm text-secondary hover:text-primary hover:bg-hover transition-colors">
                     <MoveRight size={13} />
-                    Déplacer vers…
+                    {t("Déplacer vers…")}
                     <ChevronRight size={11} className="ml-auto" />
                   </button>
                   <div className="absolute left-full top-0 ml-1 bg-panel border border-border rounded-lg shadow-xl py-1 min-w-40 hidden group-hover:block z-50">
@@ -791,7 +793,7 @@ export default function Sidebar() {
                   onClick={() => { deleteNote(menu.note.id); closeMenu(); }}
                 >
                   <Trash2 size={13} />
-                  Supprimer
+                  {t("Supprimer")}
                 </button>
               </>
             )}
@@ -844,7 +846,7 @@ export default function Sidebar() {
                   }}
                 >
                   <FolderPlus size={13} />
-                  Nouveau sous-dossier
+                  {t("Nouveau sous-dossier")}
                 </button>
                 <button
                   className="w-full flex items-center gap-2 px-3 py-2 text-sm text-secondary hover:text-primary hover:bg-hover transition-colors"
@@ -855,7 +857,7 @@ export default function Sidebar() {
                   }}
                 >
                   <Pencil size={13} />
-                  Renommer
+                  {t("Renommer")}
                 </button>
                 <div className="border-t border-border my-1" />
                 <button
@@ -863,7 +865,7 @@ export default function Sidebar() {
                   onClick={() => { deleteFolder(menu.path); closeMenu(); }}
                 >
                   <Trash2 size={13} />
-                  Supprimer le dossier
+                  {t("Supprimer le dossier")}
                 </button>
               </>
             )}

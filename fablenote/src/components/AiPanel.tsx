@@ -34,6 +34,7 @@ import { TraceRow } from "./ai/TraceRow";
 import { aiChat, aiStream, activeModel } from "../lib/aiInvoke";
 import { buildMemoryContext } from "../lib/memoryContext";
 import { useStore } from "../store";
+import { useT } from "../i18n";
 import DebugConsole from "./DebugConsole";
 import { addAiLog } from "../debug/logger";
 
@@ -119,6 +120,7 @@ function detectProvider(key: string): string {
 }
 
 export default function AiPanel({ onOpenConv }: { onOpenConv: () => void }) {
+  const t = useT();
   const { activeNote, settings, saveSettings, folders, toggleAiPanel, updateNote, renameNote, moveNote, createFolder, loadNotes, loadFolders, memoryEnabled, memoryNodes } = useStore();
   const memoryActive = memoryEnabled && memoryNodes.length > 0;
 
@@ -842,8 +844,8 @@ Réponds UNIQUEMENT avec ce JSON (rien d'autre, pas de texte, pas de \`\`\`) :
     <>
     {pendingCorrection && (
       <CorrectionModal
-        title="Correction proposée par l'IA"
-        subtitle="Modifications surlignées — vert : ajouts · rouge barré : suppressions"
+        title={t("Correction proposée par l'IA")}
+        subtitle={t("Modifications surlignées — vert : ajouts · rouge barré : suppressions")}
         original={pendingCorrection.original}
         proposed={pendingCorrection.proposed}
         html={pendingCorrection.html}
@@ -860,8 +862,8 @@ Réponds UNIQUEMENT avec ce JSON (rien d'autre, pas de texte, pas de \`\`\`) :
     )}
     {pendingFormalize && (
       <CorrectionModal
-        title="Email formalisé par l'IA"
-        subtitle="Aperçu de la version formelle — cliquez Appliquer pour remplacer la note"
+        title={t("Email formalisé par l'IA")}
+        subtitle={t("Aperçu de la version formelle — cliquez Appliquer pour remplacer la note")}
         original={pendingFormalize.original}
         proposed={pendingFormalize.proposed}
         html={pendingFormalize.html}
@@ -937,7 +939,7 @@ Réponds UNIQUEMENT avec ce JSON (rien d'autre, pas de texte, pas de \`\`\`) :
                   ? "bg-zinc-500/15 border-zinc-500/40 text-zinc-300"
                   : "bg-hover border-border text-muted hover:text-secondary"
               }`}
-            >Local</button>
+            >{t("Local")}</button>
             {/* Fixed: Claude CLI */}
             <button
               onClick={() => { setLocalProvider("claude_cli"); setActiveConnectionId(null); }}
@@ -970,21 +972,21 @@ Réponds UNIQUEMENT avec ce JSON (rien d'autre, pas de texte, pas de \`\`\`) :
               className={`px-2 py-1 rounded-lg text-[11px] font-medium border transition-colors ${
                 showAddKey ? "bg-accent/10 border-accent/30 text-accent" : "bg-hover border-border text-muted hover:text-primary"
               }`}
-              title="Ajouter une clé API"
+              title={t("Ajouter une clé API")}
             >+</button>
           </div>
         )}
         {/* Intensity bar */}
         {activeTab === "ops" && (
           <div className="flex flex-col gap-1 px-3 pb-2">
-            <span className="text-[10px] text-muted">Longueur des réponses IA</span>
+            <span className="text-[10px] text-muted">{t("Longueur des réponses IA")}</span>
             <div className="flex items-center gap-1">
               {([
-                { key: "eco",    label: "Éco",   color: "#22c55e", title: "Ultra-court — 1 à 2 phrases" },
-                { key: "low",    label: "Concis", color: "#2dd4bf", title: "Court — 3 à 5 phrases" },
-                { key: "medium", label: "Normal", color: "#d97757", title: "Longueur standard" },
-                { key: "high",   label: "Détaillé", color: "#fb923c", title: "Développé avec contexte" },
-                { key: "max",    label: "Complet", color: "#f87171", title: "Exhaustif et structuré" },
+                { key: "eco",    label: t("Éco"),   color: "#22c55e", title: t("Ultra-court — 1 à 2 phrases") },
+                { key: "low",    label: t("Concis"), color: "#2dd4bf", title: t("Court — 3 à 5 phrases") },
+                { key: "medium", label: t("Normal"), color: "#d97757", title: t("Longueur standard") },
+                { key: "high",   label: t("Détaillé"), color: "#fb923c", title: t("Développé avec contexte") },
+                { key: "max",    label: t("Complet"), color: "#f87171", title: t("Exhaustif et structuré") },
               ] as const).map(({ key, label, color, title }) => {
                 const active = (settings.prompt_intensity ?? "medium") === key;
                 return (
@@ -1022,7 +1024,7 @@ Réponds UNIQUEMENT avec ce JSON (rien d'autre, pas de texte, pas de \`\`\`) :
                     ...(detected && !f.name ? { name: detected } : {}),
                   }));
                 }}
-                placeholder="Colle ta clé API (sk-ant-..., sk-..., AIza...)"
+                placeholder={t("Colle ta clé API (sk-ant-..., sk-..., AIza...)")}
                 className="w-full bg-hover border border-border rounded-lg px-2.5 py-1.5 text-xs text-primary outline-none focus:border-accent/50 placeholder-muted font-mono"
               />
               {addKeyForm.provider && (
@@ -1033,7 +1035,7 @@ Réponds UNIQUEMENT avec ce JSON (rien d'autre, pas de texte, pas de \`\`\`) :
               <input
                 value={addKeyForm.name}
                 onChange={(e) => setAddKeyForm((f) => ({ ...f, name: e.target.value }))}
-                placeholder="Nom de la connexion"
+                placeholder={t("Nom de la connexion")}
                 className="flex-1 bg-hover border border-border rounded-lg px-2.5 py-1.5 text-xs text-primary outline-none focus:border-accent/50 placeholder-muted"
               />
               <div className="flex gap-1 items-center">
@@ -1128,7 +1130,7 @@ Réponds UNIQUEMENT avec ce JSON (rien d'autre, pas de texte, pas de \`\`\`) :
                           onClick={testConn}
                           disabled={connTestStatus === "testing"}
                           className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-panel border border-border text-xs text-secondary hover:text-primary hover:border-accent/40 disabled:opacity-50 transition-colors shrink-0"
-                          aria-label="Tester la connexion"
+                          aria-label={t("Tester la connexion")}
                         >
                           {connTestStatus === "testing"
                             ? <Loader2 size={11} className="animate-spin text-accent" />
@@ -1157,19 +1159,19 @@ Réponds UNIQUEMENT avec ce JSON (rien d'autre, pas de texte, pas de \`\`\`) :
               ) : localProvider === "ollama" ? (
                 <>
                   <div className="flex items-center justify-between mb-1">
-                    <label className="text-xs text-muted">Modèle Ollama</label>
+                    <label className="text-xs text-muted">{t("Modèle Ollama")}</label>
                     <div className="flex items-center gap-1">
                       <button
                         onClick={refreshModels}
                         disabled={isRefreshing}
-                        title="Rafraîchir la liste"
+                        title={t("Rafraîchir la liste")}
                         className="p-0.5 rounded text-muted hover:text-primary transition-colors disabled:opacity-40"
                       >
                         <RefreshCw size={11} className={isRefreshing ? "animate-spin" : ""} />
                       </button>
                       <button
                         onClick={() => { setShowPullInput((s) => !s); setPullError(""); }}
-                        title="Télécharger un modèle"
+                        title={t("Télécharger un modèle")}
                         className={`p-0.5 rounded transition-colors ${showPullInput ? "text-accent" : "text-muted hover:text-primary"}`}
                       >
                         <Plus size={12} />
@@ -1199,7 +1201,7 @@ Réponds UNIQUEMENT avec ce JSON (rien d'autre, pas de texte, pas de \`\`\`) :
                           value={pullModel}
                           onChange={(e) => setPullModel(e.target.value)}
                           onKeyDown={(e) => { if (e.key === "Enter") startPull(); if (e.key === "Escape") setShowPullInput(false); }}
-                          placeholder="ex : llama3.2:3b"
+                          placeholder={t("ex : llama3.2:3b")}
                           disabled={isPulling}
                           className="flex-1 bg-hover border border-border rounded-lg px-2.5 py-1.5 text-xs text-primary outline-none focus:border-accent/50 transition-colors placeholder-muted"
                         />
@@ -1251,7 +1253,7 @@ Réponds UNIQUEMENT avec ce JSON (rien d'autre, pas de texte, pas de \`\`\`) :
                 className="flex items-center gap-1.5 text-xs text-muted hover:text-primary transition-colors w-full"
               >
                 {showShadow ? "▲" : "▼"}
-                <span className="ml-0.5">Prompt système</span>
+                <span className="ml-0.5">{t("Prompt système")}</span>
               </button>
               {showShadow && (
                 <textarea
@@ -1267,7 +1269,7 @@ Réponds UNIQUEMENT avec ce JSON (rien d'autre, pas de texte, pas de \`\`\`) :
             <div className="flex flex-col gap-1.5">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-1.5">
-                  <p className="text-xs text-muted uppercase tracking-wider">Message rapide</p>
+                  <p className="text-xs text-muted uppercase tracking-wider">{t("Message rapide")}</p>
                   {memoryActive && (
                     <span title={`${memoryNodes.length} nœud${memoryNodes.length !== 1 ? "s" : ""} de mémoire pris en compte`}>
                       <Brain size={10} className="text-accent/70" />
@@ -1277,7 +1279,7 @@ Réponds UNIQUEMENT avec ce JSON (rien d'autre, pas de texte, pas de \`\`\`) :
                 <button
                   onClick={onOpenConv}
                   className="flex items-center gap-1 text-xs text-accent hover:text-accent/80 transition-colors"
-                  title="Ouvrir une conversation complète"
+                  title={t("Ouvrir une conversation complète")}
                 >
                   <MessagesSquare size={11} />
                   Conversation
@@ -1288,7 +1290,7 @@ Réponds UNIQUEMENT avec ce JSON (rien d'autre, pas de texte, pas de \`\`\`) :
                   value={quickInput}
                   onChange={(e) => setQuickInput(e.target.value)}
                   onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); runQuick(); } }}
-                  placeholder="Pose une question…"
+                  placeholder={t("Pose une question…")}
                   disabled={quickLoading}
                   className="flex-1 bg-hover border border-border rounded-lg px-2.5 py-1.5 text-xs text-primary outline-none focus:border-accent/50 transition-colors placeholder-muted disabled:opacity-50"
                 />
@@ -1315,35 +1317,35 @@ Réponds UNIQUEMENT avec ce JSON (rien d'autre, pas de texte, pas de \`\`\`) :
 
             {/* Operations */}
             <div className="flex flex-col gap-1.5">
-              <p className="text-xs text-muted uppercase tracking-wider">Opérations</p>
+              <p className="text-xs text-muted uppercase tracking-wider">{t("Opérations")}</p>
               <OpButton
                 icon={<CheckCheck size={14} />}
-                label="Corriger"
-                description="Applique directement dans l'éditeur"
+                label={t("Corriger")}
+                description={t("Applique directement dans l'éditeur")}
                 active={activeOp === "Corriger"}
                 loading={isRunning && activeOp === "Corriger"}
                 onClick={handleCorrect}
               />
               <OpButton
                 icon={<FileText size={14} />}
-                label="Résumer"
-                description="Résumé · insérable en début de note"
+                label={t("Résumer")}
+                description={t("Résumé · insérable en début de note")}
                 active={activeOp === "Résumer"}
                 loading={isRunning && activeOp === "Résumer"}
                 onClick={handleSummarize}
               />
               <OpButton
                 icon={<Tag size={14} />}
-                label="Renommer"
-                description="Applique le titre automatiquement"
+                label={t("Renommer")}
+                description={t("Applique le titre automatiquement")}
                 active={activeOp === "Renommer"}
                 loading={isRunning && activeOp === "Renommer"}
                 onClick={handleRename}
               />
               <OpButton
                 icon={<Sparkles size={14} />}
-                label="Trier toutes les notes"
-                description="En développement · Organisation par IA"
+                label={t("Trier toutes les notes")}
+                description={t("En développement · Organisation par IA")}
                 active={activeOp === "Trier"}
                 loading={isRunning && activeOp === "Trier"}
                 onClick={handleSort}
@@ -1351,16 +1353,16 @@ Réponds UNIQUEMENT avec ce JSON (rien d'autre, pas de texte, pas de \`\`\`) :
               />
               <OpButton
                 icon={<Mail size={14} />}
-                label="Formaliser"
-                description="Reformule en email professionnel"
+                label={t("Formaliser")}
+                description={t("Reformule en email professionnel")}
                 active={activeOp === "Formaliser"}
                 loading={isRunning && activeOp === "Formaliser"}
                 onClick={handleFormalize}
               />
               <OpButton
                 icon={<PenLine size={14} />}
-                label="Continuer"
-                description="L'IA prolonge le texte de la note"
+                label={t("Continuer")}
+                description={t("L'IA prolonge le texte de la note")}
                 active={activeOp === "Continuer"}
                 loading={isRunning && activeOp === "Continuer"}
                 onClick={handleContinue}
@@ -1373,7 +1375,7 @@ Réponds UNIQUEMENT avec ce JSON (rien d'autre, pas de texte, pas de \`\`\`) :
                       onChange={(e) => setTranslateFrom(e.target.value)}
                       className="w-full bg-hover border border-border rounded-lg px-2 py-1.5 text-[11px] text-secondary outline-none appearance-none cursor-pointer"
                     >
-                      <option value="auto">Détecte auto.</option>
+                      <option value="auto">{t("Détecte auto.")}</option>
                       {["français","anglais","espagnol","allemand","italien","portugais","japonais","chinois","arabe","russe"].map((l) => (
                         <option key={l} value={l}>{l.charAt(0).toUpperCase() + l.slice(1)}</option>
                       ))}
@@ -1396,7 +1398,7 @@ Réponds UNIQUEMENT avec ce JSON (rien d'autre, pas de texte, pas de \`\`\`) :
                 </div>
                 <OpButton
                   icon={<Languages size={14} />}
-                  label="Traduire"
+                  label={t("Traduire")}
                   description={`${translateFrom === "auto" ? "Auto" : translateFrom.charAt(0).toUpperCase() + translateFrom.slice(1)} → ${translateLang.charAt(0).toUpperCase() + translateLang.slice(1)}`}
                   active={activeOp === "Traduire"}
                   loading={isRunning && activeOp === "Traduire"}
@@ -1421,12 +1423,12 @@ Réponds UNIQUEMENT avec ce JSON (rien d'autre, pas de texte, pas de \`\`\`) :
                     <button
                       onClick={() => setSortProposals((p) => p.map((x) => ({ ...x, accepted: true })))}
                       className="text-[10px] text-accent hover:underline"
-                    >Tout accepter</button>
+                    >{t("Tout accepter")}</button>
                     <span className="text-muted text-[10px]">/</span>
                     <button
                       onClick={() => setSortProposals((p) => p.map((x) => ({ ...x, accepted: false })))}
                       className="text-[10px] text-muted hover:text-primary hover:underline"
-                    >Tout refuser</button>
+                    >{t("Tout refuser")}</button>
                   </div>
                 </div>
                 <div className="flex flex-col gap-1 max-h-52 overflow-y-auto">
@@ -1472,7 +1474,7 @@ Réponds UNIQUEMENT avec ce JSON (rien d'autre, pas de texte, pas de \`\`\`) :
             {(response || error) && (
               <div className="flex flex-col gap-2">
                 <div className="flex items-center justify-between">
-                  <p className="text-xs text-muted">Réponse</p>
+                  <p className="text-xs text-muted">{t("Réponse")}</p>
                   {isRunning && (
                     <span className="flex items-center gap-1 text-xs text-accent">
                       <Loader2 size={10} className="animate-spin" />
@@ -1506,7 +1508,7 @@ Réponds UNIQUEMENT avec ce JSON (rien d'autre, pas de texte, pas de \`\`\`) :
                         onClick={insertSummary}
                         className="flex-1 text-xs py-1.5 rounded-lg bg-accent hover:bg-accent-hover text-white transition-colors"
                       >
-                        Insérer en début de note
+                        {t("Insérer en début de note")}
                       </button>
                     )}
                     <button
@@ -1529,24 +1531,24 @@ Réponds UNIQUEMENT avec ce JSON (rien d'autre, pas de texte, pas de \`\`\`) :
             <div className="bg-panel rounded-lg p-3 flex flex-col gap-1.5 border border-amber-500/20">
               <div className="flex items-center gap-1.5 mb-0.5">
                 <Bug size={11} className="text-amber-400" />
-                <span className="text-xs font-medium text-amber-400">Info session</span>
+                <span className="text-xs font-medium text-amber-400">{t("Info session")}</span>
               </div>
-              <TraceRow label="version" value={appVersion || "…"} />
-              <TraceRow label="uptime" value={(() => {
+              <TraceRow label={t("version")} value={appVersion || "…"} />
+              <TraceRow label={t("uptime")} value={(() => {
                 const s = Math.floor((Date.now() - sessionStartRef.current) / 1000);
                 if (s < 60) return `${s}s`;
                 if (s < 3600) return `${Math.floor(s/60)}m ${s%60}s`;
                 return `${Math.floor(s/3600)}h ${Math.floor((s%3600)/60)}m`;
               })()} />
-              <TraceRow label="provider" value={isConnectionActive
+              <TraceRow label={t("provider")} value={isConnectionActive
                 ? (apiConnections.find(c => c.id === activeConnectionId)?.name ?? "connexion")
                 : localProvider} />
-              <TraceRow label="modèle" value={isConnectionActive
+              <TraceRow label={t("modèle")} value={isConnectionActive
                 ? (apiConnections.find(c => c.id === activeConnectionId)?.model || "auto")
                 : activeModel(effectiveSettings, selectedModel)} />
-              <TraceRow label="température" value={String(settings.temperature)} />
-              <TraceRow label="contexte" value={settings.context_messages === 0 ? "illimité" : `${settings.context_messages} msgs`} />
-              <TraceRow label="erreurs session" value={String(errorLog.length)} dim={errorLog.length === 0} />
+              <TraceRow label={t("température")} value={String(settings.temperature)} />
+              <TraceRow label={t("contexte")} value={settings.context_messages === 0 ? "illimité" : `${settings.context_messages} msgs`} />
+              <TraceRow label={t("erreurs session")} value={String(errorLog.length)} dim={errorLog.length === 0} />
             </div>
 
             {/* Debug console — logs temps réel */}
@@ -1567,7 +1569,7 @@ Réponds UNIQUEMENT avec ce JSON (rien d'autre, pas de texte, pas de \`\`\`) :
                   </button>
                 )}
               </div>
-              <TraceRow label="fournisseur" value={
+              <TraceRow label={t("fournisseur")} value={
                 localProvider === "ollama" ? "Ollama (local)"
                 : localProvider === "claude" ? "Claude API"
                 : localProvider === "claude_cli" ? "Claude Code CLI"
@@ -1575,10 +1577,10 @@ Réponds UNIQUEMENT avec ce JSON (rien d'autre, pas de texte, pas de \`\`\`) :
                 : localProvider === "gemini" ? "Google Gemini"
                 : "Mistral"
               } />
-              <TraceRow label="modèle" value={activeModel(effectiveSettings, selectedModel)} />
+              <TraceRow label={t("modèle")} value={activeModel(effectiveSettings, selectedModel)} />
               {localProvider === "ollama" && (
                 <TraceRow
-                  label="modèles"
+                  label={t("modèles")}
                   value={
                     isRefreshing
                       ? "rafraîchissement…"
@@ -1590,19 +1592,19 @@ Réponds UNIQUEMENT avec ce JSON (rien d'autre, pas de texte, pas de \`\`\`) :
                 />
               )}
               {localProvider === "ollama" && (
-                <TraceRow label="url" value={settings.ollama_url} />
+                <TraceRow label={t("url")} value={settings.ollama_url} />
               )}
             </div>
 
             {/* Direct streaming chat */}
             <div className="flex flex-col gap-1.5">
-              <p className="text-xs text-muted">Chat direct — streaming</p>
+              <p className="text-xs text-muted">{t("Chat direct — streaming")}</p>
               <div className="flex gap-1.5">
                 <input
                   value={traceInput}
                   onChange={(e) => setTraceInput(e.target.value)}
                   onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); runTrace(); } }}
-                  placeholder="Message à l'IA…"
+                  placeholder={t("Message à l'IA…")}
                   disabled={isTracing}
                   className="flex-1 bg-hover border border-border rounded-lg px-2.5 py-1.5 text-xs text-primary outline-none focus:border-accent/50 placeholder-muted"
                 />
@@ -1629,7 +1631,7 @@ Réponds UNIQUEMENT avec ce JSON (rien d'autre, pas de texte, pas de \`\`\`) :
             {lastTrace && (
               <div className="flex flex-col gap-1.5">
                 <div className="flex items-center gap-2">
-                  <p className="text-xs text-muted">Opération en cours</p>
+                  <p className="text-xs text-muted">{t("Opération en cours")}</p>
                   {lastTrace.status === "running" && (
                     <Loader2 size={10} className="text-accent animate-spin" />
                   )}
@@ -1682,7 +1684,7 @@ Réponds UNIQUEMENT avec ce JSON (rien d'autre, pas de texte, pas de \`\`\`) :
             {!lastTrace && traceHistory.length === 0 && (
               <div className="text-center py-6">
                 <Zap size={20} className="text-muted mx-auto mb-2" />
-                <p className="text-xs text-muted">Lance une opération pour voir la trace</p>
+                <p className="text-xs text-muted">{t("Lance une opération pour voir la trace")}</p>
               </div>
             )}
 
@@ -1690,7 +1692,7 @@ Réponds UNIQUEMENT avec ce JSON (rien d'autre, pas de texte, pas de \`\`\`) :
             {traceHistory.length > 0 && (
               <div className="flex flex-col gap-1.5">
                 <div className="flex items-center justify-between">
-                  <p className="text-xs text-muted">Historique</p>
+                  <p className="text-xs text-muted">{t("Historique")}</p>
                   <button
                     onClick={() => { setTraceHistory([]); lastFinalizedRef.current = null; }}
                     className="text-[10px] text-muted hover:text-primary transition-colors"

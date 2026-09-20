@@ -119,6 +119,8 @@ interface AppStore {
   isDark: boolean;
   setTheme: (name: string) => void;
   toggleTheme: () => void;
+  lang: "fr" | "en";
+  setLang: (l: "fr" | "en") => void;
   versionLimit: number | null;
   saveMode: "manual" | "balanced" | "auto";
   focusMode: boolean;
@@ -556,6 +558,12 @@ export const useStore = create<AppStore>((set, get) => ({
   showGraph: false,
   toggleFocusMode: () => set((s) => ({ focusMode: !s.focusMode })),
   toggleGraph: () => set((s) => ({ showGraph: !s.showGraph })),
+
+  lang: (localStorage.getItem("natia_lang") as "fr" | "en") ?? "fr",
+  setLang: (l: "fr" | "en") => {
+    localStorage.setItem("natia_lang", l);
+    set({ lang: l });
+  },
 
   theme: localStorage.getItem("natia_theme") ?? (localStorage.getItem("theme") === "dark" ? "dark" : "light"),
   isDark: (() => {

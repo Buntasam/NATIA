@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from "react";
+import { useT } from "../i18n";
 import { invoke } from "@tauri-apps/api/core";
 import { Check, ChevronDown, Edit2, Eye, EyeOff, Plus, Trash2 } from "lucide-react";
 
@@ -75,6 +76,7 @@ function mask(k: string) {
 }
 
 export default function ApiKeysPanel() {
+  const t = useT();
   const [keys, setKeys] = useState<ApiKey[]>([]);
   const [editId, setEditId] = useState<string | null>(null);
   const [form, setForm] = useState(blank());
@@ -152,6 +154,7 @@ function Form({ form, setForm, showKey, setShowKey, onSave, onCancel }: {
   onSave: () => void;
   onCancel: () => void;
 }) {
+  const t = useT();
   const set = (k: keyof typeof form, v: string) => setForm((f) => ({ ...f, [k]: v }));
 
   const handleKeyChange = (key: string) => {
@@ -171,7 +174,7 @@ function Form({ form, setForm, showKey, setShowKey, onSave, onCancel }: {
         <input
           value={form.name}
           onChange={(e) => set("name", e.target.value)}
-          placeholder="Nom (ex : Clé OpenAI perso)"
+          placeholder={t("Nom (ex : Clé OpenAI perso)")}
           className="flex-1 bg-hover border border-border rounded-lg px-2.5 py-1.5 text-sm text-primary outline-none focus:border-accent/50 placeholder-muted"
         />
         <select

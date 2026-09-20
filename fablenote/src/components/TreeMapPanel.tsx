@@ -1,5 +1,6 @@
 import { X, Folder, FileText, Network } from "lucide-react";
 import { useStore } from "../store";
+import { useT } from "../i18n";
 import { NoteMetadata } from "../types";
 
 const INDENT = 20;
@@ -195,6 +196,7 @@ function FolderRows({
 // ─── Panel ────────────────────────────────────────────────────────────────────
 
 export default function TreeMapPanel({ onClose }: { onClose: () => void }) {
+  const t = useT();
   const { notes, folders, itemColors, selectNote } = useStore();
   const { root, rootNotes } = buildTree(notes, folders);
 
@@ -232,7 +234,7 @@ export default function TreeMapPanel({ onClose }: { onClose: () => void }) {
         {/* Tree */}
         <div className="flex-1 overflow-y-auto p-4">
           {notes.length === 0 && folders.length === 0 ? (
-            <p className="text-muted text-sm text-center py-8">Aucune note</p>
+            <p className="text-muted text-sm text-center py-8">{t("Aucune note")}</p>
           ) : (
             <>
               {root.children.map((folder, i) => (

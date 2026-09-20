@@ -3,6 +3,7 @@ import { Clock, GitBranch, RotateCcw, X } from "lucide-react";
 import { invoke } from "@tauri-apps/api/core";
 import DOMPurify from "dompurify";
 import { useStore } from "../store";
+import { useT } from "../i18n";
 import { Version } from "../types";
 import * as Diff from "diff";
 
@@ -16,6 +17,7 @@ const VERSION_LIMIT_OPTIONS: Array<{ label: string; value: number | null }> = [
 ];
 
 export default function VersionTree() {
+  const t = useT();
   const {
     activeNote, versions, restoreVersion, toggleVersionPanel, loadVersions,
     versionLimit, setVersionLimit, saveMode, setSaveMode,
@@ -95,7 +97,7 @@ export default function VersionTree() {
       <div className="flex items-center justify-between px-4 py-3 border-b border-border shrink-0">
         <div className="flex items-center gap-2">
           <GitBranch size={14} className="text-accent" />
-          <span className="text-sm font-medium text-primary">Versions</span>
+          <span className="text-sm font-medium text-primary">{t("Versions")}</span>
           {versions.length > 0 && (
             <span className="text-xs text-muted">({versions.length})</span>
           )}
@@ -114,8 +116,8 @@ export default function VersionTree() {
           {versions.length === 0 && (
             <div className="py-8 text-center">
               <Clock size={24} className="text-muted mx-auto mb-2" />
-              <p className="text-xs text-muted">Aucune version</p>
-              <p className="text-xs text-muted mt-1">Les versions s'accumulent automatiquement</p>
+              <p className="text-xs text-muted">{t("Aucune version")}</p>
+              <p className="text-xs text-muted mt-1">{t("Les versions s'accumulent automatiquement")}</p>
             </div>
           )}
 
@@ -178,7 +180,7 @@ export default function VersionTree() {
                     : "bg-hover text-secondary hover:text-primary"
                 }`}
               >
-                Aperçu
+                {t("Aperçu")}
               </button>
               <div className="flex-1" />
               <button
@@ -186,14 +188,14 @@ export default function VersionTree() {
                 className="flex items-center gap-1.5 text-xs px-2.5 py-1 rounded-lg bg-accent hover:bg-accent-hover text-white transition-colors"
               >
                 <RotateCcw size={11} />
-                Restaurer
+                {t("Restaurer")}
               </button>
             </div>
 
             {/* Content area */}
             <div className="flex-1 overflow-y-auto px-3 py-3">
               {isLoading ? (
-                <p className="text-xs text-muted text-center py-4">Chargement…</p>
+                <p className="text-xs text-muted text-center py-4">{t("Chargement…")}</p>
               ) : showDiff ? (
                 <div className="text-xs leading-relaxed font-mono">
                   {diffParts.map((part, i) => (
@@ -228,7 +230,7 @@ export default function VersionTree() {
         {/* Version limit */}
         <div>
           <p className="text-[10px] font-semibold text-muted uppercase tracking-wider mb-1.5">
-            Versions conservées / note
+            {t("Versions conservées / note")}
           </p>
           <div className="flex gap-1 flex-wrap">
             {VERSION_LIMIT_OPTIONS.map(({ label, value }) => (

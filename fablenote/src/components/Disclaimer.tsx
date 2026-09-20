@@ -1,11 +1,15 @@
 import React, { useState } from "react";
-import { AlertTriangle, BookOpen, Bug, Copy, ExternalLink, Github, Lightbulb, Lock, Mail, ShieldAlert, Star, Terminal } from "lucide-react";
+import { AlertTriangle, BookOpen, Bug, Copy, ExternalLink, Github, Lightbulb, Lock, Mail, ShieldAlert, Sparkles, Star, Terminal } from "lucide-react";
 import { useStore } from "../store";
 import { AiManualOverlay } from "./AiManual";
+import { useT } from "../i18n";
 
 const KEY = "natia_disclaimer_v1";
 const CONTACT_EMAIL = "email@test.fr";
 const GITHUB_URL = "https://github.com/Buntasam/NATIA";
+// Page communautaire de partage de prompts (en cours de mise en place).
+// En attendant, les Discussions GitHub servent d'espace de partage.
+export const PROMPTS_URL = "https://github.com/Buntasam/NATIA/discussions";
 
 
 const REPORT_TEMPLATE = (date: string) =>
@@ -65,6 +69,7 @@ const ASCII_TURTLE = `                         __    _
 
 export default function Disclaimer() {
   const { toggleSettings } = useStore();
+  const t = useT();
   const [dontShow, setDontShow] = useState(false);
   const [visible] = useState(() => !localStorage.getItem(KEY));
   const [closed, setClosed] = useState(false);
@@ -111,8 +116,8 @@ export default function Disclaimer() {
               <AlertTriangle size={22} className="text-amber-500" />
             </div>
             <div>
-              <h2 className="text-base font-semibold text-primary leading-snug">Application en développement</h2>
-              <p className="text-xs text-muted mt-0.5">NATIA · Version bêta — à usage personnel uniquement</p>
+              <h2 className="text-base font-semibold text-primary leading-snug">{t("Application en développement")}</h2>
+              <p className="text-xs text-muted mt-0.5">{t("NATIA · Version bêta — à usage personnel uniquement")}</p>
             </div>
           </div>
 
@@ -135,7 +140,7 @@ export default function Disclaimer() {
             <div className="flex flex-col gap-2 rounded-xl border border-accent/25 bg-accent/5 px-4 py-3">
               <div className="flex items-center gap-2">
                 <Terminal size={13} className="text-accent shrink-0" />
-                <span className="text-xs font-semibold text-accent">Alternative sans clé API : Claude Code CLI</span>
+                <span className="text-xs font-semibold text-accent">{t("Alternative sans clé API : Claude Code CLI")}</span>
               </div>
               <p className="text-xs text-secondary/80 leading-relaxed">
                 Si vous avez un abonnement Claude, vous pouvez utiliser <strong className="text-primary">Claude Code CLI</strong> directement dans NATIA — sans clé API, en utilisant vos crédits Claude. Activez-le dans <strong className="text-primary">Paramètres → IA → Claude CLI</strong>.
@@ -146,7 +151,7 @@ export default function Disclaimer() {
             <div className="flex flex-col gap-2 rounded-xl border border-accent/25 bg-accent/5 px-4 py-3">
               <div className="flex items-center gap-2">
                 <BookOpen size={13} className="text-accent shrink-0" />
-                <span className="text-xs font-semibold text-accent">Nouveau : un manuel pour brancher l'IA</span>
+                <span className="text-xs font-semibold text-accent">{t("Nouveau : un manuel pour brancher l'IA")}</span>
               </div>
               <p className="text-xs text-secondary/80 leading-relaxed">
                 NATIA fonctionne avec l'IA de ton choix — locale (Ollama, gratuit) ou cloud (Claude, OpenAI, Gemini, Mistral…). Le manuel détaille, pas à pas, comment configurer chaque type d'IA.
@@ -156,15 +161,36 @@ export default function Disclaimer() {
                 className="self-start flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-accent/15 hover:bg-accent/25 border border-accent/30 text-accent text-xs font-medium transition-colors"
               >
                 <BookOpen size={11} />
-                Ouvrir le manuel
+                {t("Ouvrir le manuel")}
               </button>
+            </div>
+
+            {/* ── Encart prompts communautaires ──────────────────────────────── */}
+            <div className="flex flex-col gap-2 rounded-xl border border-violet-500/25 bg-violet-500/5 px-4 py-3">
+              <div className="flex items-center gap-2">
+                <Sparkles size={13} className="text-violet-500 dark:text-violet-400 shrink-0" />
+                <span className="text-xs font-semibold text-violet-600 dark:text-violet-300">{t("Bientôt : bibliothèque de prompts de la communauté")}</span>
+              </div>
+              <p className="text-xs text-secondary/80 leading-relaxed">
+                Envie de t'inspirer des prompts d'autres utilisateurs ? Une page est en cours de mise en place pour <strong className="text-primary">consulter et voter les prompts les mieux notés</strong>. En attendant, tu peux déjà partager et découvrir des prompts dans l'espace communautaire.
+              </p>
+              <a
+                href={PROMPTS_URL}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="self-start flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-violet-500/15 hover:bg-violet-500/25 border border-violet-500/30 text-violet-600 dark:text-violet-300 text-xs font-medium transition-colors"
+              >
+                <Sparkles size={11} />
+                {t("Voir les prompts de la communauté")}
+                <ExternalLink size={10} className="opacity-70" />
+              </a>
             </div>
 
             {/* ── Encart chiffrement ─────────────────────────────────────────── */}
             <div className="flex flex-col gap-2.5 rounded-xl border border-amber-600/30 bg-amber-500/8 px-4 py-3.5">
               <div className="flex items-center gap-2">
                 <ShieldAlert size={14} className="text-amber-600 dark:text-amber-400 shrink-0" />
-                <span className="text-xs font-semibold text-amber-700 dark:text-amber-300">Vos notes ne sont pas chiffrées par défaut</span>
+                <span className="text-xs font-semibold text-amber-700 dark:text-amber-300">{t("Vos notes ne sont pas chiffrées par défaut")}</span>
               </div>
               <p className="text-xs text-secondary/80 leading-relaxed">
                 Sans mot de passe activé, les notes, titres, tags et clés API sont stockés <strong className="text-primary">en clair</strong> dans la base locale. Si vous souhaitez protéger vos données, activez un mot de passe dans les paramètres — NATIA utilise alors <strong className="text-primary">AES-256-GCM</strong> avec dérivation Argon2id pour chiffrer l'intégralité de vos contenus.
@@ -174,7 +200,7 @@ export default function Disclaimer() {
                 className="self-start flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-amber-500/15 hover:bg-amber-500/25 border border-amber-600/30 text-amber-700 dark:text-amber-300 hover:text-amber-800 dark:hover:text-amber-200 text-xs font-medium transition-colors"
               >
                 <Lock size={11} />
-                Activer un mot de passe
+                {t("Activer un mot de passe")}
               </button>
             </div>
 
@@ -182,7 +208,7 @@ export default function Disclaimer() {
             <div className="flex flex-col gap-2.5 rounded-xl border border-red-500/40 bg-red-500/8 px-4 py-3.5">
               <div className="flex items-center gap-2">
                 <AlertTriangle size={14} className="text-red-500 shrink-0" />
-                <span className="text-xs font-semibold text-red-500">Attention — IA locale : performances très limitées</span>
+                <span className="text-xs font-semibold text-red-500">{t("Attention — IA locale : performances très limitées")}</span>
               </div>
               <pre className="text-[6.5px] leading-[1.3] font-mono text-red-400/50 dark:text-red-400/40 whitespace-pre overflow-x-auto select-none">
                 {ASCII_TURTLE}
@@ -211,13 +237,13 @@ export default function Disclaimer() {
                 onChange={(e) => setDontShow(e.target.checked)}
                 className="w-4 h-4 accent-accent"
               />
-              <span className="text-sm text-secondary">Ne plus afficher ce message au démarrage</span>
+              <span className="text-sm text-secondary">{t("Ne plus afficher ce message au démarrage")}</span>
             </label>
             <button
               onClick={close}
               className="w-full py-2.5 rounded-lg bg-accent hover:bg-accent-hover text-white text-sm font-medium transition-colors"
             >
-              J'ai compris — Continuer
+              {t("J'ai compris — Continuer")}
             </button>
           </div>
         </div>
@@ -227,7 +253,7 @@ export default function Disclaimer() {
           {/* Header dev */}
           <div className="px-4 pt-5 pb-3 flex items-center gap-2 border-b border-border/50">
             <Terminal size={14} className="text-accent" />
-            <span className="text-xs font-semibold text-accent uppercase tracking-wider">Pour les testeurs</span>
+            <span className="text-xs font-semibold text-accent uppercase tracking-wider">{t("Pour les testeurs")}</span>
           </div>
 
           {/* ASCII art */}
@@ -247,7 +273,7 @@ export default function Disclaimer() {
             <div className="flex flex-col gap-1.5 rounded-lg border border-accent/25 bg-accent/5 px-3 py-2.5">
               <div className="flex items-center gap-1.5">
                 <Bug size={10} className="text-accent shrink-0" />
-                <span className="text-[10px] font-semibold text-accent">Mode debug disponible</span>
+                <span className="text-[10px] font-semibold text-accent">{t("Mode debug disponible")}</span>
               </div>
               <p className="text-[10px] text-secondary/80 leading-relaxed">
                 Active le <strong className="text-primary">journal d'erreurs</strong> et les infos de session (provider, modèle, uptime, tokens) dans le panneau IA → onglet Debug.
@@ -266,7 +292,7 @@ export default function Disclaimer() {
               <span className="text-xs text-primary font-mono flex-1 truncate">{CONTACT_EMAIL}</span>
               <button
                 onClick={handleCopyEmail}
-                title="Copier l'adresse"
+                title={t("Copier l'adresse")}
                 className="text-muted hover:text-primary transition-colors shrink-0"
               >
                 {copiedEmail ? <span className="text-[10px] text-accent">✓</span> : <Copy size={10} />}

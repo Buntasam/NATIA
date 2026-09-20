@@ -7,6 +7,7 @@ import {
   MessagesSquare, Search, Send, Sparkles, Tag, Terminal, X,
 } from "lucide-react";
 import { useStore } from "../store";
+import { useT } from "../i18n";
 import { aiStream } from "../lib/aiInvoke";
 import { markdownToHtml } from "../lib/markdown";
 import { buildMemoryContext } from "../lib/memoryContext";
@@ -214,6 +215,7 @@ function QuickOpen({
   onClose: () => void;
   onShowShortcuts: () => void;
 }) {
+  const t = useT();
   const [query, setQuery] = useState("");
   const [idx, setIdx] = useState(0);
   const [ftResults, setFtResults] = useState<{ id: string; title: string; folder: string | null; snippet: string }[]>([]);
@@ -316,12 +318,12 @@ function QuickOpen({
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             onKeyDown={onKey}
-            placeholder="Ouvrir une note… (> pour une commande)"
-            aria-label="Recherche de note ou commande"
+            placeholder={t("Ouvrir une note… (> pour une commande)")}
+            aria-label={t("Recherche de note ou commande")}
             className="flex-1 bg-transparent text-sm text-primary placeholder-muted outline-none"
           />
           {query && (
-            <button onClick={() => setQuery("")} aria-label="Effacer" className="text-muted hover:text-primary transition-colors">
+            <button onClick={() => setQuery("")} aria-label={t("Effacer")} className="text-muted hover:text-primary transition-colors">
               <X size={13} />
             </button>
           )}
@@ -331,7 +333,7 @@ function QuickOpen({
         <div ref={listRef} className="max-h-72 overflow-y-auto">
           {!commandMode && !query.trim() && recentIds.length > 0 && (
             <div className="flex items-center gap-2 px-4 pt-2 pb-1">
-              <span className="text-[11px] text-muted uppercase tracking-wider">Récentes</span>
+              <span className="text-[11px] text-muted uppercase tracking-wider">{t("Récentes")}</span>
             </div>
           )}
           {entries.length === 0 ? (
@@ -386,6 +388,7 @@ function ConvPanel({
   historyRef: React.MutableRefObject<Map<string, ConvMessage[]>>;
 }) {
   const { settings, activeNote, aiPanelWidth, setAiPanelWidth, memoryEnabled, memoryNodes } = useStore();
+  const t = useT();
   const memoryActive = memoryEnabled && memoryNodes.length > 0;
   const [messages, setMessages] = useState<ConvMessage[]>([]);
   const [input, setInput] = useState("");
@@ -501,7 +504,7 @@ function ConvPanel({
       />
       <div className="shrink-0 border-b border-border px-3 py-2.5 flex items-center gap-2">
         <MessagesSquare size={14} className="text-accent" />
-        <span className="text-xs font-medium text-primary flex-1">Conversation IA</span>
+        <span className="text-xs font-medium text-primary flex-1">{t("Conversation IA")}</span>
         {memoryActive && (
           <span
             className="flex items-center gap-1 text-[10px] text-accent/80 shrink-0"
@@ -517,7 +520,7 @@ function ConvPanel({
               if (activeNote) historyRef.current.delete(activeNote.id);
             }}
             className="text-[11px] text-muted hover:text-primary transition-colors px-1.5 py-0.5 rounded hover:bg-hover"
-            title="Effacer la conversation"
+            title={t("Effacer la conversation")}
           >
             Réinitialiser
           </button>
@@ -530,16 +533,16 @@ function ConvPanel({
         <div className="shrink-0 flex items-center gap-1.5 px-3 py-1.5 bg-accent/5 border-b border-border/50 text-[11px] text-muted">
           <FileText size={10} className="text-accent shrink-0" />
           <span className="truncate text-secondary">{activeNote.title}</span>
-          <span className="text-accent shrink-0">· en contexte</span>
+          <span className="text-accent shrink-0">{t("· en contexte")}</span>
         </div>
       )}
       <div className="flex-1 overflow-y-auto p-3 flex flex-col gap-2">
         {messages.length === 0 && !isStreaming && (
           <div className="flex flex-col items-center justify-center h-full text-center py-8">
             <MessagesSquare size={24} className="text-muted mb-2" />
-            <p className="text-xs text-muted">Commence une conversation avec l'IA</p>
+            <p className="text-xs text-muted">{t("Commence une conversation avec l'IA")}</p>
             {activeNote && (
-              <p className="text-[11px] text-muted/70 mt-1">L'IA a accès au contenu de ta note</p>
+              <p className="text-[11px] text-muted/70 mt-1">{t("L'IA a accès au contenu de ta note")}</p>
             )}
           </div>
         )}
@@ -559,7 +562,7 @@ function ConvPanel({
                 <div className="flex items-center gap-1 mt-0.5 ml-1">
                   <button
                     onClick={() => copyMessage(m.content, i)}
-                    aria-label="Copier la réponse"
+                    aria-label={t("Copier la réponse")}
                     className="flex items-center gap-1 px-1.5 py-0.5 rounded text-[11px] text-muted hover:text-primary hover:bg-hover transition-colors"
                   >
                     {copiedIdx === i ? <Check size={10} className="text-accent" /> : <Copy size={10} />}
@@ -568,7 +571,7 @@ function ConvPanel({
                   {activeNote && (
                     <button
                       onClick={() => insertIntoNote(m.content)}
-                      aria-label="Insérer dans la note"
+                      aria-label={t("Insérer dans la note")}
                       className="flex items-center gap-1 px-1.5 py-0.5 rounded text-[11px] text-muted hover:text-primary hover:bg-hover transition-colors"
                     >
                       <FilePlus2 size={10} />
@@ -585,7 +588,7 @@ function ConvPanel({
             <div className={`max-w-[85%] px-3 py-2 rounded-xl rounded-bl-sm text-xs leading-relaxed whitespace-pre-wrap bg-hover text-secondary border border-border ${streamText ? "" : "flex items-center gap-1.5"}`}>
               {streamText
                 ? <>{streamText}<span className="animate-pulse text-accent ml-0.5">▋</span></>
-                : <><Loader2 size={11} className="text-accent animate-spin" /><span className="text-muted">Réflexion…</span></>
+                : <><Loader2 size={11} className="text-accent animate-spin" /><span className="text-muted">{t("Réflexion…")}</span></>
               }
             </div>
           </div>
@@ -597,7 +600,7 @@ function ConvPanel({
           value={input}
           onChange={(e) => setInput(e.target.value)}
           onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); send(); } }}
-          placeholder="Message… (Entrée pour envoyer)"
+          placeholder={t("Message… (Entrée pour envoyer)")}
           disabled={isStreaming}
           rows={2}
           className="flex-1 bg-hover border border-border rounded-lg px-3 py-2 text-xs text-primary outline-none resize-none focus:border-accent/50 transition-colors placeholder-muted disabled:opacity-50"
@@ -617,26 +620,27 @@ function ConvPanel({
 // ─── Narrow ops strip ─────────────────────────────────────────────────────────
 
 function NarrowOpsStrip({ onExpand }: { onExpand: () => void }) {
+  const t = useT();
   return (
     <aside className="w-12 shrink-0 border-l border-border flex flex-col items-center py-3 gap-2 bg-panel">
       <button
         onClick={onExpand}
-        title="Afficher les opérations"
+        title={t("Afficher les opérations")}
         className="p-2 rounded-lg text-muted hover:text-primary hover:bg-hover transition-colors"
       >
         <ChevronRight size={14} />
       </button>
       <div className="w-6 h-px bg-border my-1" />
-      <button onClick={onExpand} title="Corriger" className="p-2 rounded-lg text-muted hover:text-accent hover:bg-hover transition-colors">
+      <button onClick={onExpand} title={t("Corriger")} className="p-2 rounded-lg text-muted hover:text-accent hover:bg-hover transition-colors">
         <CheckCheck size={14} />
       </button>
-      <button onClick={onExpand} title="Résumer" className="p-2 rounded-lg text-muted hover:text-accent hover:bg-hover transition-colors">
+      <button onClick={onExpand} title={t("Résumer")} className="p-2 rounded-lg text-muted hover:text-accent hover:bg-hover transition-colors">
         <FileText size={14} />
       </button>
-      <button onClick={onExpand} title="Renommer" className="p-2 rounded-lg text-muted hover:text-accent hover:bg-hover transition-colors">
+      <button onClick={onExpand} title={t("Renommer")} className="p-2 rounded-lg text-muted hover:text-accent hover:bg-hover transition-colors">
         <Tag size={14} />
       </button>
-      <button onClick={onExpand} title="Trier" className="p-2 rounded-lg text-muted hover:text-accent hover:bg-hover transition-colors">
+      <button onClick={onExpand} title={t("Trier")} className="p-2 rounded-lg text-muted hover:text-accent hover:bg-hover transition-colors">
         <Sparkles size={14} />
       </button>
     </aside>

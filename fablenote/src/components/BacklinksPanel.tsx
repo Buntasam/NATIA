@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { Link2, X } from "lucide-react";
 import { useStore } from "../store";
+import { useT } from "../i18n";
 
 interface SearchResult {
   id: string;
@@ -16,6 +17,7 @@ interface Props {
 }
 
 export default function BacklinksPanel({ onClose }: Props) {
+  const t = useT();
   const { activeNote, selectNote, notes } = useStore();
   const [backlinks, setBacklinks] = useState<SearchResult[]>([]);
   const [loading, setLoading] = useState(false);
@@ -97,7 +99,7 @@ export default function BacklinksPanel({ onClose }: Props) {
           </p>
           {loading && <p className="text-xs text-muted px-3">Recherche…</p>}
           {!loading && backlinks.length === 0 && (
-            <p className="text-xs text-muted px-3">Aucune note ne mentionne cette note</p>
+            <p className="text-xs text-muted px-3">{t("Aucune note ne mentionne cette note")}</p>
           )}
           <div className="space-y-1">
             {backlinks.map((n) => (

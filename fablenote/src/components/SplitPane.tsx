@@ -3,6 +3,7 @@ import { invoke } from "@tauri-apps/api/core";
 import DOMPurify from "dompurify";
 import { ArrowLeftRight, ExternalLink, X } from "lucide-react";
 import { useStore } from "../store";
+import { useT } from "../i18n";
 import { Note } from "../types";
 import Tip from "./Tooltip";
 
@@ -10,6 +11,7 @@ import Tip from "./Tooltip";
 // Cas d'usage : rédiger en consultant une note de référence.
 
 export default function SplitPane() {
+  const t = useT();
   const { splitNoteId, setSplitNote, selectNote, activeNote, notes } = useStore();
   const [note, setNote] = useState<Note | null>(null);
   const [error, setError] = useState(false);
@@ -44,28 +46,28 @@ export default function SplitPane() {
         <span className="text-sm font-medium text-primary truncate flex-1">
           {note?.title || "…"}
         </span>
-        <Tip label="Échanger avec la note active">
+        <Tip label={t("Échanger avec la note active")}>
           <button
             onClick={swap}
-            aria-label="Échanger avec la note active"
+            aria-label={t("Échanger avec la note active")}
             className="p-1 rounded text-muted hover:text-primary hover:bg-hover transition-colors"
           >
             <ArrowLeftRight size={13} />
           </button>
         </Tip>
-        <Tip label="Ouvrir dans l'éditeur">
+        <Tip label={t("Ouvrir dans l'éditeur")}>
           <button
             onClick={() => { if (note) { selectNote(note.id); setSplitNote(null); } }}
-            aria-label="Ouvrir dans l'éditeur"
+            aria-label={t("Ouvrir dans l'éditeur")}
             className="p-1 rounded text-muted hover:text-primary hover:bg-hover transition-colors"
           >
             <ExternalLink size={13} />
           </button>
         </Tip>
-        <Tip label="Fermer la vue scindée">
+        <Tip label={t("Fermer la vue scindée")}>
           <button
             onClick={() => setSplitNote(null)}
-            aria-label="Fermer la vue scindée"
+            aria-label={t("Fermer la vue scindée")}
             className="p-1 rounded text-muted hover:text-primary hover:bg-hover transition-colors"
           >
             <X size={14} />

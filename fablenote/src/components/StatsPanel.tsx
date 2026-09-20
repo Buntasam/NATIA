@@ -2,6 +2,7 @@ import React, { useMemo, useEffect, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { BarChart2, FileText, Folder, GitBranch, Hash, Trash2 } from "lucide-react";
 import { useStore } from "../store";
+import { useT } from "../i18n";
 
 interface RustStats { trash_count: number; version_count: number; }
 
@@ -18,6 +19,7 @@ function relativeDate(iso: string): string {
 }
 
 export default function StatsPanel() {
+  const t = useT();
   const { notes, folders } = useStore();
   const [rust, setRust] = useState<RustStats>({ trash_count: 0, version_count: 0 });
 
@@ -70,8 +72,8 @@ export default function StatsPanel() {
     return (
       <div className="flex flex-col items-center justify-center py-16 gap-3 text-center">
         <BarChart2 size={32} className="text-muted/40" />
-        <p className="text-sm text-muted">Aucune note pour le moment</p>
-        <p className="text-[11px] text-muted/60">Les statistiques apparaîtront ici une fois vos premières notes créées.</p>
+        <p className="text-sm text-muted">{t("Aucune note pour le moment")}</p>
+        <p className="text-[11px] text-muted/60">{t("Les statistiques apparaîtront ici une fois vos premières notes créées.")}</p>
       </div>
     );
   }
@@ -100,22 +102,22 @@ export default function StatsPanel() {
 
       {/* ── KPI cards ─────────────────────────────────────────────────────── */}
       <div className="grid grid-cols-2 gap-2.5">
-        <StatCard icon={<FileText size={13} className="text-accent" />}       value={notes.length}         label="Notes actives" />
-        <StatCard icon={<Folder size={13} className="text-blue-400" />}       value={folders.length}       label="Dossiers" />
-        <StatCard icon={<Hash size={13} className="text-purple-400" />}       value={s.uniqueTags}         label="Tags uniques" />
-        <StatCard icon={<GitBranch size={13} className="text-green-400" />}   value={rust.version_count}   label="Versions" />
+        <StatCard icon={<FileText size={13} className="text-accent" />}       value={notes.length}         label={t("Notes actives")} />
+        <StatCard icon={<Folder size={13} className="text-blue-400" />}       value={folders.length}       label={t("Dossiers")} />
+        <StatCard icon={<Hash size={13} className="text-purple-400" />}       value={s.uniqueTags}         label={t("Tags uniques")} />
+        <StatCard icon={<GitBranch size={13} className="text-green-400" />}   value={rust.version_count}   label={t("Versions")} />
       </div>
 
       {/* ── Dernière activité ─────────────────────────────────────────────── */}
       <div className="flex items-center justify-between px-3 py-2 rounded-lg bg-hover border border-border">
-        <span className="text-[11px] text-muted">Dernière modification</span>
+        <span className="text-[11px] text-muted">{t("Dernière modification")}</span>
         <span className="text-[11px] text-secondary font-medium">{relativeDate(s.lastActivity)}</span>
       </div>
 
       {/* ── Bar chart — activité 30 jours ─────────────────────────────────── */}
       <div className="flex flex-col gap-1.5">
         <div className="flex items-center justify-between">
-          <p className="text-[10px] text-muted uppercase tracking-wider">Activité — 30 derniers jours</p>
+          <p className="text-[10px] text-muted uppercase tracking-wider">{t("Activité — 30 derniers jours")}</p>
           <p className="text-[10px] text-muted">{s.createdThisMonth} créée{s.createdThisMonth !== 1 ? "s" : ""}</p>
         </div>
         <div className="rounded-lg border border-border bg-hover px-3 pt-3 pb-2">
@@ -132,14 +134,14 @@ export default function StatsPanel() {
           </svg>
           <div className="flex justify-between mt-0.5">
             <span className="text-[9px] text-muted">il y a 30 j</span>
-            <span className="text-[9px] text-muted">aujourd'hui</span>
+            <span className="text-[9px] text-muted">{t("aujourd'hui")}</span>
           </div>
         </div>
       </div>
 
       {/* ── Line chart — création mensuelle ───────────────────────────────── */}
       <div className="flex flex-col gap-1.5">
-        <p className="text-[10px] text-muted uppercase tracking-wider">Création mensuelle — 12 mois</p>
+        <p className="text-[10px] text-muted uppercase tracking-wider">{t("Création mensuelle — 12 mois")}</p>
         <div className="rounded-lg border border-border bg-hover px-3 pt-3 pb-2">
           <svg viewBox={`0 0 ${LW} ${LH}`} className="w-full overflow-visible" preserveAspectRatio="none">
             {/* subtle grid */}
@@ -170,7 +172,7 @@ export default function StatsPanel() {
       {/* ── Répartition par dossier ────────────────────────────────────────── */}
       {s.topFolders.length > 0 && (
         <div className="flex flex-col gap-1.5">
-          <p className="text-[10px] text-muted uppercase tracking-wider">Répartition par dossier</p>
+          <p className="text-[10px] text-muted uppercase tracking-wider">{t("Répartition par dossier")}</p>
           <div className="flex flex-col gap-1.5">
             {s.topFolders.map(([name, count]) => (
               <div key={name} className="flex items-center gap-2">
@@ -191,14 +193,14 @@ export default function StatsPanel() {
           <Trash2 size={13} className="text-red-400/60 shrink-0" />
           <div>
             <p className="text-sm font-semibold text-primary leading-none">{rust.trash_count}</p>
-            <p className="text-[10px] text-muted mt-0.5">En corbeille</p>
+            <p className="text-[10px] text-muted mt-0.5">{t("En corbeille")}</p>
           </div>
         </div>
         <div className="flex items-center gap-2.5 px-3 py-2.5 rounded-lg bg-hover border border-border">
           <GitBranch size={13} className="text-green-400/60 shrink-0" />
           <div>
             <p className="text-sm font-semibold text-primary leading-none">{rust.version_count}</p>
-            <p className="text-[10px] text-muted mt-0.5">Versions sauvegardées</p>
+            <p className="text-[10px] text-muted mt-0.5">{t("Versions sauvegardées")}</p>
           </div>
         </div>
       </div>
@@ -206,7 +208,7 @@ export default function StatsPanel() {
       {/* ── Nuage de tags ─────────────────────────────────────────────────── */}
       {s.topTags.length > 0 && (
         <div className="flex flex-col gap-1.5">
-          <p className="text-[10px] text-muted uppercase tracking-wider">Tags les plus utilisés</p>
+          <p className="text-[10px] text-muted uppercase tracking-wider">{t("Tags les plus utilisés")}</p>
           <div className="flex flex-wrap gap-1.5 pb-1">
             {s.topTags.map(([tag, count]) => {
               const r = count / maxTag;

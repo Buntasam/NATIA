@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { Bell, ChevronLeft, ChevronRight, X } from "lucide-react";
 import { invoke } from "@tauri-apps/api/core";
 import { useStore } from "../store";
+import { useT } from "../i18n";
 
 const DAYS_FR = ["Lun", "Mar", "Mer", "Jeu", "Ven", "Sam", "Dim"];
 const MONTHS_FR = [
@@ -28,6 +29,7 @@ interface Props {
 }
 
 export default function CalendarPanel({ onClose }: Props) {
+  const t = useT();
   const { notes, selectNote, activeNote, createNote, updateNote } = useStore();
   const today = new Date();
   const [view, setView] = useState(new Date(today.getFullYear(), today.getMonth(), 1));
@@ -181,7 +183,7 @@ export default function CalendarPanel({ onClose }: Props) {
                 </p>
                 <button
                   onClick={() => handleAddReminder(selected)}
-                  title="Créer un rappel ce jour"
+                  title={t("Créer un rappel ce jour")}
                   className="flex items-center gap-1 text-[10px] px-2 py-1 rounded bg-hover text-muted hover:text-primary hover:bg-accent/10 hover:text-accent transition-colors"
                 >
                   <Bell size={10} />
@@ -215,11 +217,11 @@ export default function CalendarPanel({ onClose }: Props) {
 
               {/* Notes */}
               {selectedNotes.length === 0 && selectedReminders.length === 0 ? (
-                <p className="text-xs text-muted py-2">Aucune note ni rappel ce jour</p>
+                <p className="text-xs text-muted py-2">{t("Aucune note ni rappel ce jour")}</p>
               ) : selectedNotes.length > 0 && (
                 <>
                   {selectedReminders.length > 0 && (
-                    <p className="text-[10px] text-muted uppercase tracking-wider font-medium mb-1">Notes modifiées</p>
+                    <p className="text-[10px] text-muted uppercase tracking-wider font-medium mb-1">{t("Notes modifiées")}</p>
                   )}
                   <div className="space-y-1">
                     {selectedNotes.map((n) => (

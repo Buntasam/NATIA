@@ -1,5 +1,6 @@
 import React, { useRef, useState } from "react";
 import { Editor } from "@tiptap/react";
+import { useT } from "../i18n";
 import {
   Bell,
   Bold,
@@ -165,6 +166,7 @@ function TablePicker({
 // ─── Main toolbar ─────────────────────────────────────────────────────────────
 
 export default function Toolbar({ editor }: { editor: Editor | null }) {
+  const t = useT();
   const [highlightColor, setHighlightColor] = useState(HIGHLIGHT_COLORS[0].hex);
   const [showColorPicker, setShowColorPicker] = useState(false);
   const [tablePicker, setTablePicker] = useState<{ top: number; left: number } | null>(null);
@@ -208,28 +210,28 @@ export default function Toolbar({ editor }: { editor: Editor | null }) {
   return (
     <div className="flex items-center gap-0.5 px-4 py-2 border-b border-border bg-sidebar overflow-x-auto shrink-0">
       <Btn
-        title="Gras (Ctrl+B)"
+        title={t("Gras (Ctrl+B)")}
         onClick={() => editor.chain().focus().toggleBold().run()}
         active={editor.isActive("bold")}
       >
         <Bold size={15} />
       </Btn>
       <Btn
-        title="Italique (Ctrl+I)"
+        title={t("Italique (Ctrl+I)")}
         onClick={() => editor.chain().focus().toggleItalic().run()}
         active={editor.isActive("italic")}
       >
         <Italic size={15} />
       </Btn>
       <Btn
-        title="Souligné (Ctrl+U)"
+        title={t("Souligné (Ctrl+U)")}
         onClick={() => editor.chain().focus().toggleUnderline().run()}
         active={editor.isActive("underline")}
       >
         <Underline size={15} />
       </Btn>
       <Btn
-        title="Barré"
+        title={t("Barré")}
         onClick={() => editor.chain().focus().toggleStrike().run()}
         active={editor.isActive("strike")}
       >
@@ -239,7 +241,7 @@ export default function Toolbar({ editor }: { editor: Editor | null }) {
       {/* Highlight with color picker */}
       <div className="relative flex items-center">
         <Btn
-          title="Surligner"
+          title={t("Surligner")}
           onClick={() => editor.chain().focus().toggleHighlight({ color: highlightColor }).run()}
           active={editor.isActive("highlight")}
         >
@@ -251,7 +253,7 @@ export default function Toolbar({ editor }: { editor: Editor | null }) {
         <button
           onClick={() => setShowColorPicker((s) => !s)}
           className="p-0.5 text-muted hover:text-primary transition-colors"
-          title="Choisir la couleur"
+          title={t("Choisir la couleur")}
         >
           <ChevronDown size={10} />
         </button>
@@ -280,21 +282,21 @@ export default function Toolbar({ editor }: { editor: Editor | null }) {
       <Divider />
 
       <Btn
-        title="Titre 1"
+        title={t("Titre 1")}
         onClick={() => editor.chain().focus().toggleHeading({ level: 1 }).run()}
         active={editor.isActive("heading", { level: 1 })}
       >
         <Heading1 size={15} />
       </Btn>
       <Btn
-        title="Titre 2"
+        title={t("Titre 2")}
         onClick={() => editor.chain().focus().toggleHeading({ level: 2 }).run()}
         active={editor.isActive("heading", { level: 2 })}
       >
         <Heading2 size={15} />
       </Btn>
       <Btn
-        title="Titre 3"
+        title={t("Titre 3")}
         onClick={() => editor.chain().focus().toggleHeading({ level: 3 }).run()}
         active={editor.isActive("heading", { level: 3 })}
       >
@@ -304,21 +306,21 @@ export default function Toolbar({ editor }: { editor: Editor | null }) {
       <Divider />
 
       <Btn
-        title="Liste à puces"
+        title={t("Liste à puces")}
         onClick={() => editor.chain().focus().toggleBulletList().run()}
         active={editor.isActive("bulletList")}
       >
         <List size={15} />
       </Btn>
       <Btn
-        title="Liste numérotée"
+        title={t("Liste numérotée")}
         onClick={() => editor.chain().focus().toggleOrderedList().run()}
         active={editor.isActive("orderedList")}
       >
         <ListOrdered size={15} />
       </Btn>
       <Btn
-        title="Liste de tâches"
+        title={t("Liste de tâches")}
         onClick={() => editor.chain().focus().toggleTaskList().run()}
         active={editor.isActive("taskList")}
       >
@@ -328,14 +330,14 @@ export default function Toolbar({ editor }: { editor: Editor | null }) {
       <Divider />
 
       <Btn
-        title="Citation"
+        title={t("Citation")}
         onClick={() => editor.chain().focus().toggleBlockquote().run()}
         active={editor.isActive("blockquote")}
       >
         <Quote size={15} />
       </Btn>
       <Btn
-        title="Bloc de code"
+        title={t("Bloc de code")}
         onClick={() => editor.chain().focus().toggleCodeBlock().run()}
         active={editor.isActive("codeBlock")}
       >
@@ -345,14 +347,14 @@ export default function Toolbar({ editor }: { editor: Editor | null }) {
       <Divider />
 
       <Btn
-        title="Insérer un post-it"
+        title={t("Insérer un post-it")}
         onClick={() => editor.chain().focus().insertPostIt().run()}
         active={editor.isActive("postit")}
       >
         <StickyNote size={15} />
       </Btn>
       <Btn
-        title="Insérer un rappel"
+        title={t("Insérer un rappel")}
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         onClick={() => (editor.chain().focus() as any).insertReminder().run()}
         active={editor.isActive("reminder")}
@@ -363,12 +365,12 @@ export default function Toolbar({ editor }: { editor: Editor | null }) {
       <Divider />
 
       {/* Link */}
-      <Btn title="Lien (Ctrl+K)" onClick={setLink} active={editor.isActive("link")}>
+      <Btn title={t("Lien (Ctrl+K)")} onClick={setLink} active={editor.isActive("link")}>
         <Link size={15} />
       </Btn>
 
       {/* Image */}
-      <Btn title="Insérer une image" onClick={() => imageInputRef.current?.click()}>
+      <Btn title={t("Insérer une image")} onClick={() => imageInputRef.current?.click()}>
         <Image size={15} />
       </Btn>
       <input ref={imageInputRef} type="file" accept="image/*" className="hidden" onChange={insertImage} />
@@ -376,7 +378,7 @@ export default function Toolbar({ editor }: { editor: Editor | null }) {
       {/* Table — grid picker */}
       <div ref={tableButtonRef}>
         <Btn
-          title="Tableau"
+          title={t("Tableau")}
           onClick={openTablePicker}
           active={editor.isActive("table")}
         >

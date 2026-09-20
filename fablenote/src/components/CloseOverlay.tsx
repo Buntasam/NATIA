@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { CheckCircle2, Loader2, LogOut, X } from "lucide-react";
 import { useStore } from "../store";
+import { useT } from "../i18n";
 
 let _resolveConfirm: ((v: boolean) => void) | null = null;
 let _saveNow: (() => void) | null = null;
@@ -24,6 +25,7 @@ export default function CloseOverlay() {
   const setIsConfirmingClose = useStore((s) => s.setIsConfirmingClose);
   const isClosingApp = useStore((s) => s.isClosingApp);
   const closeOverlayDone = useStore((s) => s.closeOverlayDone);
+  const t = useT();
   const [visible, setVisible] = useState(false);
 
   useEffect(() => {
@@ -56,7 +58,7 @@ export default function CloseOverlay() {
             )}
           </div>
           <p className="text-sm text-secondary">
-            {closeOverlayDone ? "Sauvegardé !" : "Sauvegarde en cours…"}
+            {closeOverlayDone ? t("Sauvegardé !") : t("Sauvegarde en cours…")}
           </p>
         </div>
       </div>
@@ -71,8 +73,8 @@ export default function CloseOverlay() {
           <div className="w-12 h-12 rounded-full bg-red-500/10 flex items-center justify-center">
             <LogOut size={24} className="text-red-400" strokeWidth={1.5} />
           </div>
-          <p className="text-sm font-semibold text-primary">Quitter NATIA ?</p>
-          <p className="text-xs text-muted leading-relaxed">Vos notes seront sauvegardées avant la fermeture.</p>
+          <p className="text-sm font-semibold text-primary">{t("Quitter NATIA ?")}</p>
+          <p className="text-xs text-muted leading-relaxed">{t("Vos notes seront sauvegardées avant la fermeture.")}</p>
         </div>
         <div className="flex gap-3 w-full">
           <button
@@ -80,14 +82,14 @@ export default function CloseOverlay() {
             className="flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-xl border border-border bg-hover hover:bg-active text-sm text-secondary hover:text-primary transition-colors"
           >
             <X size={14} />
-            Rester
+            {t("Rester")}
           </button>
           <button
             onClick={handleConfirm}
             className="flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-xl bg-red-500 hover:bg-red-600 text-sm text-white font-medium transition-colors"
           >
             <LogOut size={14} />
-            Quitter
+            {t("Quitter")}
           </button>
         </div>
       </div>

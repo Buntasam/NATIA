@@ -2,6 +2,7 @@ import { useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { ImageIcon, Loader2, Sparkles, X } from "lucide-react";
 import { useStore } from "../store";
+import { useT } from "../i18n";
 
 interface Props {
   onClose: () => void;
@@ -12,6 +13,7 @@ const SIZES = ["1024x1024", "1792x1024", "1024x1792"] as const;
 type Size = typeof SIZES[number];
 
 export default function ImageGenPanel({ onClose, onInsert }: Props) {
+  const t = useT();
   const { settings } = useStore();
   const [prompt, setPrompt] = useState("");
   const [size, setSize] = useState<Size>("1024x1024");
@@ -59,7 +61,7 @@ export default function ImageGenPanel({ onClose, onInsert }: Props) {
         <div className="flex-1 overflow-y-auto p-5 space-y-4">
           {!apiKey && (
             <div className="p-3 rounded-lg bg-red-500/10 border border-red-500/20 text-xs text-red-500">
-              Clé OpenAI requise — configure-la dans les Paramètres.
+              {t("Clé OpenAI requise — configure-la dans les Paramètres.")}
             </div>
           )}
 
@@ -68,7 +70,7 @@ export default function ImageGenPanel({ onClose, onInsert }: Props) {
             <textarea
               value={prompt}
               onChange={(e) => setPrompt(e.target.value)}
-              placeholder="Décris l'image souhaitée en détail…"
+              placeholder={t("Décris l'image souhaitée en détail…")}
               rows={4}
               className="w-full bg-sidebar border border-border rounded-lg px-3 py-2 text-sm text-primary placeholder-muted outline-none resize-none focus:border-accent/40 transition-colors"
             />
@@ -115,7 +117,7 @@ export default function ImageGenPanel({ onClose, onInsert }: Props) {
                 className="w-full flex items-center justify-center gap-2 px-4 py-2.5 bg-accent text-white rounded-lg text-sm font-medium hover:bg-accent/90 transition-colors"
               >
                 <ImageIcon size={15} />
-                Insérer dans la note
+                {t("Insérer dans la note")}
               </button>
             </div>
           )}

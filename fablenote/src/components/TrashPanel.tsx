@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { Folder, RotateCcw, Trash2, X } from "lucide-react";
 import { useStore } from "../store";
+import { useT } from "../i18n";
 import { TrashItem } from "../types";
 
 function fmtDate(iso: string) {
@@ -13,6 +14,7 @@ function fmtDate(iso: string) {
 }
 
 export default function TrashPanel() {
+  const t = useT();
   const { toggleTrash, getTrash, restoreFromTrash, emptyTrash, permanentDeleteItem } = useStore();
   const [items, setItems] = useState<TrashItem[]>([]);
   const [loading, setLoading] = useState(true);
@@ -63,7 +65,7 @@ export default function TrashPanel() {
         <div className="flex items-center justify-between px-5 py-4 border-b border-border shrink-0">
           <div className="flex items-center gap-2.5">
             <Trash2 size={15} className="text-muted" />
-            <h2 className="text-base font-semibold text-primary">Corbeille</h2>
+            <h2 className="text-base font-semibold text-primary">{t("Corbeille")}</h2>
             {items.length > 0 && (
               <span className="text-xs text-muted bg-hover border border-border px-2 py-0.5 rounded-full">
                 {items.length}
@@ -78,11 +80,11 @@ export default function TrashPanel() {
         {/* Body */}
         <div className="flex-1 overflow-y-auto">
           {loading ? (
-            <div className="flex items-center justify-center py-16 text-muted text-sm">Chargement…</div>
+            <div className="flex items-center justify-center py-16 text-muted text-sm">{t("Chargement…")}</div>
           ) : items.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-16 gap-3 text-muted">
               <Trash2 size={32} className="opacity-20" />
-              <p className="text-sm">La corbeille est vide</p>
+              <p className="text-sm">{t("La corbeille est vide")}</p>
             </div>
           ) : (
             <div className="flex flex-col divide-y divide-border">
@@ -115,7 +117,7 @@ export default function TrashPanel() {
                     <button
                       onClick={() => handleRestore(item)}
                       disabled={busy === item.id}
-                      title="Restaurer"
+                      title={t("Restaurer")}
                       className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-accent/10 border border-accent/30 text-xs text-accent hover:bg-accent/20 transition-colors disabled:opacity-50"
                     >
                       <RotateCcw size={11} />
@@ -124,7 +126,7 @@ export default function TrashPanel() {
                     <button
                       onClick={() => handlePermanentDelete(item)}
                       disabled={busy === item.id}
-                      title="Supprimer définitivement"
+                      title={t("Supprimer définitivement")}
                       className="p-1.5 rounded-lg text-muted hover:text-red-400 hover:bg-red-400/10 transition-colors disabled:opacity-50"
                     >
                       <Trash2 size={13} />
@@ -139,7 +141,7 @@ export default function TrashPanel() {
         {/* Footer */}
         {items.length > 0 && (
           <div className="flex items-center justify-between px-5 py-3 border-t border-border shrink-0">
-            <p className="text-[10px] text-muted">Les éléments supprimés définitivement ne peuvent pas être récupérés.</p>
+            <p className="text-[10px] text-muted">{t("Les éléments supprimés définitivement ne peuvent pas être récupérés.")}</p>
             <button
               onClick={handleEmptyTrash}
               disabled={busy === "empty"}
@@ -150,7 +152,7 @@ export default function TrashPanel() {
               }`}
             >
               <Trash2 size={11} />
-              {confirmEmpty ? "Confirmer — tout supprimer" : "Vider la corbeille"}
+              {confirmEmpty ? t("Confirmer — tout supprimer") : t("Vider la corbeille")}
             </button>
           </div>
         )}

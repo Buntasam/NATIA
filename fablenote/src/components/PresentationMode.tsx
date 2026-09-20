@@ -2,6 +2,7 @@ import { useEffect, useState, useCallback } from "react";
 import { ChevronLeft, ChevronRight, X } from "lucide-react";
 import DOMPurify from "dompurify";
 import { useStore } from "../store";
+import { useT } from "../i18n";
 
 function htmlToSlides(html: string): string[] {
   const div = document.createElement("div");
@@ -40,6 +41,7 @@ interface Props {
 }
 
 export default function PresentationMode({ onClose }: Props) {
+  const t = useT();
   const { activeNote } = useStore();
   const slides = activeNote ? htmlToSlides(activeNote.content) : [];
   const [idx, setIdx] = useState(0);
@@ -61,7 +63,7 @@ export default function PresentationMode({ onClose }: Props) {
     return (
       <div className="fixed inset-0 z-50 bg-black flex items-center justify-center">
         <div className="text-white/60 text-center">
-          <p className="text-lg mb-2">Aucun contenu à présenter</p>
+          <p className="text-lg mb-2">{t("Aucun contenu à présenter")}</p>
           <p className="text-sm">Utilise des titres H1/H2 ou des séparateurs — pour diviser en slides</p>
           <button onClick={onClose} className="mt-6 px-4 py-2 rounded bg-white/10 hover:bg-white/20 transition-colors text-sm">
             Fermer

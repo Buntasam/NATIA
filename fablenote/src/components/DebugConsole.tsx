@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { useT } from "../i18n";
 import { AlertTriangle, Download, Search, Trash2, X } from "lucide-react";
 import { type LogEntry, type LogLevel, subscribe, getBuffer, clearBuffer } from "../debug/logger";
 
@@ -35,6 +36,7 @@ function fmtTime(ts: number): string {
 }
 
 export default function DebugConsole() {
+  const t = useT();
   const [entries, setEntries] = useState<LogEntry[]>(getBuffer);
   const [filter, setFilter] = useState<Filter>("all");
   const [search, setSearch] = useState("");
@@ -101,21 +103,21 @@ export default function DebugConsole() {
           </span>
         )}
         {hasLoop && (
-          <span className="text-[10px] px-1 rounded bg-amber-400/15 text-amber-400 border border-amber-400/20" title="Boucle détectée">
+          <span className="text-[10px] px-1 rounded bg-amber-400/15 text-amber-400 border border-amber-400/20" title={t("Boucle détectée")}>
             ⟳ loop
           </span>
         )}
         <div className="ml-auto flex items-center gap-1">
           <button
             onClick={exportLog}
-            title="Exporter le log (.txt)"
+            title={t("Exporter le log (.txt)")}
             className="p-0.5 rounded text-muted hover:text-primary transition-colors"
           >
             <Download size={10} />
           </button>
           <button
             onClick={() => { clearBuffer(); setEntries([]); }}
-            title="Effacer tous les logs"
+            title={t("Effacer tous les logs")}
             className="p-0.5 rounded text-muted hover:text-primary transition-colors"
           >
             <Trash2 size={10} />
@@ -152,7 +154,7 @@ export default function DebugConsole() {
           <input
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            placeholder="filtrer…"
+            placeholder={t("filtrer…")}
             className="bg-transparent text-[10px] text-primary outline-none w-16 placeholder-muted"
           />
           {search && (
@@ -188,7 +190,7 @@ export default function DebugConsole() {
               <span className="text-muted/70 shrink-0 w-[52px] truncate select-none">{e.source}</span>
               <span className="text-secondary/80 min-w-0 break-all">{e.msg}</span>
               {e.loopFlag && (
-                <span className="shrink-0 text-amber-400 text-[9px] font-bold ml-auto" title="Même message répété ≥5× en 2s">
+                <span className="shrink-0 text-amber-400 text-[9px] font-bold ml-auto" title={t("Même message répété ≥5× en 2s")}>
                   ⟳
                 </span>
               )}

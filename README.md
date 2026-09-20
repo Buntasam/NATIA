@@ -9,275 +9,279 @@
  ▀█   █▀    ███    █▀     ▄████▀   █▀     ███    █▀  
                                                      
 ```
-🇫🇷 Développeur français
+🇫🇷 French developer
 
-> Application de prise de notes locale avec IA multi-provider, versionnage Git, chiffrement AES-256-GCM et support du dark mode.
+**English** · [Français](README.fr.md)
 
-NATIA est une application de bureau **cross-platform** (Windows, macOS, Linux) construite avec **Tauri 2** (backend Rust) et **React 18** (frontend TypeScript). Toutes les données sont stockées localement — aucun cloud requis.
+> Local note-taking app with multi-provider AI, Git versioning, AES-256-GCM encryption and dark mode support.
 
-![Aperçu de NATIA — éditeur, arborescence des notes et panneau IA en mode sombre](docs/screenshot.png)
+NATIA is a **cross-platform** desktop app (Windows, macOS, Linux) built with **Tauri 2** (Rust backend) and **React 18** (TypeScript frontend). All data is stored locally — no cloud required.
+
+![NATIA overview — editor, note tree and AI panel in dark mode](docs/screenshot.png)
 
 ---
 
-## Fonctionnalités
+## Features
 
-### Éditeur
-- **Éditeur riche** — TipTap avec support Markdown, titres, listes, blocs de code, tâches, surlignage, tableaux, images
-- **Post-its** — blocs repositionnables colorés dans la note
-- **Wikilinks** — liens `[[Titre de note]]` avec navigation directe
-- **Rappels** — blocs de rappel avec date/heure, notifications Windows natives à l'échéance
-- **Mode focus** — éditeur plein écran sans sidebar (`Échap` pour quitter)
-- **Mode présentation** — diaporama slide par slide sur le contenu de la note
-- **Auto-save** — sauvegarde automatique avec debounce (1,5 s contenu / 600 ms titre)
-- **Confirmation de fermeture** — dialogue de confirmation + indicateur de sauvegarde avant quitter
+### Editor
+- **Rich editor** — TipTap with Markdown support, headings, lists, code blocks, tasks, highlighting, tables, images
+- **Sticky notes** — colored, repositionable blocks inside a note
+- **Wikilinks** — `[[Note title]]` links with direct navigation
+- **Reminders** — reminder blocks with date/time, native Windows notifications when due
+- **Focus mode** — full-screen editor without the sidebar (`Esc` to exit)
+- **Presentation mode** — slide-by-slide slideshow of the note's content
+- **Auto-save** — automatic saving with debounce (1.5 s content / 600 ms title)
+- **Close confirmation** — confirmation dialog + save indicator before quitting
 
-### Organisation
-- **Dossiers hiérarchiques** — arborescence de dossiers imbriqués avec glisser-déposer
-- **Vue arborescence** — panneau maillage (├──/└──) de tous les dossiers et notes
-- **Vue graphe** — graphe interactif des wikilinks entre notes
-- **Vue calendrier** — visualisation des notes par date de création/modification
-- **Backlinks** — panneau listant toutes les notes qui pointent vers la note active
-- **Tags** — étiquettes colorées sur chaque note
-- **Corbeille** — suppression avec restauration ou suppression définitive
-- **Templates** — modèles de notes réutilisables
+### Organization
+- **Hierarchical folders** — nested folder tree with drag-and-drop
+- **Tree view** — ASCII tree panel (├──/└──) of all folders and notes
+- **Graph view** — interactive graph of wikilinks between notes
+- **Calendar view** — notes visualized by creation/modification date
+- **Backlinks** — panel listing every note that points to the active note
+- **Tags** — colored labels on each note
+- **Trash** — deletion with restore or permanent removal
+- **Templates** — reusable note templates
 
-### IA multi-provider
-- **Ollama** — IA locale (Gemma, Phi, Qwen, Llama, Mistral…)
+### Multi-provider AI
+- **Ollama** — local AI (Gemma, Phi, Qwen, Llama, Mistral…)
 - **Claude API** — Anthropic (claude-haiku, claude-sonnet…)
 - **OpenAI** — GPT-4o, GPT-4o-mini…
 - **Gemini** — Google Gemini 2.0 Flash…
 - **Mistral** — Mistral Small, Medium…
-- **Claude CLI** — via `claude` CLI local (sans clé API)
-- **Connexions personnalisées** — gestionnaire de clés API avec nom, fournisseur, couleur et modèle
-- **Opérations** — correction orthographique, résumé, génération de titre, tri automatique, traduction, formalisation en email, continuation de texte
-- **Conversation** — panneau chat avec contexte de la note active et historique par note
-- **Mémoire IA** — contexte persistant injecté dans les prompts
-- **Génération d'image** — via les providers qui le supportent
-- **Pull Ollama** — téléchargement de nouveaux modèles directement depuis l'app
-- **Streaming** — réponses affichées token par token pour tous les providers
-- **Mode debug** — panneau de trace complet (prompt, réponse, temps, modèle)
+- **Claude CLI** — via the local `claude` CLI (no API key)
+- **Custom connections** — API-key manager with name, provider, color and model
+- **Operations** — spell-checking, summary, title generation, auto-sorting, translation, email formalization, text continuation
+- **Conversation** — chat panel with the active note's context and per-note history
+- **AI memory** — persistent context injected into prompts
+- **Image generation** — via providers that support it
+- **Ollama pull** — download new models directly from the app
+- **Streaming** — token-by-token responses for every provider
+- **Debug mode** — full trace panel (prompt, response, time, model)
 
-![Paramètres → Intelligence artificielle : choix du fournisseur (Ollama, Claude, OpenAI, Gemini, Mistral, Claude CLI), URL du serveur et modèle](docs/screenshot-ia.png)
+![Settings → Artificial intelligence: provider selection (Ollama, Claude, OpenAI, Gemini, Mistral, Claude CLI), server URL and model](docs/screenshot-ia.png)
 
-### Recherche et navigation
-- **Recherche plein texte** — recherche dans les titres et contenus en temps réel
-- **Quick open** — `Ctrl+P` pour ouvrir une note par nom (notes récentes en priorité)
+### Search and navigation
+- **Full-text search** — real-time search across titles and content
+- **Quick open** — `Ctrl+P` to open a note by name (recent notes first)
 
-### Versionnage
-- **Versionnage Git** — chaque sauvegarde crée un commit ; navigation dans l'historique et restauration
-- **Diff** — comparaison entre versions
+### Versioning
+- **Git versioning** — each save creates a commit; browse history and restore
+- **Diff** — comparison between versions
 
-![Panneau Versions : historique Git par note, nombre de versions conservées et mode de sauvegarde (équilibré, automatique ou manuel)](docs/screenshot-versionnage.png)
+![Versions panel: per-note Git history, number of versions kept and save mode (balanced, automatic or manual)](docs/screenshot-versionnage.png)
 
-### Sécurité et données
-- **Chiffrement AES-256-GCM** — toutes les données chiffrées au repos avec dérivation Argon2id
-- **Protection par mot de passe** — PIN numérique (4-8 chiffres) ou mot de passe alphanumérique
-- **Verrouillage automatique** — verrou après N minutes d'inactivité (configurable)
-- **Export ZIP** — export complet ou note par note
-- **Thèmes** — 9 thèmes (Clair, Sombre, Minuit, Encre, Forêt, Brume, Sakura, Crépuscule, Océan), persistants et synchronisés avec la barre de titre native
-- **Indice de récupération** — indice optionnel affiché sur l'écran de verrouillage + réinitialisation en cas de code oublié
-- **Hors ligne first** — aucune dépendance cloud, données 100 % locales (SQLite + fichiers HTML)
+### Security and data
+- **AES-256-GCM encryption** — all data encrypted at rest with Argon2id derivation
+- **Password protection** — numeric PIN (4-8 digits) or alphanumeric password
+- **Auto-lock** — locks after N minutes of inactivity (configurable)
+- **ZIP export** — full export or note by note
+- **Themes** — 9 themes (Light, Dark, Midnight, Ink, Forest, Mist, Sakura, Dusk, Ocean), persistent and synced with the native title bar
+- **Recovery hint** — optional hint shown on the lock screen + reset if you forget your code
+- **Offline first** — no cloud dependency, 100% local data (SQLite + HTML files)
 
-![Paramètres → Sécurité : chiffrement AES-256-GCM, code PIN, indice de récupération et verrouillage automatique](docs/screenshot-securite.png)
+![Settings → Security: AES-256-GCM encryption, PIN code, recovery hint and auto-lock](docs/screenshot-securite.png)
 
-![Paramètres → Apparence : sélecteur de thème (9 thèmes), police, taille et largeur de l'éditeur](docs/screenshot-apparence.png)
+![Settings → Appearance: theme picker (9 themes), font, editor size and width](docs/screenshot-apparence.png)
 
-### Divers
-- **Enregistreur vocal** — transcription audio via IA
-- **Statistiques** — comptage de mots, notes, activité
-- **D20 Roller** — dé à 20 faces intégré
-- **Stats globales** — vue d'ensemble de toute la base de notes
+### Misc
+- **Voice recorder** — audio transcription via AI
+- **Statistics** — word, note and activity counts
+- **D20 Roller** — built-in 20-sided die
+- **Global stats** — overview of the whole note base
 
 ---
 
-## Raccourcis clavier
+## Keyboard shortcuts
 
-| Raccourci | Action |
+| Shortcut | Action |
 |---|---|
-| `Ctrl+N` | Nouvelle note |
-| `Ctrl+F` | Rechercher |
-| `Ctrl+,` | Paramètres |
+| `Ctrl+N` | New note |
+| `Ctrl+F` | Search |
+| `Ctrl+,` | Settings |
 | `Ctrl+P` | Quick open |
-| `Ctrl+G` | Vue graphe |
-| `Ctrl+Shift+A` | Panneau IA |
-| `Ctrl+Shift+H` | Historique Git |
-| `Échap` | Fermer le panneau actif / quitter le mode focus |
+| `Ctrl+G` | Graph view |
+| `Ctrl+Shift+A` | AI panel |
+| `Ctrl+Shift+H` | Git history |
+| `Esc` | Close the active panel / exit focus mode |
 
 ---
 
-## Stack technique
+## Tech stack
 
-| Couche | Technologie |
+| Layer | Technology |
 |---|---|
 | UI | React 18, TypeScript, Tailwind CSS 3 |
-| Éditeur | TipTap 2 (ProseMirror) |
+| Editor | TipTap 2 (ProseMirror) |
 | State | Zustand |
 | Desktop shell | Tauri 2 |
 | Backend | Rust (rusqlite, reqwest, chrono, uuid) |
-| Chiffrement | aes-gcm 0.10 (AES-256-GCM), argon2 0.5 (Argon2id), rand 0.8, base64 0.22 |
-| Base de données | SQLite |
-| Versionnage | Git (via `std::process::Command`) |
-| IA | Ollama · Claude API · OpenAI · Gemini · Mistral · Claude CLI |
-| Plugins Tauri | tauri-plugin-notification, tauri-plugin-dialog |
+| Encryption | aes-gcm 0.10 (AES-256-GCM), argon2 0.5 (Argon2id), rand 0.8, base64 0.22 |
+| Database | SQLite |
+| Versioning | Git (via `std::process::Command`) |
+| AI | Ollama · Claude API · OpenAI · Gemini · Mistral · Claude CLI |
+| Tauri plugins | tauri-plugin-notification, tauri-plugin-dialog |
 | Build | Vite 5 |
 
 ---
 
-## Prérequis
+## Prerequisites
 
 - [Node.js](https://nodejs.org/) ≥ 18
 - [Rust](https://www.rust-lang.org/tools/install) (stable, via `rustup`)
-- [Tauri CLI](https://tauri.app/start/prerequisites/) — installé automatiquement via npm
-- [Git](https://git-scm.com/) — nécessaire pour le versionnage des notes
-- [Ollama](https://ollama.com/) *(optionnel)* — pour l'IA locale
+- [Tauri CLI](https://tauri.app/start/prerequisites/) — installed automatically via npm
+- [Git](https://git-scm.com/) — required for note versioning
+- [Ollama](https://ollama.com/) *(optional)* — for local AI
 
 ---
 
-## Installation et développement
+## Install and develop
 
 ```bash
-# 1. Cloner le dépôt
-git clone https://github.com/votre-nom/natia.git
-cd natia/fablenote
+# 1. Clone the repository
+git clone https://github.com/Buntasam/NATIA.git
+cd NATIA/fablenote
 
-# 2. Installer les dépendances
+# 2. Install dependencies
 npm install
 
-# 3. Lancer en mode développement
+# 3. Run in development mode
 npm run tauri dev
 ```
 
-Le frontend démarre sur `http://localhost:1420` ; Tauri ouvre automatiquement la fenêtre native.
+The frontend starts on `http://localhost:1420`; Tauri opens the native window automatically.
 
 ---
 
-## Build de production
+## Production build
 
 ```bash
 cd fablenote
 npm run tauri build
 ```
 
-Les installeurs (`.msi` Windows, `.dmg` macOS, `.AppImage` Linux) sont générés dans `src-tauri/target/release/bundle/`.
+The installers (`.msi` Windows, `.dmg` macOS, `.AppImage` Linux) are generated in `src-tauri/target/release/bundle/`.
 
 ---
 
-## Structure du projet
+## Project structure
 
 ```
 fablenote/
-├── src/                          # Frontend React
+├── src/                          # React frontend
 │   ├── components/
-│   │   ├── Layout.tsx            # Orchestrateur principal + QuickOpen + ConvPanel
-│   │   ├── Sidebar.tsx           # Navigation, recherche, toggle thème, dossiers, CalendarPanel, GraphPanel
-│   │   ├── TreeMapPanel.tsx      # Vue maillage (├──/└──) de l'arborescence
-│   │   ├── CalendarPanel.tsx     # Vue calendrier des notes
-│   │   ├── GraphPanel.tsx        # Graphe interactif des wikilinks
-│   │   ├── BacklinksPanel.tsx    # Panneau des backlinks de la note active
-│   │   ├── TemplatesPanel.tsx    # Modèles de notes réutilisables
-│   │   ├── LockScreen.tsx        # Écran de verrouillage (PIN / alphanumérique)
-│   │   ├── Editor.tsx            # Éditeur TipTap + auto-save + fermeture
-│   │   ├── Toolbar.tsx           # Barre de formatage
-│   │   ├── AiPanel.tsx           # Panneau IA + ConvPanel + debug trace
-│   │   ├── ApiKeysPanel.tsx      # Gestionnaire de connexions IA personnalisées
-│   │   ├── ImageGenPanel.tsx     # Génération d'image
-│   │   ├── VoiceRecorder.tsx     # Enregistreur vocal + transcription
-│   │   ├── VersionTree.tsx       # Historique Git + diff + restauration
-│   │   ├── TrashPanel.tsx        # Corbeille avec restauration / suppression définitive
-│   │   ├── StatsPanel.tsx        # Statistiques globales
-│   │   ├── PresentationMode.tsx  # Mode présentation diaporama
-│   │   ├── D20Roller.tsx         # Dé à 20 faces
-│   │   ├── ReminderDaemon.tsx    # Daemon de vérification des rappels (notifs système)
-│   │   ├── CloseOverlay.tsx      # Confirmation de fermeture + overlay sauvegarde
-│   │   ├── Disclaimer.tsx        # Écran d'accueil beta
-│   │   └── Settings.tsx          # Paramètres (modèle, prompts, sécurité, éditeur…)
+│   │   ├── Layout.tsx            # Main orchestrator + QuickOpen + ConvPanel
+│   │   ├── Sidebar.tsx           # Navigation, search, theme toggle, folders, CalendarPanel, GraphPanel
+│   │   ├── TreeMapPanel.tsx      # ASCII tree view (├──/└──) of the hierarchy
+│   │   ├── CalendarPanel.tsx     # Calendar view of notes
+│   │   ├── GraphPanel.tsx        # Interactive wikilink graph
+│   │   ├── BacklinksPanel.tsx    # Backlinks panel for the active note
+│   │   ├── TemplatesPanel.tsx    # Reusable note templates
+│   │   ├── LockScreen.tsx        # Lock screen (PIN / alphanumeric)
+│   │   ├── Editor.tsx            # TipTap editor + auto-save + close
+│   │   ├── Toolbar.tsx           # Formatting toolbar
+│   │   ├── AiPanel.tsx           # AI panel + ConvPanel + debug trace
+│   │   ├── ApiKeysPanel.tsx      # Custom AI connection manager
+│   │   ├── AiManual.tsx          # In-app AI configuration manual
+│   │   ├── ImageGenPanel.tsx     # Image generation
+│   │   ├── VoiceRecorder.tsx     # Voice recorder + transcription
+│   │   ├── VersionTree.tsx       # Git history + diff + restore
+│   │   ├── TrashPanel.tsx        # Trash with restore / permanent delete
+│   │   ├── StatsPanel.tsx        # Global statistics
+│   │   ├── PresentationMode.tsx  # Slideshow presentation mode
+│   │   ├── D20Roller.tsx         # 20-sided die
+│   │   ├── ReminderDaemon.tsx    # Reminder check daemon (system notifications)
+│   │   ├── CloseOverlay.tsx      # Close confirmation + save overlay
+│   │   ├── Disclaimer.tsx        # Beta welcome screen
+│   │   └── Settings.tsx          # Settings (model, prompts, security, editor…)
 │   ├── extensions/
-│   │   ├── PostIt.tsx            # Extension TipTap post-it
-│   │   ├── Wikilink.tsx          # Extension TipTap wikilink [[Note]]
-│   │   └── Reminder.tsx          # Extension TipTap rappel avec date
+│   │   ├── PostIt.tsx            # TipTap sticky-note extension
+│   │   ├── Wikilink.tsx          # TipTap wikilink [[Note]] extension
+│   │   └── Reminder.tsx          # TipTap reminder-with-date extension
 │   ├── ai/
-│   │   ├── CorrectionModal.tsx   # Modale accepter/refuser la correction IA
-│   │   ├── OpButton.tsx          # Bouton d'opération IA
-│   │   └── TraceRow.tsx          # Ligne de trace debug IA
+│   │   ├── CorrectionModal.tsx   # Accept/reject AI correction modal
+│   │   ├── OpButton.tsx          # AI operation button
+│   │   └── TraceRow.tsx          # AI debug trace row
 │   ├── lib/
-│   │   └── aiInvoke.ts           # Abstraction multi-provider (aiChat, aiStream)
-│   ├── store/index.ts            # State global Zustand
-│   ├── hooks/useOllama.ts        # Hook requêtes Ollama
-│   ├── types/index.ts            # Types TypeScript
-│   └── index.css                 # Variables CSS (thèmes clair/sombre)
+│   │   └── aiInvoke.ts           # Multi-provider abstraction (aiChat, aiStream)
+│   ├── i18n.ts                   # Interface translations (French/English)
+│   ├── store/index.ts            # Global Zustand state
+│   ├── hooks/useOllama.ts        # Ollama request hook
+│   ├── types/index.ts            # TypeScript types
+│   └── index.css                 # CSS variables (light/dark themes)
 ├── src-tauri/
 │   ├── src/
-│   │   ├── lib.rs                # Point d'entrée Tauri + types + setup
-│   │   ├── notes.rs              # Commandes CRUD notes, dossiers, Git, export
-│   │   ├── settings.rs           # Commandes paramètres, clés API, couleurs, sécurité
-│   │   ├── ai.rs                 # Commandes IA (Ollama, Claude, OpenAI, Gemini, Mistral, CLI)
+│   │   ├── lib.rs                # Tauri entry point + types + setup
+│   │   ├── notes.rs              # Notes/folders/Git/export CRUD commands
+│   │   ├── settings.rs           # Settings, API keys, colors, security commands
+│   │   ├── ai.rs                 # AI commands (Ollama, Claude, OpenAI, Gemini, Mistral, CLI)
 │   │   ├── crypto.rs             # AES-256-GCM + Argon2id
-│   │   └── db.rs                 # Initialisation SQLite + migrations
-│   ├── Cargo.toml                # Dépendances Rust
-│   ├── capabilities/default.json # Permissions Tauri (notification, dialog…)
-│   └── tauri.conf.json           # Config fenêtre, bundle, sécurité
-├── index.html                    # Point d'entrée HTML
-├── tailwind.config.js            # Config Tailwind (couleurs CSS variables)
-└── vite.config.ts                # Config Vite
+│   │   └── db.rs                 # SQLite initialization + migrations
+│   ├── Cargo.toml                # Rust dependencies
+│   ├── capabilities/default.json # Tauri permissions (notification, dialog…)
+│   └── tauri.conf.json           # Window, bundle and security config
+├── index.html                    # HTML entry point
+├── tailwind.config.js            # Tailwind config (CSS-variable colors)
+└── vite.config.ts                # Vite config
 ```
 
 ---
 
-## Sécurité et chiffrement
+## Security and encryption
 
-NATIA chiffre toutes les données au repos dès qu'un mot de passe est activé. Voir [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) pour le détail complet.
+NATIA encrypts all data at rest as soon as a password is enabled. See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for the full details.
 
-**Algorithmes** :
-- **Dérivation de clé** — Argon2id (19 456 KB RAM, 2 itérations, 1 thread) → 64 octets
-  - Octets [0..32] : hash de vérification stocké en DB
-  - Octets [32..64] : clé AES-256 tenue en RAM uniquement
-- **Chiffrement** — AES-256-GCM, nonce aléatoire 12 octets par valeur
+**Algorithms**:
+- **Key derivation** — Argon2id (19,456 KB RAM, 2 iterations, 1 thread) → 64 bytes
+  - Bytes [0..32]: verification hash stored in the DB
+  - Bytes [32..64]: AES-256 key kept in RAM only
+- **Encryption** — AES-256-GCM, random 12-byte nonce per value
 - **Format** — `ENC:v1:{nonce_base64}:{ciphertext_base64}`
-- **Portée** — titres et tags des notes, contenu HTML, clés API, paramètres, versions de prompts
+- **Scope** — note titles and tags, HTML content, API keys, settings, prompt versions
 
-**Types de mot de passe** :
-- **PIN** — 4 à 8 chiffres, pavé numérique, bouton ✓ pour valider
-- **Alphanumérique** — mot de passe libre, champ masqué avec toggle œil, Entrée ou bouton pour valider
+**Password types**:
+- **PIN** — 4 to 8 digits, numeric keypad, ✓ button to confirm
+- **Alphanumeric** — free-form password, masked field with eye toggle, Enter or button to confirm
 
-**Gestion** : Paramètres → Avancé → Sécurité — activer / changer / désactiver / verrouiller maintenant.
+**Management**: Settings → Security — enable / change / disable / lock now. A **recovery hint** and a **reset** option (for a forgotten code) are available too.
 
 ---
 
-## Configuration IA
+## AI configuration
 
 ### Ollama (local)
-1. Installer et lancer [Ollama](https://ollama.com/)
-2. Télécharger un modèle : `ollama pull gemma3:1b` (ou tout autre modèle)
-3. Dans NATIA → ⚙️ Paramètres, saisir l'URL Ollama et sélectionner le modèle
+1. Install and start [Ollama](https://ollama.com/)
+2. Download a model: `ollama pull gemma3:1b` (or any other model)
+3. In NATIA → ⚙️ Settings, enter the Ollama URL and select the model
 
-> ⚠️ **Note sur les performances** : l'IA locale peut être très lente sur de longues notes. Privilégier des modèles légers : `gemma3:1b`, `phi4-mini`, `qwen2.5:1.5b`.
+> ⚠️ **Performance note**: local AI can be very slow on long notes. Prefer lightweight models: `gemma3:1b`, `phi4-mini`, `qwen2.5:1.5b`.
 
-### Providers cloud
-Dans Paramètres → Connexions, ajouter une clé API avec le provider souhaité (Claude, OpenAI, Gemini, Mistral). La connexion devient disponible dans la barre de sélection du panneau IA.
+### Cloud providers
+In Settings → AI, add an API key with the provider you want (Claude, OpenAI, Gemini, Mistral). The connection then becomes available in the AI panel's provider selector. See the built-in **Manual** (Settings → Manual) for a step-by-step guide to every provider.
 
 ---
 
-## Données utilisateur
+## User data
 
-Toutes les données sont stockées dans le répertoire de données applicatif de l'OS :
+All data is stored in the OS application-data directory:
 
-| OS | Chemin |
+| OS | Path |
 |---|---|
-| Windows | `%APPDATA%\com.fablenote.app\` |
-| macOS | `~/Library/Application Support/com.fablenote.app/` |
-| Linux | `~/.local/share/com.fablenote.app/` |
+| Windows | `%APPDATA%\com.natia.app\` |
+| macOS | `~/Library/Application Support/com.natia.app/` |
+| Linux | `~/.local/share/com.natia.app/` |
 
-- `natia.db` — base SQLite (métadonnées notes, dossiers, paramètres, clés API, config sécurité)
-- `notes/` — fichiers HTML des notes + dépôt Git interne (chiffrés si mot de passe activé)
-
----
-
-## Contribuer
-
-Voir [docs/CONTRIBUTING.md](docs/CONTRIBUTING.md) pour le guide de contribution.
+- `natia.db` — SQLite database (note metadata, folders, settings, API keys, security config)
+- `notes/` — notes' HTML files + internal Git repository (encrypted if a password is enabled)
 
 ---
 
-## Licence
+## Contributing
+
+See [docs/CONTRIBUTING.md](docs/CONTRIBUTING.md) for the contribution guide.
+
+---
+
+## License
 
 MIT

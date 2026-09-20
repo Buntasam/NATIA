@@ -1,4 +1,5 @@
 import React, { useState, useRef, useCallback, useEffect, useId } from "react";
+import { useT } from "../i18n";
 import { GripVertical } from "lucide-react";
 
 const POS_KEY   = "natia_dice_pos";
@@ -132,6 +133,7 @@ function D20Face({
 // ─── Main component ───────────────────────────────────────────────────────────
 
 export default function D20Roller() {
+  const t = useT();
   // Only render if feature is enabled
   if (localStorage.getItem(ENABLED_KEY) !== "1") return null;
 
@@ -139,6 +141,7 @@ export default function D20Roller() {
 }
 
 function D20RollerInner() {
+  const t = useT();
   const uid = useId().replace(/:/g, "");
   const defaultPos = { x: Math.max(window.innerWidth - 176 - 20, 20), y: Math.max(window.innerHeight - 260 - 80, 20) };
   const [pos, setPos]         = useState(() => savedPos() ?? defaultPos);
@@ -237,7 +240,7 @@ function D20RollerInner() {
         {/* Result label */}
         <div className="h-[18px] flex items-center justify-center">
           {rolling ? (
-            <span className="text-[10px] text-muted animate-pulse">Lancer en cours…</span>
+            <span className="text-[10px] text-muted animate-pulse">{t("Lancer en cours…")}</span>
           ) : result !== null ? (
             <span key={result} className={`text-[11px] font-semibold d20-fade-in ${
               isCrit ? "text-amber-400" : isFail ? "text-red-400" : "text-secondary"

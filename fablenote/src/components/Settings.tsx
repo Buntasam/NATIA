@@ -10,6 +10,7 @@ import StatsPanel from "./StatsPanel";
 import AiManual from "./AiManual";
 import React from "react";
 import { Section, Field, Input, SecInput } from "./settings/SettingsWidgets";
+import { useT } from "../i18n";
 
 // ─── Catégories de la navigation latérale ─────────────────────────────────────
 
@@ -128,7 +129,8 @@ function fmtDate(iso: string) {
 }
 
 export default function Settings() {
-  const { settings, saveSettings, toggleSettings, theme, setTheme, isDark, hasPassword, passwordType, lock, setupPassword, changePassword, removePassword, getPasswordHint, setPasswordHint, memoryEnabled, setMemoryEnabled, memoryGraphEnabled, setMemoryGraphEnabled, memoryNodes, clearMemoryNodes } = useStore();
+  const { settings, saveSettings, toggleSettings, theme, setTheme, isDark, lang, setLang, hasPassword, passwordType, lock, setupPassword, changePassword, removePassword, getPasswordHint, setPasswordHint, memoryEnabled, setMemoryEnabled, memoryGraphEnabled, setMemoryGraphEnabled, memoryNodes, clearMemoryNodes } = useStore();
+  const t = useT();
   const [confirmClear, setConfirmClear] = React.useState(false);
   const [form, setForm] = useState<SettingsType>({ ...settings });
   const [cat, setCat] = useState<SettingsCat>(() => {
@@ -364,7 +366,7 @@ export default function Settings() {
 
   // Security section (shared between tabs)
   const securitySection = (
-    <Section title="Sécurité">
+    <Section title={t("Sécurité")}>
       {!hasPassword && secMode === "idle" && (
         <div className="flex flex-col gap-3">
           <div className="flex items-start justify-between gap-4">
@@ -405,7 +407,7 @@ export default function Settings() {
               <input
                 value={secHint}
                 onChange={(e) => setSecHint(e.target.value)}
-                placeholder="Ex : mon année de naissance à l'envers"
+                placeholder={t("Ex : mon année de naissance à l'envers")}
                 maxLength={120}
                 className="flex-1 px-3 py-2 rounded-lg bg-hover border border-border text-xs text-primary placeholder-muted outline-none focus:border-accent/50 transition-colors"
               />
@@ -434,7 +436,7 @@ export default function Settings() {
             <input
               value={secHint}
               onChange={(e) => setSecHint(e.target.value)}
-              placeholder="Indice (optionnel) — pour t'aider si tu oublies"
+              placeholder={t("Indice (optionnel) — pour t'aider si tu oublies")}
               maxLength={120}
               className="w-full px-3 py-2 rounded-lg bg-hover border border-border text-xs text-primary placeholder-muted outline-none focus:border-accent/50 transition-colors"
             />
@@ -463,7 +465,7 @@ export default function Settings() {
           <input
             value={secHint}
             onChange={(e) => setSecHint(e.target.value)}
-            placeholder="Indice (optionnel)"
+            placeholder={t("Indice (optionnel)")}
             maxLength={120}
             className="w-full px-3 py-2 rounded-lg bg-hover border border-border text-xs text-primary placeholder-muted outline-none focus:border-accent/50 transition-colors"
           />
@@ -500,11 +502,11 @@ export default function Settings() {
             onChange={(e) => set("auto_lock_minutes", Number(e.target.value))}
             className="text-xs bg-hover border border-border rounded-lg px-2 py-1.5 text-secondary focus:outline-none focus:border-accent/50"
           >
-            <option value={0}>Désactivé</option>
-            <option value={5}>5 min</option>
-            <option value={15}>15 min</option>
-            <option value={30}>30 min</option>
-            <option value={60}>1 heure</option>
+            <option value={0}>{t("Désactivé")}</option>
+            <option value={5}>{t("5 min")}</option>
+            <option value={15}>{t("15 min")}</option>
+            <option value={30}>{t("30 min")}</option>
+            <option value={60}>{t("1 heure")}</option>
           </select>
         </div>
       )}
@@ -515,11 +517,11 @@ export default function Settings() {
 
   const aiContent = (
     <>
-      <Section title="Clés API & connexions">
+      <Section title={t("Clés API & connexions")}>
         <ApiKeysPanel />
       </Section>
 
-      <Section title="Intelligence artificielle">
+      <Section title={t("Intelligence artificielle")}>
         {/* Provider selector */}
         <div className="flex flex-col gap-1.5">
           <label className="text-xs text-muted">Fournisseur</label>
@@ -543,12 +545,12 @@ export default function Settings() {
         {/* Ollama fields */}
         {form.ai_provider === "ollama" && (
           <>
-            <Field label="URL serveur Ollama" id="ollama_url">
-              <Input id="ollama_url" value={form.ollama_url} onChange={(v) => set("ollama_url", v)} placeholder="http://localhost:11434" />
+            <Field label={t("URL serveur Ollama")} id="ollama_url">
+              <Input id="ollama_url" value={form.ollama_url} onChange={(v) => set("ollama_url", v)} placeholder={t("http://localhost:11434")} />
               <p className="text-[10px] text-muted mt-1">Serveur Ollama local. Modifie uniquement si tu as changé le port.</p>
             </Field>
-            <Field label="Modèle par défaut" id="default_model">
-              <Input id="default_model" value={form.default_model} onChange={(v) => set("default_model", v)} placeholder="gemma3:1b, mistral…" />
+            <Field label={t("Modèle par défaut")} id="default_model">
+              <Input id="default_model" value={form.default_model} onChange={(v) => set("default_model", v)} placeholder={t("gemma3:1b, mistral…")} />
               <p className="text-[10px] text-muted mt-1">Nom exact du modèle installé sur ton serveur Ollama.</p>
             </Field>
           </>
@@ -557,22 +559,22 @@ export default function Settings() {
         {/* Claude fields */}
         {form.ai_provider === "claude" && (
           <>
-            <Field label="Clé API Anthropic" id="claude_api_key">
+            <Field label={t("Clé API Anthropic")} id="claude_api_key">
               <div className="relative">
-                <Input id="claude_api_key" value={form.claude_api_key} onChange={(v) => set("claude_api_key", v)} placeholder="sk-ant-api03-…" type={showClaudeKey ? "text" : "password"} />
+                <Input id="claude_api_key" value={form.claude_api_key} onChange={(v) => set("claude_api_key", v)} placeholder={t("sk-ant-api03-…")} type={showClaudeKey ? "text" : "password"} />
                 <button onClick={() => setShowClaudeKey((s) => !s)} className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted hover:text-primary transition-colors">
                   {showClaudeKey ? <EyeOff size={13} /> : <Eye size={13} />}
                 </button>
               </div>
               <p className="text-[10px] text-muted mt-1">Crée ta clé sur <strong className="text-secondary">console.anthropic.com</strong> → API Keys. Free tier disponible.</p>
             </Field>
-            <Field label="Modèle" id="claude_model">
+            <Field label={t("Modèle")} id="claude_model">
               <div className="relative">
                 <select id="claude_model" value={form.claude_model} onChange={(e) => set("claude_model", e.target.value)}
                   className="w-full bg-hover border border-border rounded-lg px-3 py-2 text-sm text-primary outline-none appearance-none cursor-pointer">
-                  <option value="claude-haiku-4-5-20251001">Claude Haiku 4.5 — rapide · économique</option>
-                  <option value="claude-sonnet-4-6">Claude Sonnet 4.6 — équilibré · recommandé</option>
-                  <option value="claude-opus-4-8">Claude Opus 4.8 — puissant · plus lent</option>
+                  <option value="claude-haiku-4-5-20251001">{t("Claude Haiku 4.5 — rapide · économique")}</option>
+                  <option value="claude-sonnet-4-6">{t("Claude Sonnet 4.6 — équilibré · recommandé")}</option>
+                  <option value="claude-opus-4-8">{t("Claude Opus 4.8 — puissant · plus lent")}</option>
                 </select>
                 <ChevronDown size={13} className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted pointer-events-none" />
               </div>
@@ -583,22 +585,22 @@ export default function Settings() {
         {/* OpenAI fields */}
         {form.ai_provider === "openai" && (
           <>
-            <Field label="Clé API OpenAI" id="openai_api_key">
+            <Field label={t("Clé API OpenAI")} id="openai_api_key">
               <div className="relative">
-                <Input id="openai_api_key" value={form.openai_api_key} onChange={(v) => set("openai_api_key", v)} placeholder="sk-…" type={showOpenAiKey ? "text" : "password"} />
+                <Input id="openai_api_key" value={form.openai_api_key} onChange={(v) => set("openai_api_key", v)} placeholder={t("sk-…")} type={showOpenAiKey ? "text" : "password"} />
                 <button onClick={() => setShowOpenAiKey((s) => !s)} className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted hover:text-primary transition-colors">
                   {showOpenAiKey ? <EyeOff size={13} /> : <Eye size={13} />}
                 </button>
               </div>
               <p className="text-[10px] text-muted mt-1">Crée ta clé sur <strong className="text-secondary">platform.openai.com</strong> → API Keys. Free tier disponible.</p>
             </Field>
-            <Field label="Modèle" id="openai_model">
+            <Field label={t("Modèle")} id="openai_model">
               <div className="relative">
                 <select id="openai_model" value={form.openai_model} onChange={(e) => set("openai_model", e.target.value)}
                   className="w-full bg-hover border border-border rounded-lg px-3 py-2 text-sm text-primary outline-none appearance-none cursor-pointer">
-                  <option value="gpt-4o-mini">GPT-4o Mini — rapide · économique</option>
-                  <option value="gpt-4o">GPT-4o — équilibré · recommandé</option>
-                  <option value="gpt-4-turbo">GPT-4 Turbo — puissant</option>
+                  <option value="gpt-4o-mini">{t("GPT-4o Mini — rapide · économique")}</option>
+                  <option value="gpt-4o">{t("GPT-4o — équilibré · recommandé")}</option>
+                  <option value="gpt-4-turbo">{t("GPT-4 Turbo — puissant")}</option>
                 </select>
                 <ChevronDown size={13} className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted pointer-events-none" />
               </div>
@@ -609,22 +611,22 @@ export default function Settings() {
         {/* Gemini fields */}
         {form.ai_provider === "gemini" && (
           <>
-            <Field label="Clé API Google" id="gemini_api_key">
+            <Field label={t("Clé API Google")} id="gemini_api_key">
               <div className="relative">
-                <Input id="gemini_api_key" value={form.gemini_api_key} onChange={(v) => set("gemini_api_key", v)} placeholder="AIza…" type={showGeminiKey ? "text" : "password"} />
+                <Input id="gemini_api_key" value={form.gemini_api_key} onChange={(v) => set("gemini_api_key", v)} placeholder={t("AIza…")} type={showGeminiKey ? "text" : "password"} />
                 <button onClick={() => setShowGeminiKey((s) => !s)} className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted hover:text-primary transition-colors">
                   {showGeminiKey ? <EyeOff size={13} /> : <Eye size={13} />}
                 </button>
               </div>
               <p className="text-[10px] text-muted mt-1">Crée ta clé sur <strong className="text-secondary">aistudio.google.com</strong> → Get API Key. Free tier généreux.</p>
             </Field>
-            <Field label="Modèle" id="gemini_model">
+            <Field label={t("Modèle")} id="gemini_model">
               <div className="relative">
                 <select id="gemini_model" value={form.gemini_model} onChange={(e) => set("gemini_model", e.target.value)}
                   className="w-full bg-hover border border-border rounded-lg px-3 py-2 text-sm text-primary outline-none appearance-none cursor-pointer">
-                  <option value="gemini-2.0-flash">Gemini 2.0 Flash — rapide · recommandé</option>
-                  <option value="gemini-1.5-flash">Gemini 1.5 Flash — économique</option>
-                  <option value="gemini-1.5-pro">Gemini 1.5 Pro — puissant</option>
+                  <option value="gemini-2.0-flash">{t("Gemini 2.0 Flash — rapide · recommandé")}</option>
+                  <option value="gemini-1.5-flash">{t("Gemini 1.5 Flash — économique")}</option>
+                  <option value="gemini-1.5-pro">{t("Gemini 1.5 Pro — puissant")}</option>
                 </select>
                 <ChevronDown size={13} className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted pointer-events-none" />
               </div>
@@ -635,22 +637,22 @@ export default function Settings() {
         {/* Mistral fields */}
         {form.ai_provider === "mistral" && (
           <>
-            <Field label="Clé API Mistral" id="mistral_api_key">
+            <Field label={t("Clé API Mistral")} id="mistral_api_key">
               <div className="relative">
-                <Input id="mistral_api_key" value={form.mistral_api_key} onChange={(v) => set("mistral_api_key", v)} placeholder="…" type={showMistralKey ? "text" : "password"} />
+                <Input id="mistral_api_key" value={form.mistral_api_key} onChange={(v) => set("mistral_api_key", v)} placeholder={t("…")} type={showMistralKey ? "text" : "password"} />
                 <button onClick={() => setShowMistralKey((s) => !s)} className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted hover:text-primary transition-colors">
                   {showMistralKey ? <EyeOff size={13} /> : <Eye size={13} />}
                 </button>
               </div>
               <p className="text-[10px] text-muted mt-1">Crée ta clé sur <strong className="text-secondary">console.mistral.ai</strong> → API Keys.</p>
             </Field>
-            <Field label="Modèle" id="mistral_model">
+            <Field label={t("Modèle")} id="mistral_model">
               <div className="relative">
                 <select id="mistral_model" value={form.mistral_model} onChange={(e) => set("mistral_model", e.target.value)}
                   className="w-full bg-hover border border-border rounded-lg px-3 py-2 text-sm text-primary outline-none appearance-none cursor-pointer">
-                  <option value="mistral-small-latest">Mistral Small — rapide · économique</option>
-                  <option value="mistral-medium-latest">Mistral Medium — équilibré</option>
-                  <option value="mistral-large-latest">Mistral Large — puissant</option>
+                  <option value="mistral-small-latest">{t("Mistral Small — rapide · économique")}</option>
+                  <option value="mistral-medium-latest">{t("Mistral Medium — équilibré")}</option>
+                  <option value="mistral-large-latest">{t("Mistral Large — puissant")}</option>
                 </select>
                 <ChevronDown size={13} className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted pointer-events-none" />
               </div>
@@ -725,9 +727,9 @@ export default function Settings() {
             className="w-full accent-accent"
           />
           <div className="flex justify-between text-[9px] text-muted mt-0.5">
-            <span>0.0 — Déterministe</span>
-            <span>0.7 — Équilibré</span>
-            <span>2.0 — Créatif</span>
+            <span>{t("0.0 — Déterministe")}</span>
+            <span>{t("0.7 — Équilibré")}</span>
+            <span>{t("2.0 — Créatif")}</span>
           </div>
           <div className="mt-2 flex items-start gap-2 px-3 py-2 rounded-lg bg-amber-400/10 border border-amber-400/20">
             <span className="text-amber-400 mt-0.5 shrink-0">⚠</span>
@@ -745,10 +747,10 @@ export default function Settings() {
           </div>
           <select value={form.context_messages} onChange={(e) => set("context_messages", Number(e.target.value))}
             className="text-xs bg-hover border border-border rounded-lg px-2 py-1.5 text-secondary focus:outline-none focus:border-accent/50">
-            <option value={0}>Illimité</option>
-            <option value={10}>10 messages</option>
-            <option value={20}>20 messages</option>
-            <option value={50}>50 messages</option>
+            <option value={0}>{t("Illimité")}</option>
+            <option value={10}>{t("10 messages")}</option>
+            <option value={20}>{t("20 messages")}</option>
+            <option value={50}>{t("50 messages")}</option>
           </select>
         </div>
 
@@ -790,7 +792,7 @@ export default function Settings() {
 
   const dataContent = (
     <>
-      <Section title="Sauvegarde">
+      <Section title={t("Sauvegarde")}>
         <div className="flex items-center justify-between">
           <div>
             <p className="text-sm text-secondary">Exporter toutes les notes</p>
@@ -807,7 +809,7 @@ export default function Settings() {
 
   const memoryContent = (
     <>
-      <Section title="Mémoire IA">
+      <Section title={t("Mémoire IA")}>
         <div className="flex items-center justify-between">
           <div>
             <p className="text-sm text-secondary">Mémoire persistante</p>
@@ -870,9 +872,38 @@ export default function Settings() {
 
   const appearanceContent = (
     <>
-      <Section title="Apparence">
+      <Section title={t("Apparence")}>
+        {/* Langue / Language */}
         <div className="flex flex-col gap-2">
-          <p className="text-sm text-secondary">Thème</p>
+          <p className="text-sm text-secondary">{t("Langue")}</p>
+          <div className="grid grid-cols-2 gap-2">
+            {([
+              { key: "fr", label: "Français", sub: "Français", flag: "🇫🇷" },
+              { key: "en", label: "English", sub: "Anglais", flag: "🇬🇧" },
+            ] as const).map(({ key, label, sub, flag }) => {
+              const active = lang === key;
+              return (
+                <button
+                  key={key}
+                  onClick={() => setLang(key)}
+                  className={`relative flex items-center gap-3 px-4 py-3 rounded-xl border transition-all ${
+                    active ? "border-accent ring-1 ring-accent/40 bg-accent/5" : "border-border hover:border-border/60 bg-hover"
+                  }`}
+                >
+                  <span className="text-3xl leading-none select-none">{flag}</span>
+                  <span className="flex flex-col items-start">
+                    <span className={`text-sm font-semibold ${active ? "text-accent" : "text-primary"}`}>{label}</span>
+                    <span className="text-[10px] text-muted">{t(sub)}</span>
+                  </span>
+                  {active && <div className="absolute top-2 right-2 w-2 h-2 rounded-full bg-accent" />}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+
+        <div className="flex flex-col gap-2">
+          <p className="text-sm text-secondary">{t("Thème")}</p>
           <div className="grid grid-cols-3 gap-2">
             {([
               { key: "light",    label: "Clair",   bg: "#f5f3ee", panel: "#e8e4db", accent: "#d97757", dark: false },
@@ -916,9 +947,9 @@ export default function Settings() {
           </div>
           <select value={form.editor_font_family} onChange={(e) => set("editor_font_family", e.target.value)}
             className="text-xs bg-hover border border-border rounded-lg px-2 py-1.5 text-secondary focus:outline-none focus:border-accent/50">
-            <option value="system">Système</option>
-            <option value="serif">Serif</option>
-            <option value="mono">Monospace</option>
+            <option value="system">{t("Système")}</option>
+            <option value="serif">{t("Serif")}</option>
+            <option value="mono">{t("Monospace")}</option>
           </select>
         </div>
         <div className="flex items-center justify-between">
@@ -928,10 +959,10 @@ export default function Settings() {
           </div>
           <select value={form.editor_font_size} onChange={(e) => set("editor_font_size", Number(e.target.value))}
             className="text-xs bg-hover border border-border rounded-lg px-2 py-1.5 text-secondary focus:outline-none focus:border-accent/50">
-            <option value={13}>Petite (13px)</option>
-            <option value={15}>Normale (15px)</option>
-            <option value={17}>Grande (17px)</option>
-            <option value={19}>Très grande (19px)</option>
+            <option value={13}>{t("Petite (13px)")}</option>
+            <option value={15}>{t("Normale (15px)")}</option>
+            <option value={17}>{t("Grande (17px)")}</option>
+            <option value={19}>{t("Très grande (19px)")}</option>
           </select>
         </div>
         <div className="flex items-center justify-between">
@@ -941,10 +972,10 @@ export default function Settings() {
           </div>
           <select value={form.editor_max_width} onChange={(e) => set("editor_max_width", e.target.value)}
             className="text-xs bg-hover border border-border rounded-lg px-2 py-1.5 text-secondary focus:outline-none focus:border-accent/50">
-            <option value="narrow">Étroit (600px)</option>
-            <option value="normal">Normal (720px)</option>
-            <option value="wide">Large (960px)</option>
-            <option value="full">Pleine largeur</option>
+            <option value="narrow">{t("Étroit (600px)")}</option>
+            <option value="normal">{t("Normal (720px)")}</option>
+            <option value="wide">{t("Large (960px)")}</option>
+            <option value="full">{t("Pleine largeur")}</option>
           </select>
         </div>
 
@@ -972,7 +1003,7 @@ export default function Settings() {
 
   const uninstallSection = (
     <>
-      <Section title="Désinstallation">
+      <Section title={t("Désinstallation")}>
         <div className="flex flex-col gap-2">
           <p className="text-xs text-muted leading-relaxed">
             Pour désinstaller NATIA, ouvre le dossier de données et supprime-le manuellement. Toutes tes notes et paramètres seront effacés.
@@ -1012,7 +1043,7 @@ export default function Settings() {
 
   const promptsContent = (
     <>
-      <Section title="Prompts système">
+      <Section title={t("Prompts système")}>
         <div className="flex flex-col gap-7">
           {PROMPT_FIELDS.map(({ key, label, rows }) => (
             <div key={key}>
@@ -1134,7 +1165,7 @@ export default function Settings() {
                         value={libSaveName}
                         onChange={e => setLibSaveName(e.target.value)}
                         onKeyDown={e => e.key === "Enter" && addToLib()}
-                        placeholder="Nom du prompt (ex : Assistant créatif)"
+                        placeholder={t("Nom du prompt (ex : Assistant créatif)")}
                         className="flex-1 bg-hover border border-border rounded-lg px-2.5 py-1.5 text-xs text-primary outline-none focus:border-accent/50 transition-colors"
                         autoFocus
                       />
@@ -1181,7 +1212,7 @@ export default function Settings() {
 
   const appContent = (
     <>
-      <Section title="Application">
+      <Section title={t("Application")}>
         <div className="flex items-center justify-between">
           <div>
             <p className="text-sm text-secondary">Disclaimer de démarrage</p>
@@ -1194,7 +1225,7 @@ export default function Settings() {
         </div>
       </Section>
 
-      <Section title="Développement">
+      <Section title={t("Développement")}>
         <div className="flex items-center justify-between">
           <div>
             <p className="text-sm text-secondary">Mode débogage</p>
@@ -1225,7 +1256,7 @@ export default function Settings() {
           <h2 className="text-base font-semibold text-primary">Paramètres</h2>
           <button
             onClick={requestClose}
-            aria-label="Fermer les paramètres"
+            aria-label={t("Fermer les paramètres")}
             className="text-muted hover:text-primary transition-colors p-1"
           >
             <X size={16} />
@@ -1241,12 +1272,12 @@ export default function Settings() {
                 <input
                   value={navQuery}
                   onChange={(e) => setNavQuery(e.target.value)}
-                  placeholder="Chercher un réglage…"
-                  aria-label="Chercher un réglage"
+                  placeholder={t("Chercher un réglage…")}
+                  aria-label={t("Chercher un réglage")}
                   className="bg-transparent text-xs text-primary placeholder-muted outline-none w-full"
                 />
                 {navQuery && (
-                  <button onClick={() => setNavQuery("")} aria-label="Effacer" className="text-muted hover:text-primary transition-colors shrink-0">
+                  <button onClick={() => setNavQuery("")} aria-label={t("Effacer")} className="text-muted hover:text-primary transition-colors shrink-0">
                     <X size={11} />
                   </button>
                 )}
@@ -1270,7 +1301,7 @@ export default function Settings() {
                     }`}
                   >
                     <span className={active ? "text-accent" : "text-muted"}>{item.icon}</span>
-                    <span className="truncate">{item.label}</span>
+                    <span className="truncate">{t(item.label)}</span>
                   </button>
                 );
               })}
@@ -1282,14 +1313,14 @@ export default function Settings() {
             <div className="pb-1 border-b border-border/50">
               <h3 className="text-sm font-semibold text-primary flex items-center gap-2">
                 <span className="text-accent">{current.icon}</span>
-                {current.label}
+                {t(current.label)}
               </h3>
-              <p className="text-xs text-muted mt-1">{current.desc}</p>
+              <p className="text-xs text-muted mt-1">{t(current.desc)}</p>
             </div>
             {cat === "appearance" && appearanceContent}
             {cat === "ai" && aiContent}
             {cat === "manual" && (
-              <Section title="Manuel — faire fonctionner l'IA">
+              <Section title={t("Manuel — faire fonctionner l'IA")}>
                 <AiManual />
               </Section>
             )}
@@ -1299,7 +1330,7 @@ export default function Settings() {
             {cat === "data" && <>{dataContent}{uninstallSection}</>}
             {cat === "app" && appContent}
             {cat === "stats" && (
-              <Section title="Vue d'ensemble">
+              <Section title={t("Vue d'ensemble")}>
                 <StatsPanel />
               </Section>
             )}
@@ -1335,20 +1366,20 @@ export default function Settings() {
           ) : (
             <>
               <span className={`flex-1 text-xs transition-colors ${dirty ? "text-amber-700 dark:text-amber-300" : "text-muted/50"}`}>
-                {dirty ? "● Modifications non sauvegardées" : "Aucune modification en attente"}
+                {dirty ? `● ${t("Modifications non sauvegardées")}` : t("Aucune modification en attente")}
               </span>
               <button
                 onClick={requestClose}
                 className="px-4 py-2 rounded-lg text-sm text-secondary hover:text-primary hover:bg-hover transition-colors"
               >
-                {dirty ? "Annuler" : "Fermer"}
+                {dirty ? t("Annuler") : t("Fermer")}
               </button>
               <button
                 onClick={handleSave}
                 disabled={!dirty}
                 className="px-4 py-2 rounded-lg text-sm bg-accent hover:bg-accent-hover text-white transition-colors disabled:opacity-40"
               >
-                Sauvegarder
+                {t("Sauvegarder")}
               </button>
             </>
           )}

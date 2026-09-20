@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import * as d3 from "d3";
 import { Check, ChevronRight, GitBranch, List, Pencil, Plus, Search, Trash2, Brain, X } from "lucide-react";
 import { useStore, MemoryNode, MemoryNodeType } from "../store";
+import { useT } from "../i18n";
 
 // ── Constants ──────────────────────────────────────────────────────────────────
 
@@ -121,6 +122,7 @@ function buildNodes(
 type PanelTab = "graph" | "list";
 
 export default function GraphPanel({ onClose }: { onClose: () => void }) {
+  const t = useT();
   const { notes, folders, settings, memoryEnabled, setMemoryEnabled, memoryGraphEnabled, memoryNodes, addMemoryNode, updateMemoryNode, deleteMemoryNode } = useStore();
   const svgRef = useRef<SVGSVGElement>(null);
   const simRef = useRef<d3.Simulation<SimNode, SimLink> | null>(null);
@@ -418,7 +420,7 @@ export default function GraphPanel({ onClose }: { onClose: () => void }) {
                 className="flex items-center gap-1.5 px-4 py-2 rounded-lg bg-accent hover:bg-accent-hover text-white text-sm font-medium transition-colors"
               >
                 <Brain size={13} />
-                Activer la mémoire IA
+                {t("Activer la mémoire IA")}
               </button>
             </div>
           )}
@@ -496,8 +498,8 @@ export default function GraphPanel({ onClose }: { onClose: () => void }) {
                     <input
                       value={query}
                       onChange={(e) => setQuery(e.target.value)}
-                      placeholder="Chercher un nœud…"
-                      aria-label="Chercher un nœud de mémoire"
+                      placeholder={t("Chercher un nœud…")}
+                      aria-label={t("Chercher un nœud de mémoire")}
                       className="flex-1 bg-transparent text-xs text-primary placeholder-muted outline-none"
                     />
                     {query && (
@@ -624,6 +626,7 @@ function NodeForm({
   onContent: (v: string) => void; onStrength: (v: number) => void;
   onSubmit: () => void; onClose: () => void;
 }) {
+  const t = useT();
   const wrapperClass = variant === "floating"
     ? "absolute top-3 right-3 bg-panel border border-border rounded-xl shadow-xl p-4 w-64 z-20 flex flex-col gap-3"
     : "w-64 border-l border-border bg-panel flex flex-col p-4 gap-3 shrink-0";
@@ -652,14 +655,14 @@ function NodeForm({
       <div className="flex flex-col gap-1">
         <label className="text-[11px] text-muted uppercase tracking-wide">Label</label>
         <input value={label} onChange={e => onLabel(e.target.value)} onKeyDown={e => { if (e.key === "Enter") onSubmit(); }}
-          placeholder="Ex : Projet Alpha…"
+          placeholder={t("Ex : Projet Alpha…")}
           className="bg-hover border border-border rounded-lg px-2.5 py-1.5 text-xs text-primary outline-none focus:border-accent/50 transition-colors" />
       </div>
 
       <div className="flex flex-col gap-1">
         <label className="text-[11px] text-muted uppercase tracking-wide">Description</label>
         <textarea value={content} onChange={e => onContent(e.target.value)}
-          placeholder="Informations contextuelles…" rows={3}
+          placeholder={t("Informations contextuelles…")} rows={3}
           className="bg-hover border border-border rounded-lg px-2.5 py-1.5 text-xs text-primary outline-none focus:border-accent/50 transition-colors resize-none" />
       </div>
 
@@ -676,7 +679,7 @@ function NodeForm({
 
       <button onClick={onSubmit} disabled={!label.trim()}
         className="w-full py-2 rounded-lg bg-accent hover:bg-accent/90 disabled:opacity-40 text-white text-xs font-semibold transition-colors flex items-center justify-center gap-1.5">
-        {mode === "edit" ? <><Check size={11} />Enregistrer</> : <><Plus size={11} />Ajouter le nœud</>}
+        {mode === "edit" ? <><Check size={11} />{t("Enregistrer")}</> : <><Plus size={11} />{t("Ajouter le nœud")}</>}
       </button>
     </div>
   );

@@ -1,5 +1,6 @@
 import { LayoutTemplate, X } from "lucide-react";
 import { useStore } from "../store";
+import { useT } from "../i18n";
 
 interface Template {
   name: string;
@@ -125,6 +126,7 @@ interface Props {
 }
 
 export default function TemplatesPanel({ onClose, onApply }: Props) {
+  const t = useT();
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center">
       <div className="fixed inset-0 bg-black/30" onClick={onClose} />

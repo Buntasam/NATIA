@@ -11,6 +11,9 @@ import {
   X,
 } from "lucide-react";
 
+// Page communautaire de partage de prompts (en cours de mise en place).
+const PROMPTS_URL = "https://github.com/Buntasam/NATIA/discussions";
+
 // ─── Manuel de configuration IA ───────────────────────────────────────────────
 // Composant de contenu réutilisable : affiché à la fois dans
 // Paramètres → Manuel et dans une surcouche depuis le Disclaimer.
@@ -159,6 +162,29 @@ export default function AiManual() {
           <li>En cas d'erreur (clé invalide, modèle absent, Ollama éteint), active le <strong className="text-primary">Mode debug</strong> : panneau IA → onglet Debug pour voir le prompt, la réponse brute et le message d'erreur.</li>
           <li>Tu peux ajuster la <strong className="text-primary">température</strong> et le <strong className="text-primary">nombre de messages de contexte</strong> dans Paramètres → IA.</li>
         </ul>
+      </div>
+
+      {/* Prompts communautaires */}
+      <div className="flex flex-col gap-2 rounded-xl border border-violet-500/25 bg-violet-500/5 px-4 py-3.5">
+        <div className="flex items-center gap-2">
+          <Sparkles size={14} className="text-violet-500 dark:text-violet-400 shrink-0" />
+          <span className="text-sm font-semibold text-violet-600 dark:text-violet-300">Bibliothèque de prompts de la communauté</span>
+        </div>
+        <p className="text-xs text-secondary/90 leading-relaxed">
+          Besoin d'inspiration pour tes prompts système et tes opérations ? Une page est en cours de mise en place pour
+          <strong className="text-primary"> consulter et voter les prompts les mieux notés</strong> partagés par d'autres utilisateurs.
+          En attendant, découvre et partage-les dans l'espace communautaire :
+        </p>
+        <a
+          href={PROMPTS_URL}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="self-start flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-violet-500/15 hover:bg-violet-500/25 border border-violet-500/30 text-violet-600 dark:text-violet-300 text-xs font-medium transition-colors"
+        >
+          <Sparkles size={11} />
+          Voir les prompts de la communauté
+          <ExternalLink size={10} className="opacity-70" />
+        </a>
       </div>
     </div>
   );

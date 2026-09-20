@@ -18,6 +18,7 @@ import CodeBlockLowlight from "@tiptap/extension-code-block-lowlight";
 import { common, createLowlight } from "lowlight";
 import { PostIt } from "../extensions/PostIt";
 import { Wikilink } from "../extensions/Wikilink";
+import { useT } from "../i18n";
 import { Reminder } from "../extensions/Reminder";
 import {
   Bell,
@@ -165,6 +166,7 @@ function SlashMenu({
   selectedIdx: number;
   onSelect: (item: SlashItem) => void;
 }) {
+  const t = useT();
   const listRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -178,7 +180,7 @@ function SlashMenu({
       style={{ left: pos.x, top: pos.y }}
     >
       {items.length === 0 ? (
-        <p className="px-3 py-2 text-xs text-muted">Aucune commande</p>
+        <p className="px-3 py-2 text-xs text-muted">{t("Aucune commande")}</p>
       ) : (
         <div ref={listRef}>
           {items.map((item, i) => (
@@ -286,6 +288,7 @@ function FindReplaceBar({
   editor: ReturnType<typeof useEditor>;
   onClose: () => void;
 }) {
+  const t = useT();
   const [search, setSearch] = useState("");
   const [replace, setReplace] = useState("");
   const [matches, setMatches] = useState<{ from: number; to: number }[]>([]);
@@ -345,7 +348,7 @@ function FindReplaceBar({
           if (e.key === "Enter") { e.preventDefault(); goTo(idx + (e.shiftKey ? -1 : 1)); }
           if (e.key === "Escape") onClose();
         }}
-        placeholder="Rechercher…"
+        placeholder={t("Rechercher…")}
         className="bg-hover border border-border rounded-md px-2 py-1 text-xs text-primary outline-none focus:border-accent/50 w-40"
       />
       <span className="text-[11px] text-muted shrink-0 min-w-10">
@@ -358,7 +361,7 @@ function FindReplaceBar({
         value={replace}
         onChange={(e) => setReplace(e.target.value)}
         onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); replaceCurrent(); } if (e.key === "Escape") onClose(); }}
-        placeholder="Remplacer…"
+        placeholder={t("Remplacer…")}
         className="bg-hover border border-border rounded-md px-2 py-1 text-xs text-primary outline-none focus:border-accent/50 w-40"
       />
       <button onClick={replaceCurrent} disabled={matches.length === 0} className="px-2 py-1 text-xs bg-hover border border-border rounded-md text-secondary hover:text-primary disabled:opacity-30 transition-colors">
@@ -434,6 +437,7 @@ function safeFilename(title: string) {
 // ─── Editor ───────────────────────────────────────────────────────────────────
 
 export default function Editor() {
+  const t = useT();
   const {
     activeNote,
     notes,
@@ -917,7 +921,7 @@ export default function Editor() {
     return (
       <div className="flex flex-col flex-1 items-center justify-center h-full text-muted gap-3">
         <div className="text-5xl opacity-20 select-none">✦</div>
-        <p className="text-sm">Sélectionne une note ou crée-en une nouvelle</p>
+        <p className="text-sm">{t("Sélectionne une note ou crée-en une nouvelle")}</p>
       </div>
     );
   }
@@ -955,21 +959,21 @@ export default function Editor() {
         <div className="flex items-center gap-3">
           {/* Navigation historique */}
           <div className="flex items-center shrink-0 -ml-2">
-            <Tip label="Note précédente" shortcut="Alt+←">
+            <Tip label={t("Note précédente")} shortcut="Alt+←">
               <button
                 onClick={goBack}
                 disabled={navBackIds.length === 0}
-                aria-label="Note précédente"
+                aria-label={t("Note précédente")}
                 className="p-1 rounded transition-colors text-muted hover:text-primary hover:bg-hover disabled:opacity-25 disabled:pointer-events-none"
               >
                 <ChevronLeft size={16} />
               </button>
             </Tip>
-            <Tip label="Note suivante" shortcut="Alt+→">
+            <Tip label={t("Note suivante")} shortcut="Alt+→">
               <button
                 onClick={goForward}
                 disabled={navForwardIds.length === 0}
-                aria-label="Note suivante"
+                aria-label={t("Note suivante")}
                 className="p-1 rounded transition-colors text-muted hover:text-primary hover:bg-hover disabled:opacity-25 disabled:pointer-events-none"
               >
                 <ChevronRight size={16} />
@@ -981,8 +985,8 @@ export default function Editor() {
             type="text"
             value={localTitle}
             onChange={handleTitleChange}
-            placeholder="Sans titre"
-            aria-label="Titre de la note"
+            placeholder={t("Sans titre")}
+            aria-label={t("Titre de la note")}
             className="flex-1 bg-transparent text-xl font-semibold text-primary placeholder-muted outline-none"
           />
           <div className="flex items-center gap-1 shrink-0">
@@ -990,7 +994,7 @@ export default function Editor() {
               <Tip label="Sauvegarder" shortcut="Ctrl+S">
                 <button
                   onClick={saveNow}
-                  aria-label="Sauvegarder"
+                  aria-label={t("Sauvegarder")}
                   className={`p-1.5 rounded transition-colors ${
                     isSaving ? "text-accent" : "text-secondary hover:text-primary hover:bg-hover"
                   }`}
@@ -1002,7 +1006,7 @@ export default function Editor() {
             <Tip label="Liens & backlinks">
               <button
                 onClick={() => setShowBacklinks((s) => !s)}
-                aria-label="Liens et backlinks"
+                aria-label={t("Liens et backlinks")}
                 className={`p-1.5 rounded transition-colors ${
                   showBacklinks ? "text-accent bg-accent/10" : "text-secondary hover:text-primary hover:bg-hover"
                 }`}
@@ -1013,7 +1017,7 @@ export default function Editor() {
             <Tip label="Historique des versions" shortcut="Ctrl+Shift+H">
               <button
                 onClick={handleVersionToggle}
-                aria-label="Historique des versions"
+                aria-label={t("Historique des versions")}
                 className={`p-1.5 rounded transition-colors ${
                   showVersionPanel ? "text-accent bg-accent/10" : "text-secondary hover:text-primary hover:bg-hover"
                 }`}
@@ -1042,7 +1046,7 @@ export default function Editor() {
             <Tip label="Panneau IA" shortcut="Ctrl+Shift+A">
               <button
                 onClick={toggleAiPanel}
-                aria-label="Panneau IA"
+                aria-label={t("Panneau IA")}
                 className={`p-1.5 rounded transition-colors ${
                   showAiPanel ? "text-accent bg-accent/10" : "text-secondary hover:text-primary hover:bg-hover"
                 }`}
@@ -1056,7 +1060,7 @@ export default function Editor() {
               <Tip label="Plus d'actions">
                 <button
                   onClick={() => setShowMoreMenu((s) => !s)}
-                  aria-label="Plus d'actions"
+                  aria-label={t("Plus d'actions")}
                   className={`p-1.5 rounded transition-colors ${
                     showMoreMenu ? "text-accent bg-accent/10" : "text-secondary hover:text-primary hover:bg-hover"
                   }`}
@@ -1242,7 +1246,7 @@ export default function Editor() {
           <Tip label="Chercher & remplacer" shortcut="Ctrl+F" side="top">
             <button
               onClick={() => setShowFindReplace((s) => !s)}
-              aria-label="Chercher et remplacer"
+              aria-label={t("Chercher et remplacer")}
               className={`transition-colors ${showFindReplace ? "text-accent" : "text-muted/50 hover:text-muted"}`}
             >
               <Search size={11} />
@@ -1302,6 +1306,7 @@ function TagsBar({
   tags: string[];
   folder: string | null;
 }) {
+  const t = useT();
   const { activeNote, updateNote, setSearchQuery } = useStore();
   const [input, setInput] = useState("");
 
@@ -1348,7 +1353,7 @@ function TagsBar({
             addTag();
           }
         }}
-        placeholder="+ ajouter un tag"
+        placeholder={t("+ ajouter un tag")}
         className="bg-transparent text-xs text-muted placeholder-muted outline-none min-w-24"
       />
     </div>

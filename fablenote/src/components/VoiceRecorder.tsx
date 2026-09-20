@@ -3,6 +3,7 @@ import { listen } from "@tauri-apps/api/event";
 import { Check, ChevronDown, ChevronUp, GripVertical, Loader2, Mic, MicOff, Pause, Play, Sparkles, X } from "lucide-react";
 import { aiStream } from "../lib/aiInvoke";
 import { useStore } from "../store";
+import { useT } from "../i18n";
 
 // Web Speech API interfaces
 interface ISpeechRecognitionResult { readonly isFinal: boolean; readonly length: number; [index: number]: { transcript: string }; }
@@ -33,6 +34,7 @@ function getSpeechRecognition(): ISpeechRecognitionConstructor | null {
 interface Props { onInsert: (text: string) => void; }
 
 export default function VoiceRecorder({ onInsert }: Props) {
+  const t = useT();
   const { settings } = useStore();
 
   const [isAvailable, setIsAvailable]       = useState(false);
@@ -419,7 +421,7 @@ Réponds UNIQUEMENT avec la transcription mise en forme. Aucun commentaire.`,
                 <div className="flex flex-col gap-2 px-4 py-3 border-t border-border/50 shrink-0">
                   <div className="flex items-center gap-1.5 text-xs text-muted">
                     <Sparkles size={10} className="text-accent" />
-                    <span>Mise en forme IA</span>
+                    <span>{t("Mise en forme IA")}</span>
                     {isReformatting && <Loader2 size={10} className="animate-spin text-accent ml-1" />}
                   </div>
                   {aiText && (

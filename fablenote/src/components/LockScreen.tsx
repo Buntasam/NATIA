@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from "react";
 import { AlertTriangle, Delete, HelpCircle, Lock, Plus } from "lucide-react";
 import { useStore } from "../store";
+import { useT } from "../i18n";
 import D20Roller from "./D20Roller";
 
 const PIN_DOTS = 8;
@@ -47,6 +48,7 @@ function loadPostIts(): LockPostIt[] {
 
 export default function LockScreen() {
   const { unlock, passwordType, getPasswordHint, resetAllData } = useStore();
+  const t = useT();
   const [value, setValue] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
@@ -165,7 +167,7 @@ export default function LockScreen() {
     if (hint !== null) { setHint(null); return; } // toggle off
     try {
       const h = await getPasswordHint();
-      setHint(h && h.trim() ? h : "Aucun indice n'a été défini.");
+      setHint(h && h.trim() ? h : t("Aucun indice n'a été défini."));
     } catch {
       setHint("Aucun indice n'a été défini.");
     }
@@ -191,7 +193,7 @@ export default function LockScreen() {
         className="flex items-center gap-1.5 text-muted hover:text-primary text-xs transition-colors"
       >
         <HelpCircle size={12} />
-        {hint !== null ? "Masquer l'indice" : "Voir l'indice"}
+        {hint !== null ? t("Masquer l'indice") : t("Voir l'indice")}
       </button>
       {hint !== null && (
         <p className="text-secondary text-xs leading-relaxed px-3 py-2 rounded-lg bg-hover border border-border">
@@ -202,7 +204,7 @@ export default function LockScreen() {
         onClick={() => setShowReset(true)}
         className="text-muted/60 hover:text-red-400 text-[11px] transition-colors mt-1"
       >
-        Code oublié ? Réinitialiser NATIA
+        {t("Code oublié ? Réinitialiser NATIA")}
       </button>
     </div>
   );
@@ -213,7 +215,7 @@ export default function LockScreen() {
       <div className="bg-panel border border-border rounded-2xl p-6 mx-4 max-w-sm flex flex-col gap-4 shadow-2xl">
         <div className="flex items-center gap-2 text-red-400">
           <AlertTriangle size={16} />
-          <span className="font-semibold text-sm">Réinitialiser NATIA ?</span>
+          <span className="font-semibold text-sm">{t("Réinitialiser NATIA ?")}</span>
         </div>
         <p className="text-xs text-muted leading-relaxed">
           Tes données sont chiffrées avec ton code. Sans lui, elles sont
@@ -226,15 +228,13 @@ export default function LockScreen() {
             onClick={() => setShowReset(false)}
             disabled={resetting}
             className="flex-1 py-2 rounded-lg bg-hover border border-border text-xs text-secondary hover:text-primary transition-colors disabled:opacity-50"
-          >
-            Annuler
-          </button>
+          >{t("Annuler")}</button>
           <button
             onClick={doReset}
             disabled={resetting}
             className="flex-1 py-2 rounded-lg bg-red-400/80 hover:bg-red-400 text-white text-xs font-medium transition-colors disabled:opacity-50"
           >
-            {resetting ? "Réinitialisation…" : "Tout supprimer"}
+            {resetting ? t("Réinitialisation…") : t("Tout supprimer")}
           </button>
         </div>
       </div>
@@ -279,7 +279,7 @@ export default function LockScreen() {
         onClick={addPostIt}
         style={{ position: "absolute", bottom: 20, right: 20, zIndex: 220 }}
         className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-white/5 hover:bg-white/10 border border-white/10 text-white/30 hover:text-white/60 text-xs transition-colors"
-        title="Ajouter un post-it"
+        title={t("Ajouter un post-it")}
       >
         <Plus size={12} />
         Post-it
@@ -295,7 +295,7 @@ export default function LockScreen() {
         <span className="text-accent font-bold text-3xl tracking-tight mb-2 select-none">NATIA</span>
         <div className="flex items-center gap-2 mb-10 text-muted text-sm">
           <Lock size={13} />
-          <span>Application verrouillée</span>
+          <span>{t("Application verrouillée")}</span>
         </div>
 
         {/* Un dot par chiffre saisi */}
@@ -350,7 +350,7 @@ export default function LockScreen() {
           </button>
         </div>
 
-        {loading && <p className="text-muted text-xs">Vérification…</p>}
+        {loading && <p className="text-muted text-xs">{t("Vérification…")}</p>}
 
         {helpFooter}
         {resetModal}
@@ -367,7 +367,7 @@ export default function LockScreen() {
       <span className="text-accent font-bold text-3xl tracking-tight mb-2 select-none">NATIA</span>
       <div className="flex items-center gap-2 mb-10 text-muted text-sm">
         <Lock size={13} />
-        <span>Application verrouillée</span>
+        <span>{t("Application verrouillée")}</span>
       </div>
 
       <div className="w-72 flex flex-col gap-3">
@@ -376,7 +376,7 @@ export default function LockScreen() {
           value={value}
           onChange={(e) => { if (!locked) { setValue(e.target.value); setError(""); } }}
           onKeyDown={(e) => { if (e.key === "Enter") handleSubmit(); }}
-          placeholder="Mot de passe"
+          placeholder={t("Mot de passe")}
           autoFocus
           disabled={locked}
           className="w-full px-4 py-3 rounded-xl bg-hover border border-border text-primary placeholder-muted outline-none focus:border-accent transition-colors text-sm disabled:opacity-50"
@@ -389,7 +389,7 @@ export default function LockScreen() {
           disabled={loading || !value || locked}
           className="w-full py-3 rounded-xl bg-accent hover:bg-accent-hover text-white text-sm font-semibold transition-colors disabled:opacity-50"
         >
-          {loading ? "Vérification…" : "Déverrouiller"}
+          {loading ? t("Vérification…") : t("Déverrouiller")}
         </button>
       </div>
 
