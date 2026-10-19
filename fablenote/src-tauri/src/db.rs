@@ -109,6 +109,10 @@ pub(crate) fn git_commit_note(notes_dir: &PathBuf, note_id: &str, message: &str)
     git_run(notes_dir, &["commit", "-m", message, "--allow-empty"]);
 }
 
+pub(crate) fn git_gc_prune(notes_dir: &PathBuf) {
+    git_run(notes_dir, &["gc", "--prune=now"]);
+}
+
 pub(crate) fn save_version_inner(
     db: &Connection,
     note_id: &str,

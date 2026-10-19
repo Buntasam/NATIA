@@ -34,6 +34,7 @@ import { TraceRow } from "./ai/TraceRow";
 import { aiChat, aiStream, activeModel } from "../lib/aiInvoke";
 import { buildMemoryContext } from "../lib/memoryContext";
 import { useStore } from "../store";
+import Tip from "./Tooltip";
 import DebugConsole from "./DebugConsole";
 import { addAiLog } from "../debug/logger";
 
@@ -109,6 +110,15 @@ function defaultModelForProvider(provider: string): string {
   return PROVIDER_MODELS[provider]?.[0]?.value ?? "";
 }
 
+// Niveaux de longueur des réponses — jauge signal compacte
+const INTENSITY: { key: "eco" | "low" | "medium" | "high" | "max"; label: string; color: string; desc: string }[] = [
+  { key: "eco",    label: "Éco",      color: "#22c55e", desc: "Ultra-court — 1 à 2 phrases" },
+  { key: "low",    label: "Concis",   color: "#2dd4bf", desc: "Court — 3 à 5 phrases" },
+  { key: "medium", label: "Normal",   color: "#d97757", desc: "Longueur standard" },
+  { key: "high",   label: "Détaillé", color: "#fb923c", desc: "Développé avec contexte" },
+  { key: "max",    label: "Complet",  color: "#f87171", desc: "Exhaustif et structuré" },
+];
+
 function detectProvider(key: string): string {
   if (key.startsWith("sk-ant-")) return "Anthropic";
   if (key.startsWith("AIza")) return "Gemini";
@@ -131,6 +141,7 @@ export default function AiPanel({ onOpenConv }: { onOpenConv: () => void }) {
   const [apiConnections, setApiConnections] = useState<ApiKey[]>([]);
   const [activeConnectionId, setActiveConnectionId] = useState<string | null>(null);
   const [showAddKey, setShowAddKey] = useState(false);
+  const [providerMenuOpen, setProviderMenuOpen] = useState(false);
   const [addKeyForm, setAddKeyForm] = useState({ name: "", provider: "", key_value: "", color: COLORS[0], model: "" });
   const [addKeySaving, setAddKeySaving] = useState(false);
 
@@ -926,85 +937,128 @@ Réponds UNIQUEMENT avec ce JSON (rien d'autre, pas de texte, pas de \`\`\`) :
             <X size={15} />
           </button>
         </div>
-        {/* Provider quick-select bar */}
-        {activeTab === "ops" && (
-          <div className="flex items-center gap-1 px-3 pb-2 flex-wrap">
-            {/* Fixed: Local */}
-            <button
-              onClick={() => { setLocalProvider("ollama"); setActiveConnectionId(null); }}
-              className={`px-2.5 py-1 rounded-lg text-[11px] font-medium border transition-colors ${
-                !isConnectionActive && localProvider === "ollama"
-                  ? "bg-zinc-500/15 border-zinc-500/40 text-zinc-300"
-                  : "bg-hover border-border text-muted hover:text-secondary"
-              }`}
-            >Local</button>
-            {/* Fixed: Claude CLI */}
-            <button
-              onClick={() => { setLocalProvider("claude_cli"); setActiveConnectionId(null); }}
-              className={`px-2.5 py-1 rounded-lg text-[11px] font-medium border transition-colors ${
-                !isConnectionActive && localProvider === "claude_cli"
-                  ? "bg-orange-500/15 border-orange-500/40 text-orange-400"
-                  : "bg-hover border-border text-muted hover:text-secondary"
-              }`}
-            >Claude CLI</button>
-            {/* Dynamic: saved API connections */}
-            {apiConnections.map((conn) => (
-              <button
-                key={conn.id}
-                onClick={() => { setActiveConnectionId(conn.id); setLocalProvider("ollama"); }}
-                className={`px-2.5 py-1 rounded-lg text-[11px] font-medium border transition-colors ${
-                  activeConnectionId === conn.id
-                    ? "bg-hover"
-                    : "bg-hover border-border text-muted hover:text-secondary"
-                }`}
-                style={activeConnectionId === conn.id ? {
-                  borderColor: conn.color + "88",
-                  color: conn.color,
-                  backgroundColor: conn.color + "18",
-                } : {}}
-              >{conn.name}</button>
-            ))}
-            {/* Add key button */}
-            <button
-              onClick={() => { setShowAddKey((s) => !s); setAddKeyForm({ name: "", provider: "", key_value: "", color: COLORS[0], model: "" }); }}
-              className={`px-2 py-1 rounded-lg text-[11px] font-medium border transition-colors ${
-                showAddKey ? "bg-accent/10 border-accent/30 text-accent" : "bg-hover border-border text-muted hover:text-primary"
-              }`}
-              title="Ajouter une clé API"
-            >+</button>
-          </div>
-        )}
-        {/* Intensity bar */}
-        {activeTab === "ops" && (
-          <div className="flex flex-col gap-1 px-3 pb-2">
-            <span className="text-[10px] text-muted">Longueur des réponses IA</span>
-            <div className="flex items-center gap-1">
-              {([
-                { key: "eco",    label: "Éco",   color: "#22c55e", title: "Ultra-court — 1 à 2 phrases" },
-                { key: "low",    label: "Concis", color: "#2dd4bf", title: "Court — 3 à 5 phrases" },
-                { key: "medium", label: "Normal", color: "#d97757", title: "Longueur standard" },
-                { key: "high",   label: "Détaillé", color: "#fb923c", title: "Développé avec contexte" },
-                { key: "max",    label: "Complet", color: "#f87171", title: "Exhaustif et structuré" },
-              ] as const).map(({ key, label, color, title }) => {
-                const active = (settings.prompt_intensity ?? "medium") === key;
-                return (
-                  <button
-                    key={key}
-                    onClick={() => saveSettings({ ...settings, prompt_intensity: key })}
-                    title={title}
-                    aria-label={`Longueur : ${label} — ${title}`}
-                    className={`flex-1 py-1 rounded text-[10px] font-semibold border transition-all ${
-                      active ? "border-current" : "bg-hover border-border text-muted hover:text-secondary"
-                    }`}
-                    style={active ? { color, borderColor: color + "80", backgroundColor: color + "18" } : {}}
-                  >
-                    {label}
-                  </button>
-                );
-              })}
+        {/* Barre compacte : sélecteur fournisseur + jauge de longueur */}
+        {activeTab === "ops" && (() => {
+          const activeConn = apiConnections.find((c) => c.id === activeConnectionId);
+          const dotColor = isConnectionActive
+            ? activeConn?.color ?? "#888888"
+            : localProvider === "claude_cli" ? "#f97316" : "#a1a1aa";
+          const currentName = isConnectionActive
+            ? activeConn?.name ?? "Connexion"
+            : localProvider === "claude_cli" ? "Claude CLI" : "Local";
+          const currentSub = isConnectionActive
+            ? activeConn?.model || activeConn?.provider || ""
+            : localProvider === "claude_cli" ? "claude" : selectedModel;
+
+          const intensityIdx = Math.max(0, INTENSITY.findIndex((l) => l.key === (settings.prompt_intensity ?? "medium")));
+          const intensityActive = INTENSITY[intensityIdx];
+
+          const pick = (fn: () => void) => { fn(); setProviderMenuOpen(false); };
+
+          return (
+            <div className="flex items-center gap-2 px-3 pb-2">
+              {/* Sélecteur fournisseur (dropdown) */}
+              <div className="relative flex-1 min-w-0">
+                <button
+                  onClick={() => setProviderMenuOpen((o) => !o)}
+                  aria-label="Choisir le fournisseur IA"
+                  aria-expanded={providerMenuOpen}
+                  className={`w-full flex items-center gap-2 px-2.5 py-1.5 rounded-lg border transition-colors ${
+                    providerMenuOpen ? "bg-hover border-accent/40" : "bg-hover border-border hover:border-accent/30"
+                  }`}
+                >
+                  <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: dotColor }} />
+                  <span className="flex-1 min-w-0 text-left flex items-baseline gap-1.5">
+                    <span className="text-xs font-medium text-primary truncate">{currentName}</span>
+                    {currentSub && <span className="text-[10px] text-muted truncate">{currentSub}</span>}
+                  </span>
+                  <ChevronDown size={12} className={`text-muted shrink-0 transition-transform ${providerMenuOpen ? "rotate-180" : ""}`} />
+                </button>
+
+                {providerMenuOpen && (
+                  <>
+                    <div className="fixed inset-0 z-40" onClick={() => setProviderMenuOpen(false)} />
+                    <div className="absolute left-0 right-0 top-full mt-1 z-50 bg-panel border border-border rounded-lg shadow-xl py-1 max-h-64 overflow-y-auto">
+                      <button
+                        onClick={() => pick(() => { setLocalProvider("ollama"); setActiveConnectionId(null); })}
+                        className="w-full flex items-center gap-2 px-3 py-2 text-left hover:bg-hover transition-colors"
+                      >
+                        <span className="w-2 h-2 rounded-full shrink-0 bg-zinc-400" />
+                        <span className="flex-1 min-w-0">
+                          <span className="block text-xs font-medium text-primary">Local</span>
+                          <span className="block text-[10px] text-muted truncate">Ollama · {selectedModel || "aucun modèle"}</span>
+                        </span>
+                        {!isConnectionActive && localProvider === "ollama" && <CheckCheck size={12} className="text-accent shrink-0" />}
+                      </button>
+                      <button
+                        onClick={() => pick(() => { setLocalProvider("claude_cli"); setActiveConnectionId(null); })}
+                        className="w-full flex items-center gap-2 px-3 py-2 text-left hover:bg-hover transition-colors"
+                      >
+                        <span className="w-2 h-2 rounded-full shrink-0 bg-orange-500" />
+                        <span className="flex-1 min-w-0">
+                          <span className="block text-xs font-medium text-primary">Claude CLI</span>
+                          <span className="block text-[10px] text-muted truncate">binaire local · crédits Claude</span>
+                        </span>
+                        {!isConnectionActive && localProvider === "claude_cli" && <CheckCheck size={12} className="text-accent shrink-0" />}
+                      </button>
+                      {apiConnections.length > 0 && <div className="my-1 border-t border-border" />}
+                      {apiConnections.map((conn) => (
+                        <button
+                          key={conn.id}
+                          onClick={() => pick(() => { setActiveConnectionId(conn.id); setLocalProvider("ollama"); })}
+                          className="w-full flex items-center gap-2 px-3 py-2 text-left hover:bg-hover transition-colors"
+                        >
+                          <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: conn.color }} />
+                          <span className="flex-1 min-w-0">
+                            <span className="block text-xs font-medium text-primary truncate">{conn.name}</span>
+                            <span className="block text-[10px] text-muted truncate">{conn.provider}{conn.model ? ` · ${conn.model}` : ""}</span>
+                          </span>
+                          {activeConnectionId === conn.id && <CheckCheck size={12} className="text-accent shrink-0" />}
+                        </button>
+                      ))}
+                      <div className="my-1 border-t border-border" />
+                      <button
+                        onClick={() => pick(() => { setShowAddKey(true); setAddKeyForm({ name: "", provider: "", key_value: "", color: COLORS[0], model: "" }); })}
+                        className="w-full flex items-center gap-2 px-3 py-2 text-left hover:bg-hover transition-colors text-accent"
+                      >
+                        <Plus size={12} className="shrink-0" />
+                        <span className="text-xs font-medium">Ajouter une clé API</span>
+                      </button>
+                    </div>
+                  </>
+                )}
+              </div>
+
+              {/* Jauge de longueur des réponses (signal 5 barres) */}
+              <div className="flex flex-col items-center gap-0.5 shrink-0" role="radiogroup" aria-label="Longueur des réponses IA">
+                <div className="flex items-end gap-[3px] h-[18px]">
+                  {INTENSITY.map((lvl, i) => {
+                    const lit = i <= intensityIdx;
+                    return (
+                      <Tip key={lvl.key} label={`${lvl.label} — ${lvl.desc}`} side="bottom">
+                        <button
+                          onClick={() => saveSettings({ ...settings, prompt_intensity: lvl.key })}
+                          role="radio"
+                          aria-checked={intensityActive.key === lvl.key}
+                          aria-label={`${lvl.label} — ${lvl.desc}`}
+                          className="rounded-[2px] transition-all hover:opacity-80"
+                          style={{
+                            width: 7,
+                            height: 6 + i * 3,
+                            backgroundColor: lit ? intensityActive.color : "var(--color-border)",
+                          }}
+                        />
+                      </Tip>
+                    );
+                  })}
+                </div>
+                <span className="text-[10px] leading-none font-medium" style={{ color: intensityActive.color }}>
+                  {intensityActive.label}
+                </span>
+              </div>
             </div>
-          </div>
-        )}
+          );
+        })()}
 
         {/* Inline add-key form */}
         {activeTab === "ops" && showAddKey && (

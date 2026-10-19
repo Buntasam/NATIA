@@ -9,8 +9,8 @@ use uuid::Uuid;
 use zeroize::Zeroize;
 
 use crate::{AppState, ApiKey, PromptVersion, Settings};
-use crate::crypto::{decrypt_all_data, derive_64, encrypt_all_data, maybe_dec, maybe_enc};
-use crate::db::{keychain_get, keychain_set, API_KEY_NAMES};
+use crate::crypto::{decrypt_all_data, derive_64, encrypt_all_data, maybe_dec, maybe_enc, generate_dek, encrypt_dek, decrypt_dek};
+use crate::db::{keychain_get, keychain_set, API_KEY_NAMES, git_gc_prune};
 
 // ─── Password commands ────────────────────────────────────────────────────────
 
@@ -39,22 +39,35 @@ pub fn setup_password(password: String, pw_type: String, state: State<AppState>)
     let salt_b64 = B64.encode(&salt);
     let mut derived = derive_64(&password, &salt)?;
     let verif_b64 = B64.encode(&derived[..32]);
-    let mut enc_key = [0u8; 32];
-    enc_key.copy_from_slice(&derived[32..]);
+    let mut kek = [0u8; 32];
+    kek.copy_from_slice(&derived[32..]);
     derived.zeroize();
+
+    let dek = generate_dek();
+    let (dek_nonce_b64, dek_ct_b64) = encrypt_dek(&dek, &kek);
+
     {
         let db = state.db.lock().map_err(|e| e.to_string())?;
-        for (k, v) in [("password_salt", salt_b64.as_str()), ("password_hash", verif_b64.as_str()), ("password_type", pw_type.as_str())] {
+        for (k, v) in [
+            ("password_salt", salt_b64.as_str()),
+            ("password_hash", verif_b64.as_str()),
+            ("password_type", pw_type.as_str()),
+            ("dek_nonce", dek_nonce_b64.as_str()),
+            ("dek_encrypted", dek_ct_b64.as_str()),
+        ] {
             db.execute(
                 "INSERT INTO app_config(key,value) VALUES(?1,?2) ON CONFLICT(key) DO UPDATE SET value=?2",
                 params![k, v],
             ).map_err(|e| e.to_string())?;
         }
         let notes_dir = state.notes_dir.clone();
-        encrypt_all_data(&db, &notes_dir, &enc_key)?;
+        encrypt_all_data(&db, &notes_dir, &dek)?;
+        drop(db);
+        git_gc_prune(&notes_dir);
     }
     let mut guard = state.enc_key.lock().map_err(|e| e.to_string())?;
-    *guard = Some(enc_key);
+    *guard = Some(dek);
+    kek.zeroize();
     Ok(())
 }
 
@@ -99,7 +112,7 @@ pub fn verify_password(password: String, state: State<AppState>) -> Result<bool,
         return Ok(false);
     }
 
-    // Success — reset counters
+    // Success — reset counters and load DEK
     {
         let mut attempts = state.failed_attempts.lock().map_err(|e| e.to_string())?;
         *attempts = 0;
@@ -107,21 +120,34 @@ pub fn verify_password(password: String, state: State<AppState>) -> Result<bool,
         *lock_until = None;
     }
 
-    let mut enc_key = [0u8; 32];
-    enc_key.copy_from_slice(&derived[32..]);
+    let (dek_nonce_b64, dek_ct_b64) = {
+        let db = state.db.lock().map_err(|e| e.to_string())?;
+        let nonce = db.query_row("SELECT value FROM app_config WHERE key='dek_nonce'", [], |r| r.get::<_, String>(0))
+            .map_err(|_| "DEK nonce not found — rerun setup_password")?;
+        let ct = db.query_row("SELECT value FROM app_config WHERE key='dek_encrypted'", [], |r| r.get::<_, String>(0))
+            .map_err(|_| "DEK encrypted not found — rerun setup_password")?;
+        (nonce, ct)
+    };
+
+    let mut kek = [0u8; 32];
+    kek.copy_from_slice(&derived[32..]);
+    let dek = decrypt_dek(&dek_nonce_b64, &dek_ct_b64, &kek)?;
+    kek.zeroize();
     derived.zeroize();
     let mut guard = state.enc_key.lock().map_err(|e| e.to_string())?;
-    *guard = Some(enc_key);
+    *guard = Some(dek);
     Ok(true)
 }
 
 #[tauri::command]
 pub fn change_password(old_pass: String, new_pass: String, state: State<AppState>) -> Result<(), String> {
-    let (salt_b64, verif_b64) = {
+    let (salt_b64, verif_b64, dek_nonce_b64, dek_ct_b64) = {
         let db = state.db.lock().map_err(|e| e.to_string())?;
         let s = db.query_row("SELECT value FROM app_config WHERE key='password_salt'", [], |r| r.get::<_, String>(0)).map_err(|e| e.to_string())?;
         let v = db.query_row("SELECT value FROM app_config WHERE key='password_hash'", [], |r| r.get::<_, String>(0)).map_err(|e| e.to_string())?;
-        (s, v)
+        let nonce = db.query_row("SELECT value FROM app_config WHERE key='dek_nonce'", [], |r| r.get::<_, String>(0)).map_err(|e| e.to_string())?;
+        let ct = db.query_row("SELECT value FROM app_config WHERE key='dek_encrypted'", [], |r| r.get::<_, String>(0)).map_err(|e| e.to_string())?;
+        (s, v, nonce, ct)
     };
     let salt = B64.decode(&salt_b64).map_err(|e| e.to_string())?;
     let mut old_derived = derive_64(&old_pass, &salt)?;
@@ -129,38 +155,46 @@ pub fn change_password(old_pass: String, new_pass: String, state: State<AppState
     let mut diff = 0u8;
     for (a, b) in old_derived[..32].iter().zip(stored.iter()) { diff |= a ^ b; }
     if diff != 0 { old_derived.zeroize(); return Err("Ancien mot de passe incorrect".to_string()); }
-    let mut old_key = [0u8; 32];
-    old_key.copy_from_slice(&old_derived[32..]);
+
+    let mut old_kek = [0u8; 32];
+    old_kek.copy_from_slice(&old_derived[32..]);
+    let dek = decrypt_dek(&dek_nonce_b64, &dek_ct_b64, &old_kek)?;
+    old_kek.zeroize();
     old_derived.zeroize();
+
     let mut new_salt = [0u8; 16];
     rand::thread_rng().fill_bytes(&mut new_salt);
     let new_salt_b64 = B64.encode(&new_salt);
     let mut new_derived = derive_64(&new_pass, &new_salt)?;
     let new_verif_b64 = B64.encode(&new_derived[..32]);
-    let mut new_key = [0u8; 32];
-    new_key.copy_from_slice(&new_derived[32..]);
+    let mut new_kek = [0u8; 32];
+    new_kek.copy_from_slice(&new_derived[32..]);
+    let (new_dek_nonce_b64, new_dek_ct_b64) = encrypt_dek(&dek, &new_kek);
+    new_kek.zeroize();
     new_derived.zeroize();
+
     {
         let db = state.db.lock().map_err(|e| e.to_string())?;
-        let notes_dir = state.notes_dir.clone();
-        decrypt_all_data(&db, &notes_dir, &old_key)?;
-        old_key.zeroize();
-        encrypt_all_data(&db, &notes_dir, &new_key)?;
         db.execute("UPDATE app_config SET value=?1 WHERE key='password_salt'", [&new_salt_b64]).map_err(|e| e.to_string())?;
         db.execute("UPDATE app_config SET value=?1 WHERE key='password_hash'", [&new_verif_b64]).map_err(|e| e.to_string())?;
+        db.execute("UPDATE app_config SET value=?1 WHERE key='dek_nonce'", [&new_dek_nonce_b64]).map_err(|e| e.to_string())?;
+        db.execute("UPDATE app_config SET value=?1 WHERE key='dek_encrypted'", [&new_dek_ct_b64]).map_err(|e| e.to_string())?;
     }
+
     let mut guard = state.enc_key.lock().map_err(|e| e.to_string())?;
-    *guard = Some(new_key);
+    *guard = Some(dek);
     Ok(())
 }
 
 #[tauri::command]
 pub fn remove_password(password: String, state: State<AppState>) -> Result<(), String> {
-    let (salt_b64, verif_b64) = {
+    let (salt_b64, verif_b64, dek_nonce_b64, dek_ct_b64) = {
         let db = state.db.lock().map_err(|e| e.to_string())?;
         let s = db.query_row("SELECT value FROM app_config WHERE key='password_salt'", [], |r| r.get::<_, String>(0)).map_err(|e| e.to_string())?;
         let v = db.query_row("SELECT value FROM app_config WHERE key='password_hash'", [], |r| r.get::<_, String>(0)).map_err(|e| e.to_string())?;
-        (s, v)
+        let nonce = db.query_row("SELECT value FROM app_config WHERE key='dek_nonce'", [], |r| r.get::<_, String>(0)).map_err(|e| e.to_string())?;
+        let ct = db.query_row("SELECT value FROM app_config WHERE key='dek_encrypted'", [], |r| r.get::<_, String>(0)).map_err(|e| e.to_string())?;
+        (s, v, nonce, ct)
     };
     let salt = B64.decode(&salt_b64).map_err(|e| e.to_string())?;
     let mut derived = derive_64(&password, &salt)?;
@@ -168,17 +202,22 @@ pub fn remove_password(password: String, state: State<AppState>) -> Result<(), S
     let mut diff = 0u8;
     for (a, b) in derived[..32].iter().zip(stored.iter()) { diff |= a ^ b; }
     if diff != 0 { derived.zeroize(); return Err("Mot de passe incorrect".to_string()); }
-    let mut key = [0u8; 32];
-    key.copy_from_slice(&derived[32..]);
+
+    let mut kek = [0u8; 32];
+    kek.copy_from_slice(&derived[32..]);
+    let dek = decrypt_dek(&dek_nonce_b64, &dek_ct_b64, &kek)?;
+    kek.zeroize();
     derived.zeroize();
-    {
+
+    let notes_dir = {
         let db = state.db.lock().map_err(|e| e.to_string())?;
-        let notes_dir = state.notes_dir.clone();
-        decrypt_all_data(&db, &notes_dir, &key)?;
-        key.zeroize();
-        db.execute("DELETE FROM app_config WHERE key IN ('password_salt','password_hash','password_type')", [])
+        let nd = state.notes_dir.clone();
+        decrypt_all_data(&db, &nd, &dek)?;
+        db.execute("DELETE FROM app_config WHERE key IN ('password_salt','password_hash','password_type','dek_nonce','dek_encrypted')", [])
             .map_err(|e| e.to_string())?;
-    }
+        nd
+    };
+    git_gc_prune(&notes_dir);
     let mut guard = state.enc_key.lock().map_err(|e| e.to_string())?;
     *guard = None;
     Ok(())

@@ -1,7 +1,9 @@
 import React, { useState, useEffect, useRef } from "react";
-import { Delete, Lock, Plus } from "lucide-react";
+import { invoke } from "@tauri-apps/api/core";
+import { Delete, Lock, Plus, AlertTriangle } from "lucide-react";
 import { useStore } from "../store";
 import D20Roller from "./D20Roller";
+import ResetConfirmDialog from "./ResetConfirmDialog";
 
 const PIN_DOTS = 8;
 const MAX_ATTEMPTS = 10;
@@ -51,6 +53,7 @@ export default function LockScreen() {
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const [postIts, setPostIts] = useState<LockPostIt[]>(loadPostIts);
+  const [showResetDialog, setShowResetDialog] = useState(false);
 
   // Attempts persisted in localStorage to survive app restarts
   const [lockout, setLockout] = useState<PersistedLockout>(() => {
@@ -75,6 +78,10 @@ export default function LockScreen() {
     saveAttempts(data);
     setLockout(data);
     return next;
+  };
+
+  const handleReset = () => {
+    setShowResetDialog(true);
   };
 
   const clearAttempts = () => {
@@ -267,8 +274,17 @@ export default function LockScreen() {
 
         {loading && <p className="text-muted text-xs">Vérification…</p>}
 
+        <button
+          onClick={handleReset}
+          className="mt-6 flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-red-400/10 border border-red-400/20 text-xs text-red-400 hover:bg-red-400/15 hover:border-red-400/30 transition-colors"
+        >
+          <AlertTriangle size={11} />
+          Réinitialiser l'app
+        </button>
+
         {postItsLayer}
         <D20Roller />
+        <ResetConfirmDialog isOpen={showResetDialog} onClose={() => setShowResetDialog(false)} />
       </div>
     );
   }
@@ -304,10 +320,19 @@ export default function LockScreen() {
         >
           {loading ? "Vérification…" : "Déverrouiller"}
         </button>
+
+        <button
+          onClick={handleReset}
+          className="w-full mt-2 flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg bg-red-400/10 border border-red-400/20 text-xs text-red-400 hover:bg-red-400/15 hover:border-red-400/30 transition-colors"
+        >
+          <AlertTriangle size={11} />
+          Réinitialiser l'app
+        </button>
       </div>
 
       {postItsLayer}
       <D20Roller />
+      <ResetConfirmDialog isOpen={showResetDialog} onClose={() => setShowResetDialog(false)} />
     </div>
   );
 }

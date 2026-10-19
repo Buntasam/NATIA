@@ -194,7 +194,6 @@ export default function Layout() {
 
 // ─── Quick open modal ─────────────────────────────────────────────────────────
 
-import React from "react";
 import { NoteMetadata } from "../types";
 
 type PaletteEntry =

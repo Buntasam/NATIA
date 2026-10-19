@@ -1,5 +1,4 @@
 use tauri::{Emitter, State};
-use uuid::Uuid;
 
 use crate::AppState;
 use crate::crypto::maybe_dec;
@@ -828,12 +827,11 @@ pub async fn check_claude_cli() -> Result<String, String> {
 #[tauri::command]
 pub async fn claude_cli_chat(system: String, message: String) -> Result<String, String> {
     use tokio::process::Command;
+    use tokio::io::AsyncWriteExt;
     use std::process::Stdio;
     let prompt = build_claude_cli_prompt(&system, &[], &message);
     #[cfg(windows)]
     let output = {
-        let tmp = std::env::temp_dir().join(format!("natia_{}.txt", Uuid::new_v4()));
-        std::fs::write(&tmp, prompt.as_bytes()).map_err(|e| e.to_string())?;
         let where_out = Command::new("cmd").args(["/C", "where claude"]).output().await
             .map_err(|e| format!("Impossible de trouver claude CLI : {e}"))?;
         let where_str = String::from_utf8_lossy(&where_out.stdout);
@@ -841,20 +839,21 @@ pub async fn claude_cli_chat(system: String, message: String) -> Result<String, 
             .find(|l| l.trim().ends_with(".cmd"))
             .or_else(|| where_str.lines().find(|l| !l.trim().is_empty()))
             .unwrap_or("claude").trim().to_string();
-        let file = std::fs::File::open(&tmp).map_err(|e| e.to_string())?;
-        let result = Command::new("cmd")
-            .args(["/C", &claude_bin, "--print"])
-            .stdin(std::process::Stdio::from(file))
+        let mut child = Command::new(&claude_bin)
+            .arg("--print")
+            .stdin(Stdio::piped())
             .stdout(Stdio::piped())
             .stderr(Stdio::piped())
-            .output().await
+            .spawn()
             .map_err(|e| format!("Impossible de lancer claude CLI : {e}"))?;
-        let _ = std::fs::remove_file(&tmp);
-        result
+        if let Some(mut stdin) = child.stdin.take() {
+            stdin.write_all(prompt.as_bytes()).await.map_err(|e| e.to_string())?;
+        }
+        child.wait_with_output().await
+            .map_err(|e| format!("Impossible de lancer claude CLI : {e}"))?
     };
     #[cfg(not(windows))]
     let output = {
-        use tokio::io::AsyncWriteExt;
         let mut child = Command::new("claude")
             .arg("--print")
             .stdin(Stdio::piped())
@@ -883,14 +882,13 @@ pub async fn claude_cli_stream(
     history: Option<Vec<serde_json::Value>>,
 ) -> Result<(), String> {
     use tokio::io::AsyncReadExt;
+    use tokio::io::AsyncWriteExt;
     use tokio::process::Command;
     use std::process::Stdio;
     let hist = history.unwrap_or_default();
     let prompt = build_claude_cli_prompt(&system, &hist, &message);
     #[cfg(windows)]
     let mut child = {
-        let tmp = std::env::temp_dir().join(format!("natia_{}.txt", Uuid::new_v4()));
-        std::fs::write(&tmp, prompt.as_bytes()).map_err(|e| e.to_string())?;
         let where_out = Command::new("cmd").args(["/C", "where claude"]).output().await
             .map_err(|e| format!("Impossible de trouver claude CLI : {e}"))?;
         let where_str = String::from_utf8_lossy(&where_out.stdout);
@@ -898,15 +896,16 @@ pub async fn claude_cli_stream(
             .find(|l| l.trim().ends_with(".cmd"))
             .or_else(|| where_str.lines().find(|l| !l.trim().is_empty()))
             .unwrap_or("claude").trim().to_string();
-        let file = std::fs::File::open(&tmp).map_err(|e| e.to_string())?;
-        let c = Command::new("cmd")
-            .args(["/C", &claude_bin, "--print"])
-            .stdin(std::process::Stdio::from(file))
+        let mut c = Command::new(&claude_bin)
+            .arg("--print")
+            .stdin(Stdio::piped())
             .stdout(Stdio::piped())
             .stderr(Stdio::piped())
             .spawn()
             .map_err(|e| format!("Impossible de lancer claude CLI : {e}"))?;
-        let _ = std::fs::remove_file(&tmp);
+        if let Some(mut stdin) = c.stdin.take() {
+            stdin.write_all(prompt.as_bytes()).await.map_err(|e| e.to_string())?;
+        }
         c
     };
     #[cfg(not(windows))]

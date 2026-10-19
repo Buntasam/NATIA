@@ -181,6 +181,24 @@ pub struct ApiKey {
     pub model: String,
 }
 
+// ─── Security helpers ─────────────────────────────────────────────────────────
+
+pub fn require_unlocked(state: &AppState) -> Result<(), String> {
+    let db = state.db.lock().map_err(|e| e.to_string())?;
+    let has_pw = db
+        .query_row("SELECT 1 FROM app_config WHERE key='password_hash' LIMIT 1", [], |_| Ok(true))
+        .is_ok();
+
+    if has_pw {
+        let key = state.enc_key.lock().map_err(|e| e.to_string())?;
+        if key.is_none() {
+            return Err("App verrouillée — déverrouiller avant de continuer".to_string());
+        }
+    }
+
+    Ok(())
+}
+
 // ─── Entry point ──────────────────────────────────────────────────────────────
 
 pub fn run() {
@@ -271,10 +289,76 @@ pub fn run() {
             ai::check_claude_cli,
             ai::claude_cli_chat,
             ai::claude_cli_stream,
+            toggle_maximize_window,
+            reset_app,
             exit_app,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
+}
+
+#[tauri::command]
+fn toggle_maximize_window(window: tauri::Window) -> Result<(), String> {
+    let is_maximized = window.is_maximized().map_err(|e| e.to_string())?;
+    if is_maximized {
+        window.unmaximize().map_err(|e| e.to_string())?;
+    } else {
+        window.maximize().map_err(|e| e.to_string())?;
+    }
+    Ok(())
+}
+
+#[tauri::command]
+async fn reset_app(app_handle: tauri::AppHandle) -> Result<(), String> {
+    let state = app_handle.state::<AppState>();
+
+    // Fermer complètement l'ancienne connexion SQLite (pas juste le lock) pour
+    // libérer le handle de fichier Windows ET éviter que has_password() etc.
+    // continuent de lire l'ancienne base encore ouverte en mémoire.
+    {
+        let mut guard = state.db.lock().map_err(|e| e.to_string())?;
+        let temp = Connection::open_in_memory().map_err(|e| e.to_string())?;
+        let old_conn = std::mem::replace(&mut *guard, temp);
+        drop(old_conn);
+    }
+
+    *state.enc_key.lock().map_err(|e| e.to_string())? = None;
+    *state.failed_attempts.lock().map_err(|e| e.to_string())? = 0;
+    *state.lock_until.lock().map_err(|e| e.to_string())? = None;
+
+    let data_dir = app_handle.path().app_data_dir().map_err(|e| e.to_string())?;
+
+    let mut deleted = !data_dir.exists();
+    for attempt in 0..20 {
+        if deleted {
+            break;
+        }
+        if std::fs::remove_dir_all(&data_dir).is_ok() {
+            deleted = true;
+            break;
+        }
+        println!("Reset attempt {}", attempt + 1);
+        tokio::time::sleep(tokio::time::Duration::from_millis(200)).await;
+    }
+
+    if !deleted {
+        return Err("Impossible de supprimer les données".to_string());
+    }
+
+    // Recréer un environnement tout neuf (dossier notes + base vide) pour que
+    // l'app soit immédiatement utilisable sans redémarrer le process Rust.
+    let notes_dir = data_dir.join("notes");
+    std::fs::create_dir_all(&notes_dir).map_err(|e| e.to_string())?;
+    db::init_git(&notes_dir);
+
+    let db_path = data_dir.join("natia.db");
+    let new_conn = Connection::open(&db_path).map_err(|e| e.to_string())?;
+    db::init_db(&new_conn).map_err(|e| e.to_string())?;
+
+    *state.db.lock().map_err(|e| e.to_string())? = new_conn;
+
+    println!("Reset OK");
+    Ok(())
 }
 
 #[tauri::command]

@@ -173,6 +173,7 @@ pub fn create_note(
     folder: Option<String>,
     state: State<AppState>,
 ) -> Result<Note, String> {
+    crate::require_unlocked(&state)?;
     let key = state.enc_key.lock().map_err(|e| e.to_string())?.clone();
     let id = Uuid::new_v4().to_string();
     let now = Utc::now().to_rfc3339();
@@ -200,6 +201,7 @@ pub fn update_note(
     label: Option<String>,
     state: State<AppState>,
 ) -> Result<Note, String> {
+    crate::require_unlocked(&state)?;
     if !is_valid_uuid(&id) { return Err("ID invalide".to_string()); }
     let key = state.enc_key.lock().map_err(|e| e.to_string())?.clone();
     let now = Utc::now().to_rfc3339();
@@ -228,6 +230,7 @@ pub fn update_note(
 
 #[tauri::command]
 pub fn rename_note(id: String, title: String, state: State<AppState>) -> Result<(), String> {
+    crate::require_unlocked(&state)?;
     if !is_valid_uuid(&id) { return Err("ID invalide".to_string()); }
     let key = state.enc_key.lock().map_err(|e| e.to_string())?.clone();
     let now = Utc::now().to_rfc3339();
@@ -241,6 +244,7 @@ pub fn rename_note(id: String, title: String, state: State<AppState>) -> Result<
 
 #[tauri::command]
 pub fn delete_note(id: String, state: State<AppState>) -> Result<(), String> {
+    crate::require_unlocked(&state)?;
     if !is_valid_uuid(&id) { return Err("ID invalide".to_string()); }
     let now = Utc::now().to_rfc3339();
     let db = state.db.lock().map_err(|e| e.to_string())?;
@@ -296,6 +300,7 @@ pub fn get_version_content(note_id: String, hash: String, state: State<AppState>
 
 #[tauri::command]
 pub fn restore_version(note_id: String, hash: String, state: State<AppState>) -> Result<Note, String> {
+    crate::require_unlocked(&state)?;
     if !is_valid_uuid(&note_id) || !is_valid_uuid(&hash) { return Err("ID invalide".to_string()); }
     let key = state.enc_key.lock().map_err(|e| e.to_string())?.clone();
     let plain_content = {
@@ -337,6 +342,7 @@ pub fn get_folders(state: State<AppState>) -> Result<Vec<String>, String> {
 
 #[tauri::command]
 pub fn create_folder(path: String, state: State<AppState>) -> Result<(), String> {
+    crate::require_unlocked(&state)?;
     let db = state.db.lock().map_err(|e| e.to_string())?;
     db.execute("INSERT OR IGNORE INTO folders(path) VALUES(?1)", [&path]).map_err(|e| e.to_string())?;
     Ok(())
@@ -344,6 +350,7 @@ pub fn create_folder(path: String, state: State<AppState>) -> Result<(), String>
 
 #[tauri::command]
 pub fn delete_folder(path: String, state: State<AppState>) -> Result<(), String> {
+    crate::require_unlocked(&state)?;
     let now = Utc::now().to_rfc3339();
     let db = state.db.lock().map_err(|e| e.to_string())?;
     let prefix = format!("{}/%", path);
@@ -360,6 +367,7 @@ pub fn delete_folder(path: String, state: State<AppState>) -> Result<(), String>
 
 #[tauri::command]
 pub fn rename_folder(old_path: String, new_path: String, state: State<AppState>) -> Result<(), String> {
+    crate::require_unlocked(&state)?;
     let db = state.db.lock().map_err(|e| e.to_string())?;
     let op = format!("{}/%", old_path);
     let np = format!("{}/%", new_path);
@@ -388,6 +396,7 @@ pub fn rename_folder(old_path: String, new_path: String, state: State<AppState>)
 
 #[tauri::command]
 pub fn move_note(id: String, folder: Option<String>, state: State<AppState>) -> Result<NoteMetadata, String> {
+    crate::require_unlocked(&state)?;
     if !is_valid_uuid(&id) { return Err("ID invalide".to_string()); }
     let key = state.enc_key.lock().map_err(|e| e.to_string())?.clone();
     let now = Utc::now().to_rfc3339();
@@ -469,6 +478,7 @@ pub fn get_trash(state: State<AppState>) -> Result<Vec<TrashItem>, String> {
 
 #[tauri::command]
 pub fn restore_from_trash(id: String, item_type: String, state: State<AppState>) -> Result<(), String> {
+    crate::require_unlocked(&state)?;
     let db = state.db.lock().map_err(|e| e.to_string())?;
     if item_type == "note" {
         db.execute("UPDATE notes SET deleted_at=NULL WHERE id=?1", [&id])
@@ -485,6 +495,7 @@ pub fn restore_from_trash(id: String, item_type: String, state: State<AppState>)
 
 #[tauri::command]
 pub fn permanent_delete_item(id: String, item_type: String, state: State<AppState>) -> Result<(), String> {
+    crate::require_unlocked(&state)?;
     if item_type == "note" && !is_valid_uuid(&id) { return Err("ID invalide".to_string()); }
     if item_type == "note" {
         {
@@ -529,6 +540,7 @@ pub fn permanent_delete_item(id: String, item_type: String, state: State<AppStat
 
 #[tauri::command]
 pub fn empty_trash(state: State<AppState>) -> Result<(), String> {
+    crate::require_unlocked(&state)?;
     let note_ids: Vec<String> = {
         let db = state.db.lock().map_err(|e| e.to_string())?;
         let mut stmt = db.prepare("SELECT id FROM notes WHERE deleted_at IS NOT NULL")

@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { save } from "@tauri-apps/plugin-dialog";
-import { BarChart2, BookMarked, BrainCircuit, CheckCircle2, Database, Download, Eye, EyeOff, FolderOpen, Leaf, Lock, LogOut, Minus, Palette, Plus, RotateCcw, ScrollText, Search, Shield, ShieldOff, Sparkles, Terminal, Trash2 as TrashIcon, TrendingUp, Wrench, X, ChevronDown, Clock, Trash2, XCircle, Zap, Activity } from "lucide-react";
+import { BarChart2, BookMarked, BrainCircuit, CheckCircle2, Copy, Database, Download, Eye, EyeOff, ExternalLink, FolderOpen, Github, Leaf, Lightbulb, Lock, LogOut, Mail, Minus, Palette, Plus, RotateCcw, ScrollText, Search, Shield, ShieldOff, Sparkles, Star, Terminal, Trash2 as TrashIcon, TrendingUp, Wrench, X, ChevronDown, Clock, Trash2, XCircle, Zap, Activity, AlertTriangle, Bug } from "lucide-react";
 import { useStore } from "../store";
 import { DEFAULT_SETTINGS } from "../store";
 import { Settings as SettingsType, PromptVersion } from "../types";
@@ -26,6 +26,28 @@ const NAV: { key: SettingsCat; label: string; desc: string; icon: React.ReactNod
 ];
 
 const normalize = (s: string) => s.toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "");
+
+const CONTACT_EMAIL = "email@test.fr";
+const GITHUB_URL = "https://github.com/Buntasam/NATIA";
+const REPORT_TEMPLATE = (date: string) =>
+`À : ${CONTACT_EMAIL}
+Objet : [NATIA bêta] — Rapport du ${date}
+
+Type : [ ] Bug  [ ] Idée  [ ] Autre
+
+Description :
+
+
+Étapes pour reproduire (si bug) :
+1.
+2.
+
+Comportement attendu :
+
+Comportement observé :
+
+---
+Merci pour ton retour !`;
 
 const PROMPT_FIELDS: { key: keyof SettingsType; label: string; rows: number }[] = [
   { key: "global_shadow_prompt", label: "Prompt global (injecté dans chaque requête)", rows: 3 },
@@ -140,6 +162,8 @@ export default function Settings() {
   const [exportDone, setExportDone] = useState(false);
   const [openDefault, setOpenDefault] = useState<string | null>(null);
   const [allReset, setAllReset] = useState(false);
+  const [copiedReport, setCopiedReport] = useState(false);
+  const [copiedEmail, setCopiedEmail] = useState(false);
 
   // Security state
   type SecMode = "idle" | "setup" | "change" | "remove";
@@ -193,6 +217,17 @@ export default function Settings() {
   const uninstallTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const handleRevealData = async () => {
     await invoke("reveal_data_dir");
+  };
+
+  const handleResetApp = async () => {
+    const confirmed = window.confirm("⚠️  Réinitialiser l'app ? Tout sera supprimé (notes, mot de passe, données). Cette action est irréversible.");
+    if (confirmed) {
+      try {
+        await invoke("reset_app");
+      } catch (e) {
+        console.error("Erreur reset:", e);
+      }
+    }
   };
 
   // ── Navigation, recherche et détection de modifications ─────────────────────
@@ -308,6 +343,20 @@ export default function Settings() {
     localStorage.removeItem("natia_disclaimer_v1");
     setDisclaimerReset(true);
     setTimeout(() => setDisclaimerReset(false), 2000);
+  };
+
+  const reportTemplate = REPORT_TEMPLATE(new Date().toLocaleDateString("fr-FR"));
+
+  const copyReportTemplate = () => {
+    navigator.clipboard.writeText(reportTemplate).catch(() => {});
+    setCopiedReport(true);
+    setTimeout(() => setCopiedReport(false), 2000);
+  };
+
+  const copyContactEmail = () => {
+    navigator.clipboard.writeText(CONTACT_EMAIL).catch(() => {});
+    setCopiedEmail(true);
+    setTimeout(() => setCopiedEmail(false), 2000);
   };
 
   const resetPrompt = (key: keyof SettingsType) => { set(key, DEFAULT_SETTINGS[key] as string); setOpenDefault(null); };
@@ -498,6 +547,9 @@ export default function Settings() {
               <Input id="default_model" value={form.default_model} onChange={(v) => set("default_model", v)} placeholder="gemma3:1b, mistral…" />
               <p className="text-[10px] text-muted mt-1">Nom exact du modèle installé sur ton serveur Ollama.</p>
             </Field>
+            <p className="text-[10px] text-amber-500/80 leading-relaxed -mt-1">
+              Sur du matériel standard, les modèles locaux peuvent être très lents sur les notes longues. Modèles rapides recommandés : <code className="text-accent text-[10px] bg-accent/10 px-1 rounded">gemma3:1b</code> <code className="text-accent text-[10px] bg-accent/10 px-1 rounded">phi4-mini</code> <code className="text-accent text-[10px] bg-accent/10 px-1 rounded">qwen2.5:1.5b</code>.
+            </p>
           </>
         )}
 
@@ -933,6 +985,13 @@ export default function Settings() {
               Ouvrir le dossier de données
             </button>
             <button
+              onClick={handleResetApp}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-red-400/10 border border-red-400/20 text-xs text-red-400 hover:bg-red-400/15 hover:border-red-400/30 transition-colors"
+            >
+              <AlertTriangle size={11} />
+              Réinitialiser l'app
+            </button>
+            <button
               onClick={() => {
                 if (uninstallConfirm) {
                   if (uninstallTimer.current) clearTimeout(uninstallTimer.current);
@@ -1155,6 +1214,63 @@ export default function Settings() {
           >
             <span className={`absolute top-0.5 w-4 h-4 rounded-full bg-white shadow-sm transition-transform ${form.debug_mode ? "left-[18px]" : "left-0.5"}`} />
           </button>
+        </div>
+      </Section>
+
+      <Section title="Signaler un bug ou une idée">
+        <div className="flex items-center gap-2 px-2.5 py-2 rounded-lg bg-hover border border-border">
+          <Mail size={12} className="text-accent shrink-0" />
+          <span className="text-xs text-primary font-mono flex-1 truncate">{CONTACT_EMAIL}</span>
+          <button onClick={copyContactEmail} title="Copier l'adresse" className="text-muted hover:text-primary transition-colors shrink-0">
+            {copiedEmail ? <span className="text-[10px] text-accent">✓ Copié</span> : <Copy size={11} />}
+          </button>
+        </div>
+
+        <div className="flex flex-col gap-1.5 mt-3">
+          <div className="flex items-center gap-1.5">
+            <Bug size={11} className="text-red-400" />
+            <Lightbulb size={11} className="text-amber-400" />
+            <span className="text-[10px] text-muted">Modèle de rapport</span>
+          </div>
+          <pre className="text-[10px] leading-[1.5] font-mono text-secondary/70 bg-black/20 border border-border/50 rounded-lg px-2.5 py-2 whitespace-pre-wrap overflow-hidden max-h-32 overflow-y-auto">
+            {reportTemplate}
+          </pre>
+          <div className="flex gap-2 mt-1">
+            <button onClick={copyReportTemplate} className="flex-1 flex items-center justify-center gap-1.5 py-1.5 rounded-lg border border-border bg-hover hover:bg-active text-xs text-secondary hover:text-primary transition-colors">
+              <Copy size={11} />
+              {copiedReport ? "Copié !" : "Copier"}
+            </button>
+            <a
+              href={`mailto:${CONTACT_EMAIL}?subject=${encodeURIComponent("[NATIA bêta] Rapport")}&body=${encodeURIComponent(reportTemplate)}`}
+              className="flex-1 flex items-center justify-center gap-1.5 py-1.5 rounded-lg border border-accent/30 bg-accent/10 hover:bg-accent/20 text-xs text-accent transition-colors"
+            >
+              <Mail size={11} />
+              Envoyer
+            </a>
+          </div>
+        </div>
+      </Section>
+
+      <Section title="Communauté">
+        <div className="flex items-center gap-3">
+          <a
+            href={GITHUB_URL}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="flex items-center gap-2 px-3 py-1.5 rounded-lg border border-border bg-hover hover:bg-active text-xs text-secondary hover:text-primary transition-colors shrink-0"
+          >
+            <Github size={13} />
+            <span className="font-medium">Buntasam/NATIA</span>
+            <ExternalLink size={10} className="text-muted" />
+          </a>
+          <p className="text-xs text-muted">
+            Si NATIA te plaît, une{" "}
+            <a href={GITHUB_URL} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-amber-400 hover:text-amber-300 transition-colors font-medium">
+              <Star size={11} className="fill-amber-400" />
+              étoile sur GitHub
+            </a>
+            {" "}aide beaucoup !
+          </p>
         </div>
       </Section>
     </>

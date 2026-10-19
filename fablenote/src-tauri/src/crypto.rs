@@ -8,8 +8,9 @@ use rusqlite::{Connection, Result as SqlResult, params};
 use std::path::PathBuf;
 
 pub(crate) const ENC_PREFIX: &str = "ENC:v1:";
-const ARGON2_MEM_KB: u32 = 19456;
-const ARGON2_TIME: u32 = 2;
+pub(crate) const ENC_PREFIX_V2: &str = "ENC:v2:";
+const ARGON2_MEM_KB: u32 = 65536;
+const ARGON2_TIME: u32 = 3;
 const ARGON2_PARALLEL: u32 = 1;
 const DERIVED_LEN: usize = 64;
 
@@ -83,6 +84,39 @@ pub(crate) fn sanitize_name(s: &str) -> String {
         })
         .collect();
     step1.replace("..", "_")
+}
+
+pub(crate) fn generate_dek() -> [u8; 32] {
+    let mut dek = [0u8; 32];
+    use rand::RngCore;
+    rand::thread_rng().fill_bytes(&mut dek);
+    dek
+}
+
+pub(crate) fn encrypt_dek(dek: &[u8; 32], kek: &[u8; 32]) -> (String, String) {
+    let cipher = Aes256Gcm::new_from_slice(kek).expect("32-byte KEK");
+    let nonce = Aes256Gcm::generate_nonce(&mut AeadOsRng);
+    let ct = cipher
+        .encrypt(&nonce, dek.as_ref())
+        .expect("DEK encryption failure");
+    (
+        B64.encode(nonce.as_slice()),
+        B64.encode(&ct),
+    )
+}
+
+pub(crate) fn decrypt_dek(nonce_b64: &str, ct_b64: &str, kek: &[u8; 32]) -> Result<[u8; 32], String> {
+    let cipher = Aes256Gcm::new_from_slice(kek).expect("32-byte KEK");
+    let nonce_bytes = B64.decode(nonce_b64).map_err(|e| e.to_string())?;
+    let ct = B64.decode(ct_b64).map_err(|e| e.to_string())?;
+    let nonce = aes_gcm::Nonce::from_slice(&nonce_bytes);
+    let plaintext = cipher.decrypt(nonce, ct.as_ref()).map_err(|_| "DEK decryption failed")?;
+    let mut dek = [0u8; 32];
+    if plaintext.len() != 32 {
+        return Err("DEK has wrong length".to_string());
+    }
+    dek.copy_from_slice(&plaintext);
+    Ok(dek)
 }
 
 pub(crate) fn collect_rows2(db: &Connection, sql: &str) -> Result<Vec<(String, String)>, String> {
