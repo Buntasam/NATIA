@@ -157,37 +157,108 @@ pub fn setup_password(password: String, pw_type: String, state: State<AppState>)
     Ok(())
 }
 
+// ─── Blocage après échecs ─────────────────────────────────────────────────────
+// Compteur et fin de blocage stockés en base (heure Unix) : redémarrer l'app,
+// vider le localStorage ou tuer le processus ne les remet pas à zéro.
+
+const FREE_ATTEMPTS: u32 = 4;
+const MAX_LOCK_SECS: u64 = 24 * 3600;
+
+/// Durée de blocage après `failures` échecs consécutifs : 4 essais libres,
+/// puis 30 s, 1, 2, 4, 8 min, puis 15 min doublant à chaque échec (24 h max).
+pub(crate) fn lock_delay_secs(failures: u32) -> u64 {
+    match failures {
+        0..=FREE_ATTEMPTS => 0,
+        5..=9 => 30u64 << (failures - 5),
+        _ => (900u64 << (failures - 10).min(16)).min(MAX_LOCK_SECS),
+    }
+}
+
+fn unix_now() -> u64 {
+    std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_secs())
+        .unwrap_or(0)
+}
+
+fn read_lockout(db: &rusqlite::Connection) -> (u32, u64) {
+    let get = |k: &str| -> u64 {
+        db.query_row("SELECT value FROM app_config WHERE key=?1", [k], |r| r.get::<_, String>(0))
+            .ok()
+            .and_then(|v| v.parse().ok())
+            .unwrap_or(0)
+    };
+    (get("failed_attempts") as u32, get("lock_until"))
+}
+
+fn write_lockout(db: &rusqlite::Connection, failures: u32, lock_until: u64) -> Result<(), String> {
+    let tx = db.unchecked_transaction().map_err(|e| e.to_string())?;
+    for (k, v) in [("failed_attempts", failures.to_string()), ("lock_until", lock_until.to_string())] {
+        tx.execute(
+            "INSERT INTO app_config(key,value) VALUES(?1,?2) ON CONFLICT(key) DO UPDATE SET value=?2",
+            params![k, v],
+        ).map_err(|e| e.to_string())?;
+    }
+    tx.commit().map_err(|e| e.to_string())
+}
+
+fn format_wait(secs: u64) -> String {
+    match secs {
+        0..=59 => format!("{} s", secs.max(1)),
+        60..=3599 => format!("{} min", secs.div_ceil(60)),
+        _ => format!("{} h {:02} min", secs / 3600, (secs % 3600) / 60),
+    }
+}
+
+#[derive(serde::Serialize)]
+pub struct LockStatus {
+    pub failed_attempts: u32,
+    pub locked_for_secs: u64,
+    pub attempts_before_lock: u32,
+}
+
+fn lock_status_at(db: &rusqlite::Connection, now: u64) -> LockStatus {
+    let (failures, lock_until) = read_lockout(db);
+    LockStatus {
+        failed_attempts: failures,
+        locked_for_secs: lock_until.saturating_sub(now),
+        attempts_before_lock: (FREE_ATTEMPTS + 1).saturating_sub(failures),
+    }
+}
+
+#[tauri::command]
+pub fn get_lock_status(state: State<AppState>) -> Result<LockStatus, String> {
+    let db = state.db.lock().map_err(|e| e.to_string())?;
+    Ok(lock_status_at(&db, unix_now()))
+}
+
+/// Compte la tentative AVANT de vérifier : interrompre l'app pendant le calcul
+/// Argon2 ne permet pas d'esquiver le compteur. Remis à zéro si le mot de passe est bon.
+fn begin_attempt(db: &rusqlite::Connection, now: u64) -> Result<(), String> {
+    let (failures, lock_until) = read_lockout(db);
+    if lock_until > now {
+        return Err(format!("Trop de tentatives. Réessayez dans {}.", format_wait(lock_until - now)));
+    }
+    let failures = failures.saturating_add(1);
+    write_lockout(db, failures, now + lock_delay_secs(failures))
+}
+
 #[tauri::command]
 pub fn verify_password(password: String, state: State<AppState>) -> Result<bool, String> {
-    // Check Rust-side lockout (process-lifetime, not bypassable via localStorage clear)
-    {
-        let now = std::time::Instant::now();
-        let lock_until = state.lock_until.lock().map_err(|e| e.to_string())?;
-        if let Some(until) = *lock_until {
-            if until > now {
-                let secs = (until - now).as_secs() + 1;
-                return Err(format!("Trop de tentatives. Réessayez dans {} s.", secs));
-            }
-        }
-    }
-
     let result = {
         let db = state.db.lock().map_err(|e| e.to_string())?;
+        begin_attempt(&db, unix_now())?;
         unwrap_dek(&db, &password)?
     };
 
     let Some((mut dek, bound)) = result else {
-        // Exponential backoff: 2s, 4s, 8s, 16s, 30s max
-        let mut attempts = state.failed_attempts.lock().map_err(|e| e.to_string())?;
-        *attempts += 1;
-        let delay = (1u64 << (*attempts).min(5)).min(30);
-        *state.lock_until.lock().map_err(|e| e.to_string())? =
-            Some(std::time::Instant::now() + std::time::Duration::from_secs(delay));
         return Ok(false);
     };
 
-    *state.failed_attempts.lock().map_err(|e| e.to_string())? = 0;
-    *state.lock_until.lock().map_err(|e| e.to_string())? = None;
+    {
+        let db = state.db.lock().map_err(|e| e.to_string())?;
+        write_lockout(&db, 0, 0)?;
+    }
 
     // Migration : une base créée avant la liaison à l'appareil est liée au premier déverrouillage.
     if !bound {
@@ -234,6 +305,8 @@ pub fn remove_password(password: String, state: State<AppState>) -> Result<(), S
 
 #[tauri::command]
 pub fn lock_app(state: State<AppState>) -> Result<(), String> {
+    crate::notes::clear_search_cache(&state);
+    *state.lock_request.lock().map_err(|e| e.to_string())? = None;
     let mut guard = state.enc_key.lock().map_err(|e| e.to_string())?;
     if let Some(ref mut key) = *guard {
         key.zeroize();
@@ -603,6 +676,35 @@ mod tests {
         wrap_dek(&db, "motdepasse", &dek, secret_a(), None).unwrap();
         assert_eq!(unwrap_dek_with(&db, "motdepasse", secret_a).unwrap(), Some((dek, true)));
         assert_eq!(config_get(&db, "password_type").unwrap(), "alpha", "le type n'est pas écrasé");
+    }
+
+    #[test]
+    fn lock_delays_escalate_and_cap() {
+        let d: Vec<u64> = (0..=12).map(lock_delay_secs).collect();
+        assert_eq!(d, [0, 0, 0, 0, 0, 30, 60, 120, 240, 480, 900, 1800, 3600]);
+        assert_eq!(lock_delay_secs(40), MAX_LOCK_SECS);
+        assert_eq!(lock_delay_secs(u32::MAX), MAX_LOCK_SECS);
+    }
+
+    #[test]
+    fn lockout_is_persisted_and_blocks_until_expiry() {
+        let db = db();
+        let t0 = 1_000_000;
+        for _ in 0..FREE_ATTEMPTS { begin_attempt(&db, t0).unwrap(); }
+        assert_eq!(lock_status_at(&db, t0).locked_for_secs, 0, "4 essais libres");
+        assert_eq!(lock_status_at(&db, t0).attempts_before_lock, 1);
+
+        begin_attempt(&db, t0).unwrap(); // 5e échec compté → 30 s
+        assert_eq!(lock_status_at(&db, t0).locked_for_secs, 30);
+        let err = begin_attempt(&db, t0 + 10).unwrap_err();
+        assert!(err.contains("20 s"), "{}", err);
+        assert_eq!(read_lockout(&db).0, 5, "une tentative refusée n'est pas comptée en plus");
+
+        begin_attempt(&db, t0 + 31).unwrap();
+        assert_eq!(lock_status_at(&db, t0 + 31).locked_for_secs, 60);
+
+        write_lockout(&db, 0, 0).unwrap(); // bon mot de passe
+        assert_eq!(lock_status_at(&db, t0 + 31).failed_attempts, 0);
     }
 
     #[test]

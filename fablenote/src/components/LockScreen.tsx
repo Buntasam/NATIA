@@ -1,56 +1,34 @@
 import React, { useState, useEffect, useRef } from "react";
 import { invoke } from "@tauri-apps/api/core";
-import { Delete, Lock, Plus, AlertTriangle } from "lucide-react";
+import { Delete, Lock, Plus, AlertTriangle, Eye, EyeOff } from "lucide-react";
 import { useStore } from "../store";
 import D20Roller from "./D20Roller";
 import ResetConfirmDialog from "./ResetConfirmDialog";
+import { LockPostIt, POSTIT_COLORS, arePostItsHidden, loadPostIts, newPostIt, savePostIts, setPostItsHidden } from "../lib/lockPostIts";
 
 const PIN_DOTS = 8;
-const MAX_ATTEMPTS = 10;
-const LOCKOUT_DURATION_MS = 15 * 60 * 1000; // 15 min avant réinitialisation
-const ATTEMPTS_KEY = "natia_failed_attempts";
+// Ancien compteur côté navigateur, contournable : le blocage est désormais géré en Rust.
+const LEGACY_ATTEMPTS_KEY = "natia_failed_attempts";
 
-interface PersistedLockout {
-  count: number;
-  lockedAt?: number;
+interface LockStatus {
+  failed_attempts: number;
+  locked_for_secs: number;
+  attempts_before_lock: number;
 }
 
-function loadAttempts(): PersistedLockout {
-  try { return JSON.parse(localStorage.getItem(ATTEMPTS_KEY) ?? "{}"); }
-  catch { return { count: 0 }; }
-}
-
-function saveAttempts(data: PersistedLockout) {
-  localStorage.setItem(ATTEMPTS_KEY, JSON.stringify(data));
+function formatWait(secs: number): string {
+  if (secs < 60) return `${Math.max(1, secs)} s`;
+  if (secs < 3600) return `${Math.ceil(secs / 60)} min`;
+  return `${Math.floor(secs / 3600)} h ${String(Math.floor((secs % 3600) / 60)).padStart(2, "0")} min`;
 }
 
 // ─── Lock-screen post-its ─────────────────────────────────────────────────────
-
-interface LockPostIt {
-  id: string;
-  text: string;
-  x: number;
-  y: number;
-  color: string;
-  width?: number;
-  height?: number;
-}
 
 const POSTIT_DEFAULT_W = 180;
 const POSTIT_DEFAULT_H = 130;
 const POSTIT_MIN_W = 120;
 const POSTIT_MIN_H = 80;
 
-const POSTIT_COLORS = ["#fef08a", "#fbcfe8", "#bbf7d0", "#bae6fd", "#e9d5ff"];
-const POSTIT_KEY = "natia_lock_postits";
-
-function loadPostIts(): LockPostIt[] {
-  try {
-    return JSON.parse(localStorage.getItem(POSTIT_KEY) ?? "[]");
-  } catch {
-    return [];
-  }
-}
 
 // ─── LockScreen ──────────────────────────────────────────────────────────────
 
@@ -60,53 +38,46 @@ export default function LockScreen() {
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const [postIts, setPostIts] = useState<LockPostIt[]>(loadPostIts);
+  const [postItsHidden, setHidden] = useState(arePostItsHidden);
+  const togglePostIts = () => { setPostItsHidden(!postItsHidden); setHidden(!postItsHidden); };
   const [showResetDialog, setShowResetDialog] = useState(false);
 
-  // Attempts persisted in localStorage to survive app restarts
-  const [lockout, setLockout] = useState<PersistedLockout>(() => {
-    const data = loadAttempts();
-    // Auto-clear lockout after LOCKOUT_DURATION_MS
-    if (data.lockedAt && Date.now() - data.lockedAt > LOCKOUT_DURATION_MS) {
-      const reset = { count: 0 };
-      saveAttempts(reset);
-      return reset;
+  // Source de vérité : le backend (compteur persistant en base, non contournable depuis l'interface).
+  const [lockedFor, setLockedFor] = useState(0);
+  const locked = lockedFor > 0;
+
+  const refreshStatus = async (): Promise<LockStatus | null> => {
+    try {
+      const s = await invoke<LockStatus>("get_lock_status");
+      setLockedFor(s.locked_for_secs);
+      return s;
+    } catch {
+      return null;
     }
-    return data;
-  });
-
-  const attempts = lockout.count;
-  const locked = attempts >= MAX_ATTEMPTS;
-
-  const bumpAttempts = () => {
-    const next = attempts + 1;
-    const data: PersistedLockout = next >= MAX_ATTEMPTS
-      ? { count: next, lockedAt: Date.now() }
-      : { count: next };
-    saveAttempts(data);
-    setLockout(data);
-    return next;
   };
+
+  useEffect(() => {
+    localStorage.removeItem(LEGACY_ATTEMPTS_KEY);
+    refreshStatus();
+  }, []);
+
+  useEffect(() => {
+    if (!locked) return;
+    const t = setInterval(() => setLockedFor((s) => Math.max(0, s - 1)), 1000);
+    return () => clearInterval(t);
+  }, [locked]);
+
+  const shownError = locked ? `Trop de tentatives — réessayez dans ${formatWait(lockedFor)}` : error;
 
   const handleReset = () => {
     setShowResetDialog(true);
   };
 
-  const clearAttempts = () => {
-    saveAttempts({ count: 0 });
-    setLockout({ count: 0 });
-  };
-
   const addPostIt = () => {
-    const note: LockPostIt = {
-      id: crypto.randomUUID(),
-      text: "",
-      x: 40 + Math.random() * Math.max(window.innerWidth - 260, 100),
-      y: 40 + Math.random() * Math.max(window.innerHeight - 260, 100),
-      color: POSTIT_COLORS[Math.floor(Math.random() * POSTIT_COLORS.length)],
-    };
+    if (postItsHidden) { setPostItsHidden(false); setHidden(false); }
     setPostIts((prev) => {
-      const updated = [...prev, note];
-      localStorage.setItem(POSTIT_KEY, JSON.stringify(updated));
+      const updated = [...prev, newPostIt()];
+      savePostIts(updated);
       return updated;
     });
   };
@@ -119,20 +90,17 @@ export default function LockScreen() {
     try {
       const ok = await unlock(password);
       if (!ok) {
-        const next = bumpAttempts();
-        if (next >= MAX_ATTEMPTS) {
-          setError("Trop de tentatives — application bloquée 15 min.");
-        } else {
-          const remaining = MAX_ATTEMPTS - next;
-          setError(`Mot de passe incorrect${remaining <= 5 ? ` — ${remaining} essai(s) restant(s)` : ""}`);
-        }
+        const s = await refreshStatus();
+        const left = s?.attempts_before_lock ?? 0;
+        setError(s && s.locked_for_secs === 0 && left > 0 && left <= 3
+          ? `Mot de passe incorrect — ${left} essai(s) avant blocage`
+          : "Mot de passe incorrect");
         setValue("");
-      } else {
-        clearAttempts();
       }
     } catch (e: unknown) {
       setError(String(e));
       setValue("");
+      await refreshStatus();
     } finally {
       setLoading(false);
     }
@@ -174,7 +142,7 @@ export default function LockScreen() {
 
   const postItsLayer = (
     <>
-      {postIts.map((p) => (
+      {!postItsHidden && postIts.map((p) => (
         <DraggablePostIt
           key={p.id}
           note={p}
@@ -184,14 +152,14 @@ export default function LockScreen() {
           onMoveEnd={(x, y) => {
             setPostIts((prev) => {
               const updated = prev.map((n) => (n.id === p.id ? { ...n, x, y } : n));
-              localStorage.setItem(POSTIT_KEY, JSON.stringify(updated));
+              savePostIts(updated);
               return updated;
             });
           }}
           onUpdate={(updates) => {
             setPostIts((prev) => {
               const updated = prev.map((n) => (n.id === p.id ? { ...n, ...updates } : n));
-              localStorage.setItem(POSTIT_KEY, JSON.stringify(updated));
+              savePostIts(updated);
               return updated;
             });
           }}
@@ -201,7 +169,7 @@ export default function LockScreen() {
           onDelete={() => {
             setPostIts((prev) => {
               const updated = prev.filter((n) => n.id !== p.id);
-              localStorage.setItem(POSTIT_KEY, JSON.stringify(updated));
+              savePostIts(updated);
               return updated;
             });
           }}
@@ -216,6 +184,17 @@ export default function LockScreen() {
           <AlertTriangle size={12} />
           Réinitialiser l'app
         </button>
+        {postIts.length > 0 && (
+          <button
+            onClick={togglePostIts}
+            aria-label={postItsHidden ? "Afficher les post-its" : "Masquer les post-its"}
+            title={postItsHidden ? `Afficher les post-its (${postIts.length})` : "Masquer les post-its"}
+            className="flex items-center gap-1.5 px-2 py-1.5 rounded-lg bg-white/5 hover:bg-white/10 border border-white/10 text-white/30 hover:text-white/60 text-xs transition-colors"
+          >
+            {postItsHidden ? <Eye size={12} /> : <EyeOff size={12} />}
+            {postItsHidden && <span>{postIts.length}</span>}
+          </button>
+        )}
         <button
           onClick={addPostIt}
           className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-white/5 hover:bg-white/10 border border-white/10 text-white/30 hover:text-white/60 text-xs transition-colors"
@@ -253,8 +232,8 @@ export default function LockScreen() {
           ))}
         </div>
 
-        {error && (
-          <p className="text-red-400 text-xs mb-4 animate-pulse">{error}</p>
+        {shownError && (
+          <p className="text-red-400 text-xs mb-4 animate-pulse">{shownError}</p>
         )}
 
         <div className="grid grid-cols-3 gap-3 mb-6">
@@ -322,7 +301,7 @@ export default function LockScreen() {
           className="w-full px-4 py-3 rounded-xl bg-hover border border-border text-primary placeholder-muted outline-none focus:border-accent transition-colors text-sm disabled:opacity-50"
         />
 
-        {error && <p className="text-red-400 text-xs text-center">{error}</p>}
+        {shownError && <p className="text-red-400 text-xs text-center">{shownError}</p>}
 
         <button
           onClick={() => handleSubmit()}

@@ -7,6 +7,7 @@ import {
   MessagesSquare, Search, Send, Sparkles, Tag, Terminal, X,
 } from "lucide-react";
 import { useStore } from "../store";
+import { lockSafely } from "../lib/lockSafely";
 import { aiStream } from "../lib/aiInvoke";
 import { markdownToHtml } from "../lib/markdown";
 import { buildMemoryContext } from "../lib/memoryContext";
@@ -29,7 +30,7 @@ export default function Layout() {
     showAiPanel, showVersionPanel, showSettings, showTrash,
     createNote, toggleSettings, toggleAiPanel, toggleVersionPanel,
     focusMode, toggleFocusMode, toggleGraph, notes, selectNote, recentNoteIds,
-    settings, isLocked, lock,
+    settings, isLocked,
     aiPanelWidth, setAiPanelWidth, splitNoteId, goBack, goForward,
   } = useStore();
 
@@ -39,7 +40,7 @@ export default function Layout() {
     if (!minutes || isLocked) return;
     const ms = minutes * 60 * 1000;
     let timer: ReturnType<typeof setTimeout>;
-    const reset = () => { clearTimeout(timer); timer = setTimeout(() => lock(), ms); };
+    const reset = () => { clearTimeout(timer); timer = setTimeout(() => { lockSafely(); }, ms); };
     window.addEventListener("mousemove", reset, { passive: true });
     window.addEventListener("keydown", reset, { passive: true });
     window.addEventListener("pointerdown", reset, { passive: true });
@@ -239,7 +240,7 @@ function QuickOpen({
       { id: "shortcuts", label: "Raccourcis clavier", run: onShowShortcuts },
     ];
     if (st.memoryEnabled) cmds.push({ id: "memory", label: "Mémoire IA (graphe)", run: () => st.toggleGraph() });
-    if (st.hasPassword) cmds.push({ id: "lock", label: "Verrouiller l'application", run: () => st.lock() });
+    if (st.hasPassword) cmds.push({ id: "lock", label: "Verrouiller l'application", run: () => { lockSafely(); } });
     if (st.splitNoteId) cmds.push({ id: "unsplit", label: "Fermer la vue scindée", run: () => st.setSplitNote(null) });
     return cmds.map((c) => ({ kind: "command" as const, ...c }));
   })();

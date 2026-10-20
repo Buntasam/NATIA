@@ -33,13 +33,28 @@ jobs:
         working-directory: fablenote/src-tauri
         run: cargo test --no-default-features --lib
 
+      # La version de l'app vient du tag (v6.2.0 -> 6.2.0) : c'est elle que le
+      # système de mise à jour compare à la version installée.
+      - name: Set app version from tag
+        shell: bash
+        run: |
+          version="${GITHUB_REF_NAME#v}"
+          if ! [[ "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "Le tag doit être de la forme vX.Y.Z (reçu : $GITHUB_REF_NAME)"; exit 1
+          fi
+          node -e "const f='fablenote/src-tauri/tauri.conf.json';const fs=require('fs');const c=JSON.parse(fs.readFileSync(f,'utf8'));c.version=process.argv[1];fs.writeFileSync(f,JSON.stringify(c,null,2)+'\n')" "$version"
+
       - uses: tauri-apps/tauri-action@v0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
         with:
           projectPath: fablenote
           tagName: ${{ github.ref_name }}
           releaseName: "NATIA ${{ github.ref_name }}"
           releaseBody: "Version bêta — voir le disclaimer au premier lancement."
+          # Brouillon à vérifier puis publier à la main. Pas en « pre-release » :
+          # le système de mise à jour ne lit que la dernière release publiée.
           releaseDraft: true
-          prerelease: true
+          prerelease: false

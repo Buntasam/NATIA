@@ -12,6 +12,7 @@ import {
   Moon,
   MoreHorizontal,
   Network,
+  StickyNote,
   NotebookPen,
   Pin,
   PinOff,
@@ -29,10 +30,12 @@ import { invoke } from "@tauri-apps/api/core";
 import { save } from "@tauri-apps/plugin-dialog";
 import TreeMapPanel from "./TreeMapPanel";
 import CalendarPanel from "./CalendarPanel";
+import PostItsPanel from "./PostItsPanel";
 import GraphPanel from "./GraphPanel";
 import ResizeHandle from "./ResizeHandle";
 import Tip from "./Tooltip";
 import { useStore } from "../store";
+import { lockSafely } from "../lib/lockSafely";
 import { NoteMetadata } from "../types";
 
 // ─── Module-level drag state (dataTransfer is unreliable in WebView2) ────────
@@ -143,7 +146,6 @@ export default function Sidebar() {
     setItemColor,
     deleteItemColor,
     hasPassword,
-    lock,
     settings,
     pinnedNoteIds,
     togglePinNote,
@@ -156,6 +158,7 @@ export default function Sidebar() {
 
   const [showTreeMap, setShowTreeMap] = useState(false);
   const [showCalendar, setShowCalendar] = useState(false);
+  const [showPostIts, setShowPostIts] = useState(false);
   const { showGraph, toggleGraph } = useStore();
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
 
@@ -370,6 +373,15 @@ export default function Sidebar() {
                 className="p-1 rounded text-muted hover:text-primary hover:bg-hover transition-colors"
               >
                 <CalendarDays size={14} />
+              </button>
+            </Tip>
+            <Tip label="Post-its">
+              <button
+                onClick={() => setShowPostIts(true)}
+                aria-label="Post-its"
+                className="p-1 rounded text-muted hover:text-primary hover:bg-hover transition-colors"
+              >
+                <StickyNote size={14} />
               </button>
             </Tip>
           </div>
@@ -652,7 +664,7 @@ export default function Sidebar() {
           {hasPassword && (
             <Tip label="Verrouiller l'application" side="top">
               <button
-                onClick={() => lock()}
+                onClick={() => { lockSafely(); }}
                 aria-label="Verrouiller l'application"
                 className="p-1.5 rounded text-muted hover:text-primary hover:bg-hover transition-colors"
               >
@@ -675,6 +687,7 @@ export default function Sidebar() {
       {/* Tree map overlay */}
       {showTreeMap && <TreeMapPanel onClose={() => setShowTreeMap(false)} />}
       {showCalendar && <CalendarPanel onClose={() => setShowCalendar(false)} />}
+      {showPostIts && <PostItsPanel onClose={() => setShowPostIts(false)} />}
       {showGraph && <GraphPanel onClose={toggleGraph} />}
 
       {/* Context menus */}

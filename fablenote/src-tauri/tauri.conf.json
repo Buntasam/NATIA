@@ -34,6 +34,18 @@
       "icons/128x128@2x.png",
       "icons/icon.icns",
       "icons/icon.ico"
-    ]
+    ],
+    "createUpdaterArtifacts": true
+  },
+  "plugins": {
+    "updater": {
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDcxNURFMEE4RTcwNjc4OUIKUldTYmVBYm5xT0JkY2Nlc2EwRW5NSVVzUG9kNENHMktaWG9VdVRlZm5vQ2syYjByQ1JFOUxySEQK",
+      "endpoints": [
+        "https://github.com/Buntasam/NATIA/releases/latest/download/latest.json"
+      ],
+      "windows": {
+        "installMode": "passive"
+      }
+    }
   }
 }

@@ -9,6 +9,7 @@ mod crypto;
 mod db;
 mod notes;
 mod settings;
+mod system_lock;
 
 // ─── App state ────────────────────────────────────────────────────────────────
 
@@ -16,8 +17,10 @@ pub struct AppState {
     pub db: Mutex<Connection>,
     pub notes_dir: PathBuf,
     pub enc_key: Mutex<Option<[u8; 32]>>,
-    pub failed_attempts: Mutex<u32>,
-    pub lock_until: Mutex<Option<std::time::Instant>>,
+    /// Verrouillage demandé par system_lock, en attente de l'interface.
+    pub lock_request: Mutex<Option<std::time::Instant>>,
+    /// Texte déchiffré des notes pour la recherche, vidé au verrouillage.
+    pub search_cache: Mutex<notes::SearchCache>,
 }
 
 // ─── Data types ───────────────────────────────────────────────────────────────
@@ -206,6 +209,7 @@ pub fn run() {
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_notification::init())
         .plugin(tauri_plugin_opener::init())
+        .plugin(tauri_plugin_updater::Builder::new().build())
         .setup(|app| {
             let data_dir = app.path().app_data_dir().expect("cannot resolve app data dir");
             let notes_dir = data_dir.join("notes");
@@ -220,9 +224,10 @@ pub fn run() {
                 db: Mutex::new(conn),
                 notes_dir,
                 enc_key: Mutex::new(None),
-                failed_attempts: Mutex::new(0),
-                lock_until: Mutex::new(None),
+                lock_request: Mutex::new(None),
+                search_cache: Mutex::new(Default::default()),
             });
+            system_lock::spawn(app.handle().clone());
 
             Ok(())
         })
@@ -247,8 +252,9 @@ pub fn run() {
             notes::permanent_delete_item,
             notes::empty_trash,
             notes::reveal_data_dir,
-            notes::export_zip,
             notes::save_zip_to_path,
+            notes::inspect_import,
+            notes::import_zip,
             notes::export_note_to_path,
             notes::search_notes,
             notes::get_global_stats,
@@ -269,6 +275,7 @@ pub fn run() {
             settings::get_password_type,
             settings::setup_password,
             settings::verify_password,
+            settings::get_lock_status,
             settings::change_password,
             settings::remove_password,
             settings::lock_app,
@@ -326,8 +333,7 @@ async fn reset_app(app_handle: tauri::AppHandle) -> Result<(), String> {
     }
 
     *state.enc_key.lock().map_err(|e| e.to_string())? = None;
-    *state.failed_attempts.lock().map_err(|e| e.to_string())? = 0;
-    *state.lock_until.lock().map_err(|e| e.to_string())? = None;
+    notes::clear_search_cache(&state);
 
     // Les clés API sans mot de passe vivent dans le keychain OS, hors du dossier de données.
     for name in db::API_KEY_NAMES.iter().chain([&db::DEVICE_SECRET_NAME]) {

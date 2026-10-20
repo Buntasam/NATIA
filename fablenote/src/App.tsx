@@ -1,5 +1,9 @@
 import { useEffect } from "react";
 import { invoke } from "@tauri-apps/api/core";
+import { listen } from "@tauri-apps/api/event";
+import { isPermissionGranted, sendNotification } from "@tauri-apps/plugin-notification";
+import { lockSafely } from "./lib/lockSafely";
+import { checkForUpdate, isAutoUpdateEnabled } from "./lib/updater";
 import { useStore } from "./store";
 import Layout from "./components/Layout";
 import Disclaimer from "./components/Disclaimer";
@@ -38,6 +42,23 @@ export default function App() {
   useEffect(() => {
     invoke("set_window_theme", { dark: isDark }).catch(() => {});
   }, [isDark]);
+
+  // Vérification silencieuse au démarrage : pas de release publiée ou pas de réseau = rien à signaler.
+  useEffect(() => {
+    if (!isAutoUpdateEnabled()) return;
+    checkForUpdate()
+      .then(async (u) => {
+        if (!u || !(await isPermissionGranted())) return;
+        sendNotification({ title: `NATIA ${u.version} est disponible`, body: "Paramètres → Application → Mises à jour" });
+      })
+      .catch(() => {});
+  }, []);
+
+  // Session Windows verrouillée ou PC sorti de veille (voir src-tauri/src/system_lock.rs).
+  useEffect(() => {
+    const unlisten = listen("system-lock", () => { lockSafely(); });
+    return () => { unlisten.then((fn) => fn()); };
+  }, []);
 
   // Close handler always active regardless of lock state
   useEffect(() => {
