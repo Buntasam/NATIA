@@ -11,6 +11,9 @@ pub(crate) const API_KEY_NAMES: &[&str] = &[
     "mistral_api_key",
 ];
 
+/// Secret Argon2 qui lie le mot de passe à la session Windows (voir settings.rs).
+pub(crate) const DEVICE_SECRET_NAME: &str = "device_secret";
+
 pub(crate) fn keychain_get(key_name: &str) -> Option<String> {
     keyring::Entry::new(KEYCHAIN_SERVICE, key_name)
         .ok()

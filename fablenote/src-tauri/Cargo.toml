@@ -27,7 +27,7 @@ rand = "0.8"
 base64 = "0.22"
 zip = "0.6"
 ammonia = "3"
-keyring = "3"
+keyring = { version = "3", features = ["windows-native", "apple-native"] }
 tauri-plugin-dialog = "2"
 tauri-plugin-notification = "2"
 zeroize = "1"

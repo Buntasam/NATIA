@@ -29,6 +29,10 @@ jobs:
         working-directory: fablenote
         run: npm ci
 
+      - name: Rust tests
+        working-directory: fablenote/src-tauri
+        run: cargo test --no-default-features --lib
+
       - uses: tauri-apps/tauri-action@v0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

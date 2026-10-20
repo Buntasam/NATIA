@@ -323,7 +323,7 @@ export default function Settings() {
     if (secPwType === "pin" && !/^\d{4,8}$/.test(secA)) { setSecError("PIN : 4 à 8 chiffres requis"); return; }
     if (secPwType === "alpha" && secA.length < 6) { setSecError("Minimum 6 caractères"); return; }
     setSecLoading(true); setSecError("");
-    try { await changePassword(secC, secA); cancelSec(); }
+    try { await changePassword(secC, secA, secPwType); cancelSec(); }
     catch (e) { setSecError(String(e)); }
     finally { setSecLoading(false); }
   };
@@ -430,8 +430,16 @@ export default function Settings() {
               </button>
             ))}
           </div>
+          {secPwType === "pin" && (
+            <p className="text-[10px] text-amber-500/90 leading-relaxed">
+              Un PIN se devine plus facilement qu'un mot de passe. Pour des notes sensibles, préférez un mot de passe long.
+            </p>
+          )}
           <SecInput label={secPwType === "pin" ? "Code PIN (4–8 chiffres)" : "Mot de passe (min. 6 car.)"} value={secA} onChange={setSecA} show={secShowA} onToggleShow={() => setSecShowA(s => !s)} />
           <SecInput label="Confirmer" value={secB} onChange={setSecB} show={secShowB} onToggleShow={() => setSecShowB(s => !s)} />
+          <p className="text-[10px] text-muted leading-relaxed">
+            Le chiffrement est lié à ce PC et à votre session Windows : une copie de vos données ne peut pas être ouverte ailleurs, même avec le bon mot de passe. Pour changer d'ordinateur, faites d'abord un export (Paramètres → Données).
+          </p>
           {secError && <p className="text-xs text-red-400">{secError}</p>}
           <div className="flex gap-2">
             <button onClick={cancelSec} className="flex-1 py-2 rounded-lg bg-hover border border-border text-xs text-secondary hover:text-primary transition-colors">Annuler</button>
@@ -450,6 +458,11 @@ export default function Settings() {
               </button>
             ))}
           </div>
+          {secPwType === "pin" && (
+            <p className="text-[10px] text-amber-500/90 leading-relaxed">
+              Un PIN se devine plus facilement qu'un mot de passe. Pour des notes sensibles, préférez un mot de passe long.
+            </p>
+          )}
           <SecInput label={secPwType === "pin" ? "Nouveau PIN (4–8 chiffres)" : "Nouveau mot de passe"} value={secA} onChange={setSecA} show={secShowB} onToggleShow={() => setSecShowB(s => !s)} />
           <SecInput label="Confirmer le nouveau" value={secB} onChange={setSecB} show={secShowB} onToggleShow={() => setSecShowB(s => !s)} />
           {secError && <p className="text-xs text-red-400">{secError}</p>}

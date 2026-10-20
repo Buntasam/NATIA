@@ -13,10 +13,16 @@ const ARGON2_TIME: u32 = 3;
 const ARGON2_PARALLEL: u32 = 1;
 const DERIVED_LEN: usize = 64;
 
-pub(crate) fn derive_64(password: &str, salt: &[u8]) -> Result<[u8; DERIVED_LEN], String> {
+/// `device_secret` (secret Argon2 / « pepper ») lie la dérivation à la session
+/// Windows : sans lui, une base copiée ne permet de tester aucun mot de passe.
+pub(crate) fn derive_64(password: &str, salt: &[u8], device_secret: Option<&[u8; 32]>) -> Result<[u8; DERIVED_LEN], String> {
     let params = Params::new(ARGON2_MEM_KB, ARGON2_TIME, ARGON2_PARALLEL, Some(DERIVED_LEN))
         .map_err(|e| e.to_string())?;
-    let argon2 = Argon2::new(Algorithm::Argon2id, Argon2Version::V0x13, params);
+    let argon2 = match device_secret {
+        Some(s) => Argon2::new_with_secret(s, Algorithm::Argon2id, Argon2Version::V0x13, params)
+            .map_err(|e| e.to_string())?,
+        None => Argon2::new(Algorithm::Argon2id, Argon2Version::V0x13, params),
+    };
     let mut out = [0u8; DERIVED_LEN];
     argon2
         .hash_password_into(password.as_bytes(), salt, &mut out)

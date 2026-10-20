@@ -32,7 +32,7 @@ interface AppStore {
   unlock: (password: string) => Promise<boolean>;
   lock: () => Promise<void>;
   setupPassword: (password: string, pwType: string) => Promise<void>;
-  changePassword: (oldPass: string, newPass: string) => Promise<void>;
+  changePassword: (oldPass: string, newPass: string, pwType: "pin" | "alpha") => Promise<void>;
   removePassword: (password: string) => Promise<void>;
 
   // UI state
@@ -226,8 +226,9 @@ export const useStore = create<AppStore>((set, get) => ({
     set({ hasPassword: true, passwordType: pwType as "pin" | "alpha" });
   },
 
-  changePassword: async (oldPass: string, newPass: string) => {
-    await invoke("change_password", { oldPass, newPass });
+  changePassword: async (oldPass: string, newPass: string, pwType: "pin" | "alpha") => {
+    await invoke("change_password", { oldPass, newPass, pwType });
+    set({ passwordType: pwType });
   },
 
   removePassword: async (password: string) => {

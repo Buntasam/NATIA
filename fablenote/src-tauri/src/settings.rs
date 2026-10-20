@@ -10,7 +10,7 @@ use zeroize::Zeroize;
 
 use crate::{AppState, ApiKey, PromptVersion, Settings};
 use crate::crypto::{decrypt_all_data, derive_64, encrypt_all_data, maybe_dec, maybe_enc, generate_dek, encrypt_dek, decrypt_dek};
-use crate::db::{delete_color_where, keychain_get, keychain_set, load_color_rows, upsert_color, API_KEY_NAMES};
+use crate::db::{delete_color_where, keychain_get, keychain_set, load_color_rows, upsert_color, API_KEY_NAMES, DEVICE_SECRET_NAME};
 
 // ─── Password commands ────────────────────────────────────────────────────────
 
@@ -32,42 +32,128 @@ pub fn get_password_type(state: State<AppState>) -> Result<String, String> {
     Ok(pw_type)
 }
 
-#[tauri::command]
-pub fn setup_password(password: String, pw_type: String, state: State<AppState>) -> Result<(), String> {
+// ─── Liaison à l'appareil ─────────────────────────────────────────────────────
+// Un secret aléatoire, rangé dans le coffre d'identifiants Windows (protégé par
+// DPAPI, donc lié à la session Windows), est injecté dans Argon2. Une base copiée
+// sur une autre machine ne permet alors de tester aucun mot de passe ni PIN.
+
+const DEVICE_MISSING: &str = "Clé de sécurité de cet appareil introuvable. Les notes ne peuvent être déchiffrées que sur le PC et la session Windows où le mot de passe a été créé. Si vous avez changé de PC ou de compte Windows, utilisez « Réinitialiser l'app ».";
+
+fn load_device_secret() -> Option<[u8; 32]> {
+    let bytes = B64.decode(keychain_get(DEVICE_SECRET_NAME)?).ok()?;
+    <[u8; 32]>::try_from(bytes.as_slice()).ok()
+}
+
+fn get_or_create_device_secret() -> Option<[u8; 32]> {
+    if let Some(s) = load_device_secret() { return Some(s); }
+    let mut s = [0u8; 32];
+    rand::thread_rng().fill_bytes(&mut s);
+    let res = keychain_set(DEVICE_SECRET_NAME, &B64.encode(s));
+    s.zeroize();
+    if let Err(e) = res {
+        eprintln!("Coffre Windows indisponible, mot de passe non lié à l'appareil : {}", e);
+        return None;
+    }
+    // Relecture : on ne lie la base que si le secret est réellement persisté.
+    load_device_secret()
+}
+
+fn config_get(db: &rusqlite::Connection, key: &str) -> Result<String, String> {
+    db.query_row("SELECT value FROM app_config WHERE key=?1", [key], |r| r.get::<_, String>(0))
+        .map_err(|_| "Aucune donnée de sécurité trouvée".to_string())
+}
+
+fn device_secret_for(db: &rusqlite::Connection, load: fn() -> Option<[u8; 32]>) -> Result<Option<[u8; 32]>, String> {
+    let bound = db
+        .query_row("SELECT value FROM app_config WHERE key='device_bound'", [], |r| r.get::<_, String>(0))
+        .map(|v| v == "1")
+        .unwrap_or(false);
+    if !bound { return Ok(None); }
+    load().map(Some).ok_or_else(|| DEVICE_MISSING.to_string())
+}
+
+struct DerivedKeys { verif: [u8; 32], kek: [u8; 32] }
+
+impl Drop for DerivedKeys {
+    fn drop(&mut self) { self.verif.zeroize(); self.kek.zeroize(); }
+}
+
+fn derive_keys(password: &str, salt: &[u8], secret: Option<&[u8; 32]>) -> Result<DerivedKeys, String> {
+    let mut d = derive_64(password, salt, secret)?;
+    let mut keys = DerivedKeys { verif: [0u8; 32], kek: [0u8; 32] };
+    keys.verif.copy_from_slice(&d[..32]);
+    keys.kek.copy_from_slice(&d[32..]);
+    d.zeroize();
+    Ok(keys)
+}
+
+/// Vérifie le mot de passe et renvoie (DEK, base liée à l'appareil ?). `None` = mauvais mot de passe.
+fn unwrap_dek(db: &rusqlite::Connection, password: &str) -> Result<Option<([u8; 32], bool)>, String> {
+    unwrap_dek_with(db, password, load_device_secret)
+}
+
+fn unwrap_dek_with(db: &rusqlite::Connection, password: &str, load: fn() -> Option<[u8; 32]>) -> Result<Option<([u8; 32], bool)>, String> {
+    let salt = B64.decode(config_get(db, "password_salt")?).map_err(|e| e.to_string())?;
+    let stored = B64.decode(config_get(db, "password_hash")?).map_err(|e| e.to_string())?;
+    if stored.len() != 32 { return Err("Hash corrompu".to_string()); }
+    let secret = device_secret_for(db, load)?;
+    let keys = derive_keys(password, &salt, secret.as_ref())?;
+
+    let mut diff = 0u8;
+    for (a, b) in keys.verif.iter().zip(stored.iter()) { diff |= a ^ b; }
+    if diff != 0 { return Ok(None); }
+
+    let nonce = config_get(db, "dek_nonce").map_err(|_| "DEK nonce introuvable")?;
+    let ct = config_get(db, "dek_encrypted").map_err(|_| "DEK chiffrée introuvable")?;
+    let dek = decrypt_dek(&nonce, &ct, &keys.kek)?;
+    Ok(Some((dek, secret.is_some())))
+}
+
+/// Chiffre la DEK avec `password` (nouveau sel) et enregistre le tout en une transaction.
+fn wrap_dek(db: &rusqlite::Connection, password: &str, dek: &[u8; 32], secret: Option<[u8; 32]>, pw_type: Option<&str>) -> Result<(), String> {
+    if pw_type.is_some_and(|t| t != "pin" && t != "alpha") {
+        return Err("Type de mot de passe invalide".to_string());
+    }
     let mut salt = [0u8; 16];
     rand::thread_rng().fill_bytes(&mut salt);
-    let salt_b64 = B64.encode(&salt);
-    let mut derived = derive_64(&password, &salt)?;
-    let verif_b64 = B64.encode(&derived[..32]);
-    let mut kek = [0u8; 32];
-    kek.copy_from_slice(&derived[32..]);
-    derived.zeroize();
+    let keys = derive_keys(password, &salt, secret.as_ref())?;
+    let (dek_nonce, dek_ct) = encrypt_dek(dek, &keys.kek);
+    let salt_b64 = B64.encode(salt);
+    let verif_b64 = B64.encode(keys.verif);
+    let bound = if secret.is_some() { "1" } else { "0" };
 
-    let dek = generate_dek();
-    let (dek_nonce_b64, dek_ct_b64) = encrypt_dek(&dek, &kek);
+    let tx = db.unchecked_transaction().map_err(|e| e.to_string())?;
+    let mut rows = vec![
+        ("password_salt", salt_b64.as_str()),
+        ("password_hash", verif_b64.as_str()),
+        ("dek_nonce", dek_nonce.as_str()),
+        ("dek_encrypted", dek_ct.as_str()),
+        ("device_bound", bound),
+    ];
+    if let Some(t) = pw_type { rows.push(("password_type", t)); }
+    for (k, v) in rows {
+        tx.execute(
+            "INSERT INTO app_config(key,value) VALUES(?1,?2) ON CONFLICT(key) DO UPDATE SET value=?2",
+            params![k, v],
+        ).map_err(|e| e.to_string())?;
+    }
+    tx.commit().map_err(|e| e.to_string())
+}
 
+// ─── Password commands ────────────────────────────────────────────────────────
+
+#[tauri::command]
+pub fn setup_password(password: String, pw_type: String, state: State<AppState>) -> Result<(), String> {
+    let mut dek = generate_dek();
     {
         let db = state.db.lock().map_err(|e| e.to_string())?;
-        for (k, v) in [
-            ("password_salt", salt_b64.as_str()),
-            ("password_hash", verif_b64.as_str()),
-            ("password_type", pw_type.as_str()),
-            ("dek_nonce", dek_nonce_b64.as_str()),
-            ("dek_encrypted", dek_ct_b64.as_str()),
-        ] {
-            db.execute(
-                "INSERT INTO app_config(key,value) VALUES(?1,?2) ON CONFLICT(key) DO UPDATE SET value=?2",
-                params![k, v],
-            ).map_err(|e| e.to_string())?;
-        }
-        let notes_dir = state.notes_dir.clone();
-        encrypt_all_data(&db, &notes_dir, &dek)?;
+        wrap_dek(&db, &password, &dek, get_or_create_device_secret(), Some(&pw_type))?;
+        encrypt_all_data(&db, &state.notes_dir, &dek)?;
         // Réécrit le fichier SQLite pour qu'aucune page libérée ne garde l'ancien texte clair.
         db.execute_batch("VACUUM").map_err(|e| e.to_string())?;
     }
-    let mut guard = state.enc_key.lock().map_err(|e| e.to_string())?;
-    *guard = Some(dek);
-    kek.zeroize();
+    *state.enc_key.lock().map_err(|e| e.to_string())? = Some(dek);
+    dek.zeroize();
     Ok(())
 }
 
@@ -85,138 +171,64 @@ pub fn verify_password(password: String, state: State<AppState>) -> Result<bool,
         }
     }
 
-    let (salt_b64, verif_b64) = {
+    let result = {
         let db = state.db.lock().map_err(|e| e.to_string())?;
-        let salt = db.query_row("SELECT value FROM app_config WHERE key='password_salt'", [], |r| r.get::<_, String>(0))
-            .map_err(|_| "Aucune donnée de sécurité trouvée".to_string())?;
-        let verif = db.query_row("SELECT value FROM app_config WHERE key='password_hash'", [], |r| r.get::<_, String>(0))
-            .map_err(|_| "Aucune donnée de sécurité trouvée".to_string())?;
-        (salt, verif)
+        unwrap_dek(&db, &password)?
     };
-    let salt = B64.decode(&salt_b64).map_err(|e| e.to_string())?;
-    let mut derived = derive_64(&password, &salt)?;
-    let stored = B64.decode(&verif_b64).map_err(|e| e.to_string())?;
-    if stored.len() != 32 { derived.zeroize(); return Err("Hash corrompu".to_string()); }
 
-    let mut diff = 0u8;
-    for (a, b) in derived[..32].iter().zip(stored.iter()) { diff |= a ^ b; }
-
-    if diff != 0 {
-        derived.zeroize();
+    let Some((mut dek, bound)) = result else {
         // Exponential backoff: 2s, 4s, 8s, 16s, 30s max
         let mut attempts = state.failed_attempts.lock().map_err(|e| e.to_string())?;
         *attempts += 1;
         let delay = (1u64 << (*attempts).min(5)).min(30);
-        let mut lock_until = state.lock_until.lock().map_err(|e| e.to_string())?;
-        *lock_until = Some(std::time::Instant::now() + std::time::Duration::from_secs(delay));
+        *state.lock_until.lock().map_err(|e| e.to_string())? =
+            Some(std::time::Instant::now() + std::time::Duration::from_secs(delay));
         return Ok(false);
-    }
-
-    // Success — reset counters and load DEK
-    {
-        let mut attempts = state.failed_attempts.lock().map_err(|e| e.to_string())?;
-        *attempts = 0;
-        let mut lock_until = state.lock_until.lock().map_err(|e| e.to_string())?;
-        *lock_until = None;
-    }
-
-    let (dek_nonce_b64, dek_ct_b64) = {
-        let db = state.db.lock().map_err(|e| e.to_string())?;
-        let nonce = db.query_row("SELECT value FROM app_config WHERE key='dek_nonce'", [], |r| r.get::<_, String>(0))
-            .map_err(|_| "DEK nonce not found — rerun setup_password")?;
-        let ct = db.query_row("SELECT value FROM app_config WHERE key='dek_encrypted'", [], |r| r.get::<_, String>(0))
-            .map_err(|_| "DEK encrypted not found — rerun setup_password")?;
-        (nonce, ct)
     };
 
-    let mut kek = [0u8; 32];
-    kek.copy_from_slice(&derived[32..]);
-    let dek = decrypt_dek(&dek_nonce_b64, &dek_ct_b64, &kek)?;
-    kek.zeroize();
-    derived.zeroize();
-    let mut guard = state.enc_key.lock().map_err(|e| e.to_string())?;
-    *guard = Some(dek);
+    *state.failed_attempts.lock().map_err(|e| e.to_string())? = 0;
+    *state.lock_until.lock().map_err(|e| e.to_string())? = None;
+
+    // Migration : une base créée avant la liaison à l'appareil est liée au premier déverrouillage.
+    if !bound {
+        if let Some(secret) = get_or_create_device_secret() {
+            let db = state.db.lock().map_err(|e| e.to_string())?;
+            if let Err(e) = wrap_dek(&db, &password, &dek, Some(secret), None) {
+                eprintln!("Liaison à l'appareil impossible : {}", e);
+            }
+        }
+    }
+
+    *state.enc_key.lock().map_err(|e| e.to_string())? = Some(dek);
+    dek.zeroize();
     Ok(true)
 }
 
 #[tauri::command]
-pub fn change_password(old_pass: String, new_pass: String, state: State<AppState>) -> Result<(), String> {
-    let (salt_b64, verif_b64, dek_nonce_b64, dek_ct_b64) = {
+pub fn change_password(old_pass: String, new_pass: String, pw_type: Option<String>, state: State<AppState>) -> Result<(), String> {
+    let mut dek = {
         let db = state.db.lock().map_err(|e| e.to_string())?;
-        let s = db.query_row("SELECT value FROM app_config WHERE key='password_salt'", [], |r| r.get::<_, String>(0)).map_err(|e| e.to_string())?;
-        let v = db.query_row("SELECT value FROM app_config WHERE key='password_hash'", [], |r| r.get::<_, String>(0)).map_err(|e| e.to_string())?;
-        let nonce = db.query_row("SELECT value FROM app_config WHERE key='dek_nonce'", [], |r| r.get::<_, String>(0)).map_err(|e| e.to_string())?;
-        let ct = db.query_row("SELECT value FROM app_config WHERE key='dek_encrypted'", [], |r| r.get::<_, String>(0)).map_err(|e| e.to_string())?;
-        (s, v, nonce, ct)
+        let (dek, _) = unwrap_dek(&db, &old_pass)?.ok_or("Ancien mot de passe incorrect")?;
+        wrap_dek(&db, &new_pass, &dek, get_or_create_device_secret(), pw_type.as_deref())?;
+        dek
     };
-    let salt = B64.decode(&salt_b64).map_err(|e| e.to_string())?;
-    let mut old_derived = derive_64(&old_pass, &salt)?;
-    let stored = B64.decode(&verif_b64).map_err(|e| e.to_string())?;
-    let mut diff = 0u8;
-    for (a, b) in old_derived[..32].iter().zip(stored.iter()) { diff |= a ^ b; }
-    if diff != 0 { old_derived.zeroize(); return Err("Ancien mot de passe incorrect".to_string()); }
-
-    let mut old_kek = [0u8; 32];
-    old_kek.copy_from_slice(&old_derived[32..]);
-    let dek = decrypt_dek(&dek_nonce_b64, &dek_ct_b64, &old_kek)?;
-    old_kek.zeroize();
-    old_derived.zeroize();
-
-    let mut new_salt = [0u8; 16];
-    rand::thread_rng().fill_bytes(&mut new_salt);
-    let new_salt_b64 = B64.encode(&new_salt);
-    let mut new_derived = derive_64(&new_pass, &new_salt)?;
-    let new_verif_b64 = B64.encode(&new_derived[..32]);
-    let mut new_kek = [0u8; 32];
-    new_kek.copy_from_slice(&new_derived[32..]);
-    let (new_dek_nonce_b64, new_dek_ct_b64) = encrypt_dek(&dek, &new_kek);
-    new_kek.zeroize();
-    new_derived.zeroize();
-
-    {
-        let db = state.db.lock().map_err(|e| e.to_string())?;
-        db.execute("UPDATE app_config SET value=?1 WHERE key='password_salt'", [&new_salt_b64]).map_err(|e| e.to_string())?;
-        db.execute("UPDATE app_config SET value=?1 WHERE key='password_hash'", [&new_verif_b64]).map_err(|e| e.to_string())?;
-        db.execute("UPDATE app_config SET value=?1 WHERE key='dek_nonce'", [&new_dek_nonce_b64]).map_err(|e| e.to_string())?;
-        db.execute("UPDATE app_config SET value=?1 WHERE key='dek_encrypted'", [&new_dek_ct_b64]).map_err(|e| e.to_string())?;
-    }
-
-    let mut guard = state.enc_key.lock().map_err(|e| e.to_string())?;
-    *guard = Some(dek);
+    *state.enc_key.lock().map_err(|e| e.to_string())? = Some(dek);
+    dek.zeroize();
     Ok(())
 }
 
 #[tauri::command]
 pub fn remove_password(password: String, state: State<AppState>) -> Result<(), String> {
-    let (salt_b64, verif_b64, dek_nonce_b64, dek_ct_b64) = {
-        let db = state.db.lock().map_err(|e| e.to_string())?;
-        let s = db.query_row("SELECT value FROM app_config WHERE key='password_salt'", [], |r| r.get::<_, String>(0)).map_err(|e| e.to_string())?;
-        let v = db.query_row("SELECT value FROM app_config WHERE key='password_hash'", [], |r| r.get::<_, String>(0)).map_err(|e| e.to_string())?;
-        let nonce = db.query_row("SELECT value FROM app_config WHERE key='dek_nonce'", [], |r| r.get::<_, String>(0)).map_err(|e| e.to_string())?;
-        let ct = db.query_row("SELECT value FROM app_config WHERE key='dek_encrypted'", [], |r| r.get::<_, String>(0)).map_err(|e| e.to_string())?;
-        (s, v, nonce, ct)
-    };
-    let salt = B64.decode(&salt_b64).map_err(|e| e.to_string())?;
-    let mut derived = derive_64(&password, &salt)?;
-    let stored = B64.decode(&verif_b64).map_err(|e| e.to_string())?;
-    let mut diff = 0u8;
-    for (a, b) in derived[..32].iter().zip(stored.iter()) { diff |= a ^ b; }
-    if diff != 0 { derived.zeroize(); return Err("Mot de passe incorrect".to_string()); }
-
-    let mut kek = [0u8; 32];
-    kek.copy_from_slice(&derived[32..]);
-    let dek = decrypt_dek(&dek_nonce_b64, &dek_ct_b64, &kek)?;
-    kek.zeroize();
-    derived.zeroize();
-
     {
         let db = state.db.lock().map_err(|e| e.to_string())?;
+        let (mut dek, _) = unwrap_dek(&db, &password)?.ok_or("Mot de passe incorrect")?;
         decrypt_all_data(&db, &state.notes_dir, &dek)?;
-        db.execute("DELETE FROM app_config WHERE key IN ('password_salt','password_hash','password_type','dek_nonce','dek_encrypted')", [])
+        dek.zeroize();
+        db.execute("DELETE FROM app_config WHERE key IN ('password_salt','password_hash','password_type','dek_nonce','dek_encrypted','device_bound')", [])
             .map_err(|e| e.to_string())?;
     }
-    let mut guard = state.enc_key.lock().map_err(|e| e.to_string())?;
-    *guard = None;
+    let _ = keychain_set(DEVICE_SECRET_NAME, "");
+    *state.enc_key.lock().map_err(|e| e.to_string())? = None;
     Ok(())
 }
 
@@ -547,4 +559,61 @@ pub fn set_window_theme(window: tauri::Window, dark: bool) -> Result<(), String>
     window
         .set_theme(Some(if dark { Theme::Dark } else { Theme::Light }))
         .map_err(|e| e.to_string())
+}
+
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // Sources de secret factices : les tests ne touchent jamais au vrai coffre Windows.
+    fn secret_a() -> Option<[u8; 32]> { Some([7u8; 32]) }
+    fn secret_b() -> Option<[u8; 32]> { Some([9u8; 32]) }
+    fn no_secret() -> Option<[u8; 32]> { None }
+
+    fn db() -> rusqlite::Connection {
+        let db = rusqlite::Connection::open_in_memory().unwrap();
+        crate::db::init_db(&db).unwrap();
+        db
+    }
+
+    #[test]
+    fn device_bound_pin_only_unlocks_with_the_device_secret() {
+        let db = db();
+        let dek = generate_dek();
+        wrap_dek(&db, "1234", &dek, secret_a(), Some("pin")).unwrap();
+
+        assert_eq!(unwrap_dek_with(&db, "1234", secret_a).unwrap(), Some((dek, true)));
+        assert_eq!(unwrap_dek_with(&db, "0000", secret_a).unwrap(), None, "mauvais PIN refusé");
+        // Base copiée sur une autre machine : un autre secret ne valide même pas le bon PIN.
+        assert_eq!(unwrap_dek_with(&db, "1234", secret_b).unwrap(), None);
+        // Secret absent du coffre : erreur explicite, pas un « mauvais mot de passe ».
+        assert_eq!(unwrap_dek_with(&db, "1234", no_secret).unwrap_err(), DEVICE_MISSING);
+        assert_eq!(config_get(&db, "password_type").unwrap(), "pin");
+    }
+
+    #[test]
+    fn unbound_database_still_unlocks_and_can_be_rebound() {
+        let db = db();
+        let dek = generate_dek();
+        wrap_dek(&db, "motdepasse", &dek, None, Some("alpha")).unwrap();
+        assert_eq!(unwrap_dek_with(&db, "motdepasse", no_secret).unwrap(), Some((dek, false)));
+
+        // Migration au déverrouillage : on relie la base à l'appareil.
+        wrap_dek(&db, "motdepasse", &dek, secret_a(), None).unwrap();
+        assert_eq!(unwrap_dek_with(&db, "motdepasse", secret_a).unwrap(), Some((dek, true)));
+        assert_eq!(config_get(&db, "password_type").unwrap(), "alpha", "le type n'est pas écrasé");
+    }
+
+    #[test]
+    fn changing_password_type_is_saved_and_validated() {
+        let db = db();
+        let dek = generate_dek();
+        wrap_dek(&db, "1234", &dek, secret_a(), Some("pin")).unwrap();
+        wrap_dek(&db, "chat2024", &dek, secret_a(), Some("alpha")).unwrap();
+        assert_eq!(config_get(&db, "password_type").unwrap(), "alpha");
+        assert_eq!(unwrap_dek_with(&db, "chat2024", secret_a).unwrap(), Some((dek, true)));
+        assert!(wrap_dek(&db, "x", &dek, secret_a(), Some("emoji")).is_err());
+        assert_eq!(unwrap_dek_with(&db, "chat2024", secret_a).unwrap(), Some((dek, true)), "un type refusé ne touche à rien");
+    }
 }

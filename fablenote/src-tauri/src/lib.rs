@@ -330,7 +330,7 @@ async fn reset_app(app_handle: tauri::AppHandle) -> Result<(), String> {
     *state.lock_until.lock().map_err(|e| e.to_string())? = None;
 
     // Les clés API sans mot de passe vivent dans le keychain OS, hors du dossier de données.
-    for name in db::API_KEY_NAMES {
+    for name in db::API_KEY_NAMES.iter().chain([&db::DEVICE_SECRET_NAME]) {
         let _ = db::keychain_set(name, "");
     }
 

@@ -357,12 +357,13 @@ pub fn restore_version(note_id: String, hash: String, state: State<AppState>) ->
 }
 
 // ─── Folder commands ──────────────────────────────────────────────────────────
+// Chaque commande délègue à une fonction `*_in` sur une connexion brute, testable
+// sans Tauri (voir les tests en bas du fichier).
 
-#[tauri::command]
-pub fn get_folders(state: State<AppState>) -> Result<Vec<String>, String> {
-    let key = state.enc_key.lock().map_err(|e| e.to_string())?.clone();
-    let db = state.db.lock().map_err(|e| e.to_string())?;
-    let mut folders: Vec<String> = load_folder_rows(&db, &key)?
+type Key = Option<[u8; 32]>;
+
+fn get_folders_in(db: &rusqlite::Connection, key: &Key) -> Result<Vec<String>, String> {
+    let mut folders: Vec<String> = load_folder_rows(db, key)?
         .into_iter()
         .filter(|f| !f.deleted)
         .map(|f| f.path)
@@ -372,28 +373,19 @@ pub fn get_folders(state: State<AppState>) -> Result<Vec<String>, String> {
     Ok(folders)
 }
 
-#[tauri::command]
-pub fn create_folder(path: String, state: State<AppState>) -> Result<(), String> {
-    crate::require_unlocked(&state)?;
-    let key = state.enc_key.lock().map_err(|e| e.to_string())?.clone();
-    let db = state.db.lock().map_err(|e| e.to_string())?;
-    if load_folder_rows(&db, &key)?.iter().any(|f| f.path == path) { return Ok(()); }
-    db.execute("INSERT OR IGNORE INTO folders(path) VALUES(?1)", [maybe_enc(&key, &path)]).map_err(|e| e.to_string())?;
+fn create_folder_in(db: &rusqlite::Connection, key: &Key, path: &str) -> Result<(), String> {
+    if load_folder_rows(db, key)?.iter().any(|f| f.path == path) { return Ok(()); }
+    db.execute("INSERT OR IGNORE INTO folders(path) VALUES(?1)", [maybe_enc(key, path)]).map_err(|e| e.to_string())?;
     Ok(())
 }
 
-#[tauri::command]
-pub fn delete_folder(path: String, state: State<AppState>) -> Result<(), String> {
-    crate::require_unlocked(&state)?;
-    let key = state.enc_key.lock().map_err(|e| e.to_string())?.clone();
-    let now = Utc::now().to_rfc3339();
-    let db = state.db.lock().map_err(|e| e.to_string())?;
-    for f in load_folder_rows(&db, &key)?.iter().filter(|f| !f.deleted && in_tree(&f.path, &path)) {
+fn delete_folder_in(db: &rusqlite::Connection, key: &Key, path: &str, now: &str) -> Result<(), String> {
+    for f in load_folder_rows(db, key)?.iter().filter(|f| !f.deleted && in_tree(&f.path, path)) {
         db.execute("UPDATE folders SET deleted_at=?1 WHERE path=?2", params![now, f.raw])
             .map_err(|e| e.to_string())?;
     }
-    for n in load_note_folder_rows(&db, &key)? {
-        if !n.deleted && n.folder.as_deref().map(|f| in_tree(f, &path)).unwrap_or(false) {
+    for n in load_note_folder_rows(db, key)? {
+        if !n.deleted && n.folder.as_deref().map(|f| in_tree(f, path)).unwrap_or(false) {
             db.execute("UPDATE notes SET deleted_at=?1 WHERE id=?2", params![now, n.id])
                 .map_err(|e| e.to_string())?;
         }
@@ -401,47 +393,74 @@ pub fn delete_folder(path: String, state: State<AppState>) -> Result<(), String>
     Ok(())
 }
 
+fn rename_folder_in(db: &rusqlite::Connection, key: &Key, old_path: &str, new_path: &str) -> Result<(), String> {
+    let renamed = |p: &str| format!("{}{}", new_path, &p[old_path.len()..]);
+
+    let rows = load_folder_rows(db, key)?;
+    let mut existing: std::collections::HashSet<String> = rows.iter()
+        .filter(|f| !in_tree(&f.path, old_path))
+        .map(|f| f.path.clone())
+        .collect();
+    for f in rows.iter().filter(|f| in_tree(&f.path, old_path)) {
+        let np = renamed(&f.path);
+        if existing.contains(&np) {
+            db.execute("DELETE FROM folders WHERE path=?1", [&f.raw]).map_err(|e| e.to_string())?;
+        } else {
+            db.execute("UPDATE folders SET path=?1 WHERE path=?2", params![maybe_enc(key, &np), f.raw])
+                .map_err(|e| e.to_string())?;
+            existing.insert(np);
+        }
+    }
+    if !existing.contains(new_path) {
+        db.execute("INSERT OR IGNORE INTO folders(path) VALUES(?1)", [maybe_enc(key, new_path)])
+            .map_err(|e| e.to_string())?;
+    }
+
+    for n in load_note_folder_rows(db, key)? {
+        if let Some(f) = n.folder.as_deref().filter(|f| in_tree(f, old_path)) {
+            db.execute("UPDATE notes SET folder=?1 WHERE id=?2", params![maybe_enc(key, &renamed(f)), n.id])
+                .map_err(|e| e.to_string())?;
+        }
+    }
+
+    for (raw, plain, color) in load_color_rows(db, key)? {
+        if folder_color_in_tree(&plain, old_path) {
+            db.execute("DELETE FROM item_colors WHERE item_key=?1", [&raw]).map_err(|e| e.to_string())?;
+            upsert_color(db, key, &format!("folder:{}", renamed(&plain["folder:".len()..])), &color)?;
+        }
+    }
+    Ok(())
+}
+
+#[tauri::command]
+pub fn get_folders(state: State<AppState>) -> Result<Vec<String>, String> {
+    let key = state.enc_key.lock().map_err(|e| e.to_string())?.clone();
+    let db = state.db.lock().map_err(|e| e.to_string())?;
+    get_folders_in(&db, &key)
+}
+
+#[tauri::command]
+pub fn create_folder(path: String, state: State<AppState>) -> Result<(), String> {
+    crate::require_unlocked(&state)?;
+    let key = state.enc_key.lock().map_err(|e| e.to_string())?.clone();
+    let db = state.db.lock().map_err(|e| e.to_string())?;
+    create_folder_in(&db, &key, &path)
+}
+
+#[tauri::command]
+pub fn delete_folder(path: String, state: State<AppState>) -> Result<(), String> {
+    crate::require_unlocked(&state)?;
+    let key = state.enc_key.lock().map_err(|e| e.to_string())?.clone();
+    let db = state.db.lock().map_err(|e| e.to_string())?;
+    delete_folder_in(&db, &key, &path, &Utc::now().to_rfc3339())
+}
+
 #[tauri::command]
 pub fn rename_folder(old_path: String, new_path: String, state: State<AppState>) -> Result<(), String> {
     crate::require_unlocked(&state)?;
     let key = state.enc_key.lock().map_err(|e| e.to_string())?.clone();
     let db = state.db.lock().map_err(|e| e.to_string())?;
-    let renamed = |p: &str| format!("{}{}", new_path, &p[old_path.len()..]);
-
-    let rows = load_folder_rows(&db, &key)?;
-    let mut existing: std::collections::HashSet<String> = rows.iter()
-        .filter(|f| !in_tree(&f.path, &old_path))
-        .map(|f| f.path.clone())
-        .collect();
-    for f in rows.iter().filter(|f| in_tree(&f.path, &old_path)) {
-        let np = renamed(&f.path);
-        if existing.contains(&np) {
-            db.execute("DELETE FROM folders WHERE path=?1", [&f.raw]).map_err(|e| e.to_string())?;
-        } else {
-            db.execute("UPDATE folders SET path=?1 WHERE path=?2", params![maybe_enc(&key, &np), f.raw])
-                .map_err(|e| e.to_string())?;
-            existing.insert(np);
-        }
-    }
-    if !existing.contains(&new_path) {
-        db.execute("INSERT OR IGNORE INTO folders(path) VALUES(?1)", [maybe_enc(&key, &new_path)])
-            .map_err(|e| e.to_string())?;
-    }
-
-    for n in load_note_folder_rows(&db, &key)? {
-        if let Some(f) = n.folder.as_deref().filter(|f| in_tree(f, &old_path)) {
-            db.execute("UPDATE notes SET folder=?1 WHERE id=?2", params![maybe_enc(&key, &renamed(f)), n.id])
-                .map_err(|e| e.to_string())?;
-        }
-    }
-
-    for (raw, plain, color) in load_color_rows(&db, &key)? {
-        if folder_color_in_tree(&plain, &old_path) {
-            db.execute("DELETE FROM item_colors WHERE item_key=?1", [&raw]).map_err(|e| e.to_string())?;
-            upsert_color(&db, &key, &format!("folder:{}", renamed(&plain["folder:".len()..])), &color)?;
-        }
-    }
-    Ok(())
+    rename_folder_in(&db, &key, &old_path, &new_path)
 }
 
 #[tauri::command]
@@ -466,10 +485,7 @@ pub fn move_note(id: String, folder: Option<String>, state: State<AppState>) -> 
 
 // ─── Trash commands ───────────────────────────────────────────────────────────
 
-#[tauri::command]
-pub fn get_trash(state: State<AppState>) -> Result<Vec<TrashItem>, String> {
-    let key = state.enc_key.lock().map_err(|e| e.to_string())?.clone();
-    let db = state.db.lock().map_err(|e| e.to_string())?;
+fn get_trash_in(db: &rusqlite::Connection, key: &Key) -> Result<Vec<TrashItem>, String> {
     let mut items: Vec<TrashItem> = Vec::new();
 
     let folder_rows: Vec<(String, String)> = {
@@ -479,7 +495,7 @@ pub fn get_trash(state: State<AppState>) -> Result<Vec<TrashItem>, String> {
             .map_err(|e| e.to_string())?
             .collect::<SqlResult<Vec<_>>>()
             .map_err(|e| e.to_string())?;
-        rows.into_iter().map(|(p, d)| (maybe_dec(&key, &p), d)).collect()
+        rows.into_iter().map(|(p, d)| (maybe_dec(key, &p), d)).collect()
     };
     let note_rows: Vec<(String, String, Option<String>, String)> = {
         let mut stmt = db.prepare("SELECT id, title, folder, deleted_at FROM notes WHERE deleted_at IS NOT NULL")
@@ -489,7 +505,7 @@ pub fn get_trash(state: State<AppState>) -> Result<Vec<TrashItem>, String> {
         }).map_err(|e| e.to_string())?
           .collect::<SqlResult<Vec<_>>>()
           .map_err(|e| e.to_string())?;
-        rows.into_iter().map(|(id, t, f, d)| (id, maybe_dec(&key, &t), maybe_dec_opt(&key, &f), d)).collect()
+        rows.into_iter().map(|(id, t, f, d)| (id, maybe_dec(key, &t), maybe_dec_opt(key, &f), d)).collect()
     };
 
     let is_child = |p: &str| folder_rows.iter().any(|(df, _)| df != p && in_tree(p, df));
@@ -521,21 +537,17 @@ pub fn get_trash(state: State<AppState>) -> Result<Vec<TrashItem>, String> {
     Ok(items)
 }
 
-#[tauri::command]
-pub fn restore_from_trash(id: String, item_type: String, state: State<AppState>) -> Result<(), String> {
-    crate::require_unlocked(&state)?;
-    let key = state.enc_key.lock().map_err(|e| e.to_string())?.clone();
-    let db = state.db.lock().map_err(|e| e.to_string())?;
+fn restore_from_trash_in(db: &rusqlite::Connection, key: &Key, id: &str, item_type: &str) -> Result<(), String> {
     if item_type == "note" {
-        db.execute("UPDATE notes SET deleted_at=NULL WHERE id=?1", [&id])
+        db.execute("UPDATE notes SET deleted_at=NULL WHERE id=?1", [id])
             .map_err(|e| e.to_string())?;
     } else {
-        for f in load_folder_rows(&db, &key)?.iter().filter(|f| in_tree(&f.path, &id)) {
+        for f in load_folder_rows(db, key)?.iter().filter(|f| in_tree(&f.path, id)) {
             db.execute("UPDATE folders SET deleted_at=NULL WHERE path=?1", [&f.raw])
                 .map_err(|e| e.to_string())?;
         }
-        for n in load_note_folder_rows(&db, &key)? {
-            if n.folder.as_deref().map(|f| in_tree(f, &id)).unwrap_or(false) {
+        for n in load_note_folder_rows(db, key)? {
+            if n.folder.as_deref().map(|f| in_tree(f, id)).unwrap_or(false) {
                 db.execute("UPDATE notes SET deleted_at=NULL WHERE id=?1", [&n.id])
                     .map_err(|e| e.to_string())?;
             }
@@ -544,7 +556,7 @@ pub fn restore_from_trash(id: String, item_type: String, state: State<AppState>)
     Ok(())
 }
 
-fn purge_note(db: &rusqlite::Connection, notes_dir: &std::path::Path, key: &Option<[u8; 32]>, id: &str) -> Result<(), String> {
+fn purge_note(db: &rusqlite::Connection, notes_dir: &std::path::Path, key: &Key, id: &str) -> Result<(), String> {
     db.execute("DELETE FROM notes WHERE id=?1", [id]).map_err(|e| e.to_string())?;
     db.execute("DELETE FROM note_versions WHERE note_id=?1", [id]).map_err(|e| e.to_string())?;
     let color_key = format!("note:{}", id);
@@ -554,26 +566,54 @@ fn purge_note(db: &rusqlite::Connection, notes_dir: &std::path::Path, key: &Opti
     Ok(())
 }
 
+fn permanent_delete_in(db: &rusqlite::Connection, notes_dir: &std::path::Path, key: &Key, id: &str, item_type: &str) -> Result<(), String> {
+    if item_type == "note" {
+        return purge_note(db, notes_dir, key, id);
+    }
+    for n in load_note_folder_rows(db, key)? {
+        if n.deleted && n.folder.as_deref().map(|f| in_tree(f, id)).unwrap_or(false) {
+            purge_note(db, notes_dir, key, &n.id)?;
+        }
+    }
+    for f in load_folder_rows(db, key)?.iter().filter(|f| f.deleted && in_tree(&f.path, id)) {
+        db.execute("DELETE FROM folders WHERE path=?1", [&f.raw]).map_err(|e| e.to_string())?;
+    }
+    delete_color_where(db, key, |k| folder_color_in_tree(k, id))
+}
+
+fn empty_trash_in(db: &rusqlite::Connection, notes_dir: &std::path::Path, key: &Key) -> Result<(), String> {
+    for n in load_note_folder_rows(db, key)?.into_iter().filter(|n| n.deleted) {
+        purge_note(db, notes_dir, key, &n.id)?;
+    }
+    let deleted: Vec<FolderRow> = load_folder_rows(db, key)?.into_iter().filter(|f| f.deleted).collect();
+    for f in &deleted {
+        db.execute("DELETE FROM folders WHERE path=?1", [&f.raw]).map_err(|e| e.to_string())?;
+    }
+    delete_color_where(db, key, |k| deleted.iter().any(|f| k == format!("folder:{}", f.path)))
+}
+
+#[tauri::command]
+pub fn get_trash(state: State<AppState>) -> Result<Vec<TrashItem>, String> {
+    let key = state.enc_key.lock().map_err(|e| e.to_string())?.clone();
+    let db = state.db.lock().map_err(|e| e.to_string())?;
+    get_trash_in(&db, &key)
+}
+
+#[tauri::command]
+pub fn restore_from_trash(id: String, item_type: String, state: State<AppState>) -> Result<(), String> {
+    crate::require_unlocked(&state)?;
+    let key = state.enc_key.lock().map_err(|e| e.to_string())?.clone();
+    let db = state.db.lock().map_err(|e| e.to_string())?;
+    restore_from_trash_in(&db, &key, &id, &item_type)
+}
+
 #[tauri::command]
 pub fn permanent_delete_item(id: String, item_type: String, state: State<AppState>) -> Result<(), String> {
     crate::require_unlocked(&state)?;
     if item_type == "note" && !is_valid_uuid(&id) { return Err("ID invalide".to_string()); }
     let key = state.enc_key.lock().map_err(|e| e.to_string())?.clone();
     let db = state.db.lock().map_err(|e| e.to_string())?;
-    if item_type == "note" {
-        purge_note(&db, &state.notes_dir, &key, &id)?;
-    } else {
-        for n in load_note_folder_rows(&db, &key)? {
-            if n.deleted && n.folder.as_deref().map(|f| in_tree(f, &id)).unwrap_or(false) {
-                purge_note(&db, &state.notes_dir, &key, &n.id)?;
-            }
-        }
-        for f in load_folder_rows(&db, &key)?.iter().filter(|f| f.deleted && in_tree(&f.path, &id)) {
-            db.execute("DELETE FROM folders WHERE path=?1", [&f.raw]).map_err(|e| e.to_string())?;
-        }
-        delete_color_where(&db, &key, |k| folder_color_in_tree(k, &id))?;
-    }
-    Ok(())
+    permanent_delete_in(&db, &state.notes_dir, &key, &id, &item_type)
 }
 
 #[tauri::command]
@@ -581,15 +621,7 @@ pub fn empty_trash(state: State<AppState>) -> Result<(), String> {
     crate::require_unlocked(&state)?;
     let key = state.enc_key.lock().map_err(|e| e.to_string())?.clone();
     let db = state.db.lock().map_err(|e| e.to_string())?;
-    for n in load_note_folder_rows(&db, &key)?.into_iter().filter(|n| n.deleted) {
-        purge_note(&db, &state.notes_dir, &key, &n.id)?;
-    }
-    let deleted: Vec<FolderRow> = load_folder_rows(&db, &key)?.into_iter().filter(|f| f.deleted).collect();
-    for f in &deleted {
-        db.execute("DELETE FROM folders WHERE path=?1", [&f.raw]).map_err(|e| e.to_string())?;
-    }
-    delete_color_where(&db, &key, |k| deleted.iter().any(|f| k == format!("folder:{}", f.path)))?;
-    Ok(())
+    empty_trash_in(&db, &state.notes_dir, &key)
 }
 
 #[tauri::command]
@@ -831,4 +863,179 @@ pub fn get_global_stats(state: State<AppState>) -> Result<GlobalStats, String> {
         "SELECT COUNT(*) FROM note_versions", [], |r| r.get(0),
     ).unwrap_or(0);
     Ok(GlobalStats { trash_count, version_count })
+}
+
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::crypto::{generate_dek, ENC_PREFIX};
+
+    struct Env { db: rusqlite::Connection, dir: std::path::PathBuf, key: Key }
+
+    impl Drop for Env {
+        fn drop(&mut self) { let _ = std::fs::remove_dir_all(&self.dir); }
+    }
+
+    fn env(encrypted: bool) -> Env {
+        let dir = std::env::temp_dir().join(format!("natia-notes-{}", Uuid::new_v4()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let db = rusqlite::Connection::open_in_memory().unwrap();
+        crate::db::init_db(&db).unwrap();
+        Env { db, dir, key: if encrypted { Some(generate_dek()) } else { None } }
+    }
+
+    fn add_note(e: &Env, title: &str, folder: Option<&str>) -> String {
+        let id = Uuid::new_v4().to_string();
+        let folder = folder.map(|f| f.to_string());
+        e.db.execute(
+            "INSERT INTO notes(id,title,tags,folder,created_at,updated_at) VALUES(?1,?2,?3,?4,'t','t')",
+            params![id, maybe_enc(&e.key, title), maybe_enc(&e.key, "[]"), maybe_enc_opt(&e.key, &folder)],
+        ).unwrap();
+        std::fs::write(e.dir.join(format!("{}.html", id)), maybe_enc(&e.key, "contenu")).unwrap();
+        id
+    }
+
+    fn note_folder(e: &Env, id: &str) -> Option<String> {
+        load_note_folder_rows(&e.db, &e.key).unwrap().into_iter().find(|n| n.id == id).unwrap().folder
+    }
+
+    fn note_deleted(e: &Env, id: &str) -> bool {
+        load_note_folder_rows(&e.db, &e.key).unwrap().into_iter().find(|n| n.id == id).unwrap().deleted
+    }
+
+    fn note_exists(e: &Env, id: &str) -> bool {
+        e.db.query_row("SELECT 1 FROM notes WHERE id=?1", [id], |_| Ok(())).is_ok()
+    }
+
+    fn colors(e: &Env) -> Vec<String> {
+        let mut c: Vec<String> = load_color_rows(&e.db, &e.key).unwrap().into_iter().map(|(_, k, _)| k).collect();
+        c.sort();
+        c
+    }
+
+    fn both(f: impl Fn(Env)) { f(env(false)); f(env(true)); }
+
+    #[test]
+    fn create_lists_sorted_without_duplicates() {
+        both(|e| {
+            for p in ["Travail", "Perso", "Perso/Santé", "Perso"] { create_folder_in(&e.db, &e.key, p).unwrap(); }
+            assert_eq!(get_folders_in(&e.db, &e.key).unwrap(), ["Perso", "Perso/Santé", "Travail"]);
+        });
+    }
+
+    #[test]
+    fn rename_moves_subfolders_notes_and_colors_but_not_lookalikes() {
+        both(|e| {
+            for p in ["Perso", "Perso/Santé", "Perso2"] { create_folder_in(&e.db, &e.key, p).unwrap(); }
+            let inside = add_note(&e, "rdv", Some("Perso/Santé"));
+            let lookalike = add_note(&e, "autre", Some("Perso2"));
+            upsert_color(&e.db, &e.key, "folder:Perso/Santé", "#f00").unwrap();
+            upsert_color(&e.db, &e.key, "folder:Perso2", "#0f0").unwrap();
+
+            rename_folder_in(&e.db, &e.key, "Perso", "Privé").unwrap();
+
+            assert_eq!(get_folders_in(&e.db, &e.key).unwrap(), ["Perso2", "Privé", "Privé/Santé"]);
+            assert_eq!(note_folder(&e, &inside).as_deref(), Some("Privé/Santé"));
+            assert_eq!(note_folder(&e, &lookalike).as_deref(), Some("Perso2"));
+            assert_eq!(colors(&e), ["folder:Perso2", "folder:Privé/Santé"]);
+        });
+    }
+
+    #[test]
+    fn rename_onto_existing_folder_merges() {
+        both(|e| {
+            for p in ["A", "A/x", "B"] { create_folder_in(&e.db, &e.key, p).unwrap(); }
+            rename_folder_in(&e.db, &e.key, "A", "B").unwrap();
+            assert_eq!(get_folders_in(&e.db, &e.key).unwrap(), ["B", "B/x"]);
+            let rows: i64 = e.db.query_row("SELECT COUNT(*) FROM folders", [], |r| r.get(0)).unwrap();
+            assert_eq!(rows, 2);
+        });
+    }
+
+    #[test]
+    fn delete_trash_restore_roundtrip() {
+        both(|e| {
+            for p in ["Perso", "Perso/Santé", "Perso2"] { create_folder_in(&e.db, &e.key, p).unwrap(); }
+            let inside = add_note(&e, "rdv", Some("Perso/Santé"));
+            let lookalike = add_note(&e, "autre", Some("Perso2"));
+
+            delete_folder_in(&e.db, &e.key, "Perso", "2026-01-01").unwrap();
+            assert_eq!(get_folders_in(&e.db, &e.key).unwrap(), ["Perso2"]);
+            assert!(note_deleted(&e, &inside));
+            assert!(!note_deleted(&e, &lookalike));
+
+            let trash = get_trash_in(&e.db, &e.key).unwrap();
+            assert_eq!(trash.len(), 1, "seul le dossier parent apparaît, pas ses enfants ni la note");
+            assert_eq!((trash[0].id.as_str(), trash[0].item_type.as_str(), trash[0].note_count), ("Perso", "folder", Some(1)));
+
+            restore_from_trash_in(&e.db, &e.key, "Perso", "folder").unwrap();
+            assert_eq!(get_folders_in(&e.db, &e.key).unwrap(), ["Perso", "Perso/Santé", "Perso2"]);
+            assert!(!note_deleted(&e, &inside));
+            assert!(get_trash_in(&e.db, &e.key).unwrap().is_empty());
+        });
+    }
+
+    #[test]
+    fn permanent_delete_purges_folder_tree_only() {
+        both(|e| {
+            for p in ["Perso", "Perso/Santé", "Perso2"] { create_folder_in(&e.db, &e.key, p).unwrap(); }
+            let inside = add_note(&e, "rdv", Some("Perso/Santé"));
+            let lookalike = add_note(&e, "autre", Some("Perso2"));
+            upsert_color(&e.db, &e.key, "folder:Perso", "#f00").unwrap();
+            upsert_color(&e.db, &e.key, &format!("note:{}", inside), "#00f").unwrap();
+
+            delete_folder_in(&e.db, &e.key, "Perso", "2026-01-01").unwrap();
+            permanent_delete_in(&e.db, &e.dir, &e.key, "Perso", "folder").unwrap();
+
+            assert!(!note_exists(&e, &inside));
+            assert!(!e.dir.join(format!("{}.html", inside)).exists());
+            assert!(note_exists(&e, &lookalike));
+            assert!(e.dir.join(format!("{}.html", lookalike)).exists());
+            assert_eq!(get_folders_in(&e.db, &e.key).unwrap(), ["Perso2"]);
+            assert!(colors(&e).is_empty());
+            assert!(get_trash_in(&e.db, &e.key).unwrap().is_empty());
+        });
+    }
+
+    #[test]
+    fn empty_trash_keeps_live_notes() {
+        both(|e| {
+            create_folder_in(&e.db, &e.key, "Vieux").unwrap();
+            let in_old = add_note(&e, "a", Some("Vieux"));
+            let loose = add_note(&e, "b", None);
+            let live = add_note(&e, "c", None);
+            delete_folder_in(&e.db, &e.key, "Vieux", "t").unwrap();
+            e.db.execute("UPDATE notes SET deleted_at='t' WHERE id=?1", [&loose]).unwrap();
+
+            empty_trash_in(&e.db, &e.dir, &e.key).unwrap();
+
+            assert!(!note_exists(&e, &in_old) && !note_exists(&e, &loose));
+            assert!(note_exists(&e, &live));
+            assert!(get_folders_in(&e.db, &e.key).unwrap().is_empty());
+            assert!(get_trash_in(&e.db, &e.key).unwrap().is_empty());
+        });
+    }
+
+    #[test]
+    fn encrypted_db_never_stores_folder_names_in_clear() {
+        let e = env(true);
+        for p in ["Perso", "Perso/Santé"] { create_folder_in(&e.db, &e.key, p).unwrap(); }
+        add_note(&e, "rdv", Some("Perso/Santé"));
+        upsert_color(&e.db, &e.key, "folder:Perso", "#f00").unwrap();
+        rename_folder_in(&e.db, &e.key, "Perso", "Privé").unwrap();
+
+        let raw: Vec<String> = ["SELECT path FROM folders", "SELECT folder FROM notes", "SELECT item_key FROM item_colors"]
+            .iter()
+            .flat_map(|q| {
+                let mut s = e.db.prepare(q).unwrap();
+                let v: Vec<String> = s.query_map([], |r| r.get(0)).unwrap().map(|r| r.unwrap()).collect();
+                v
+            })
+            .collect();
+        assert!(!raw.is_empty());
+        for v in raw {
+            assert!(v.starts_with(ENC_PREFIX), "valeur en clair en base : {}", v);
+        }
+    }
 }
