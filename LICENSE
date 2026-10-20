@@ -1,0 +1,67 @@
+NATIA — Licence d'utilisation (code source consultable)
+
+Copyright (c) 2026 Buntasam (https://github.com/Buntasam)
+Tous droits réservés, à l'exception de ce qui est expressément autorisé ci-dessous.
+
+1. DÉFINITIONS
+
+« Le Logiciel » désigne le code source, les fichiers compilés, la documentation
+et tous les éléments de NATIA publiés dans le dépôt officiel
+https://github.com/Buntasam/NATIA (le « Dépôt officiel »).
+« L'Auteur » désigne Buntasam, titulaire des droits sur le Logiciel.
+
+2. CE QUI EST AUTORISÉ
+
+L'Auteur vous accorde, gratuitement et à titre non exclusif, le droit de :
+
+  a) utiliser le Logiciel à des fins personnelles et non commerciales ;
+  b) consulter et étudier son code source ;
+  c) modifier le Logiciel pour votre seul usage personnel, sans diffuser ces
+     modifications à des tiers ;
+  d) créer une copie (« fork ») du Dépôt officiel sur GitHub, uniquement dans le
+     but de proposer vos modifications à l'Auteur sous forme de « pull request »
+     vers le Dépôt officiel.
+
+3. CE QUI EST INTERDIT SANS L'ACCORD ÉCRIT PRÉALABLE DE L'AUTEUR
+
+  a) Toute utilisation commerciale, notamment : vendre le Logiciel ou une version
+     modifiée, l'intégrer à un produit ou un service payant, ou l'utiliser pour
+     fournir une prestation rémunérée.
+  b) Redistribuer le Logiciel, modifié ou non, en dehors du Dépôt officiel, même
+     gratuitement : autre dépôt présenté comme un projet distinct, site web,
+     magasin d'applications, fichiers compilés, etc. Pour partager le Logiciel,
+     renvoyez vers le Dépôt officiel.
+  c) Publier un projet dérivé du Logiciel, sous ce nom ou sous un autre nom.
+  d) Retirer ou modifier les mentions de droits d'auteur et la présente licence.
+
+4. CONTRIBUTIONS
+
+En proposant une contribution à l'Auteur (pull request, correctif, suggestion de
+code…), vous garantissez en être l'auteur ou disposer des droits nécessaires, et
+vous accordez à l'Auteur, gratuitement, pour le monde entier et pour toute la
+durée des droits d'auteur, le droit irrévocable d'utiliser, modifier, publier,
+distribuer et placer sous toute autre licence cette contribution, y compris à
+des fins commerciales.
+
+5. FIN DES DROITS
+
+Tout manquement à la présente licence met fin automatiquement aux droits qu'elle
+vous accorde. Vous devez alors cesser d'utiliser le Logiciel et supprimer les
+copies modifiées en votre possession.
+
+6. ABSENCE DE GARANTIE
+
+Le Logiciel est fourni « en l'état », sans garantie d'aucune sorte, expresse ou
+implicite, notamment de bon fonctionnement, d'adéquation à un usage particulier
+ou d'absence de perte de données. En aucun cas l'Auteur ne pourra être tenu
+responsable d'un dommage, d'une perte de données ou de tout autre préjudice
+résultant de l'utilisation du Logiciel ou de l'impossibilité de l'utiliser.
+
+7. DEMANDES D'AUTORISATION
+
+Pour toute utilisation non prévue par la présente licence (usage commercial,
+redistribution, partenariat…), contactez l'Auteur via le Dépôt officiel :
+https://github.com/Buntasam/NATIA/issues
+
+Les versions du Logiciel publiées avant l'ajout de ce fichier restent soumises
+aux conditions qui les accompagnaient lors de leur publication.

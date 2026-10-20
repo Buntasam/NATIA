@@ -4,6 +4,7 @@ import { openUrl } from "@tauri-apps/plugin-opener";
 import { Bug, Download, ExternalLink, Github, Lightbulb, RotateCcw, Star } from "lucide-react";
 import { checkForUpdate, getPendingUpdate, isAutoUpdateEnabled, setAutoUpdateEnabled } from "../../lib/updater";
 import { callSaveNow } from "../CloseOverlay";
+import { DISCLAIMER_KEY } from "../Disclaimer";
 import { Section } from "./SettingsWidgets";
 import { SettingsFormProps } from "./types";
 
@@ -58,7 +59,7 @@ export default function AppSettings({ form, set }: Pick<SettingsFormProps, "form
   };
 
   const resetDisclaimer = () => {
-    localStorage.removeItem("natia_disclaimer_v1");
+    localStorage.removeItem(DISCLAIMER_KEY);
     setDisclaimerReset(true);
     setTimeout(() => setDisclaimerReset(false), 2000);
   };

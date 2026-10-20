@@ -2,7 +2,8 @@
 name = "natia"
 version = "0.1.0"
 description = "NATIA - AI-powered note taking"
-authors = []
+authors = ["Buntasam"]
+license-file = "../../LICENSE"
 edition = "2021"
 
 [lib]

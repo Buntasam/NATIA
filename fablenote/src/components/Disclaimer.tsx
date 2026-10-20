@@ -1,25 +1,38 @@
 import { useState } from "react";
-import { AlertTriangle, Lock, ShieldAlert } from "lucide-react";
+import { AlertTriangle, Cpu, Lock, ShieldAlert, Sparkles } from "lucide-react";
 import { useStore } from "../store";
 
-const KEY = "natia_disclaimer_v1";
+export const DISCLAIMER_KEY = "natia_disclaimer_v2";
+
+// Repères indicatifs : le besoin réel dépend aussi de la longueur des notes.
+const MODEL_TIERS = [
+  { machine: "PC standard, 8 Go de RAM, sans carte graphique", size: "petits modèles (1 à 2 milliards de paramètres)", models: ["gemma3:1b", "qwen2.5:1.5b"] },
+  { machine: "16 Go de RAM", size: "modèles moyens (3 à 4 milliards)", models: ["phi4-mini", "llama3.2:3b", "gemma3:4b"] },
+  { machine: "Carte graphique avec 8 Go de mémoire vidéo ou plus", size: "modèles plus capables (7 à 8 milliards)", models: ["mistral", "llama3.1:8b"] },
+];
 
 export default function Disclaimer() {
   const { toggleSettings } = useStore();
   const [dontShow, setDontShow] = useState(false);
-  const [visible] = useState(() => !localStorage.getItem(KEY));
+  const [visible] = useState(() => !localStorage.getItem(DISCLAIMER_KEY));
   const [closed, setClosed] = useState(false);
 
   if (!visible || closed) return null;
 
   const close = () => {
-    if (dontShow) localStorage.setItem(KEY, "1");
+    if (dontShow) localStorage.setItem(DISCLAIMER_KEY, "1");
     setClosed(true);
+  };
+
+  const openSettings = (cat: "security" | "ai" | "app") => {
+    close();
+    localStorage.setItem("natia_settings_cat", cat);
+    toggleSettings();
   };
 
   return (
     <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/70 backdrop-blur-sm">
-      <div className="bg-panel border border-border rounded-xl w-[460px] max-h-[90vh] overflow-hidden shadow-2xl flex flex-col">
+      <div className="bg-panel border border-border rounded-xl w-[500px] max-w-[95vw] max-h-[90vh] overflow-hidden shadow-2xl flex flex-col">
         {/* Header */}
         <div className="px-6 pt-6 pb-4 flex items-start gap-4 shrink-0">
           <div className="w-11 h-11 rounded-full bg-amber-400/20 flex items-center justify-center shrink-0 mt-0.5">
@@ -50,11 +63,47 @@ export default function Disclaimer() {
               Sans mot de passe activé, notes, titres, tags et clés API sont stockés <strong className="text-primary">en clair</strong> dans la base locale. Activez un mot de passe pour chiffrer l'ensemble de vos données en <strong className="text-primary">AES-256-GCM</strong>.
             </p>
             <button
-              onClick={() => { close(); toggleSettings(); }}
+              onClick={() => openSettings("security")}
               className="self-start flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-amber-500/15 hover:bg-amber-500/25 border border-amber-600/30 text-amber-700 dark:text-amber-300 hover:text-amber-800 dark:hover:text-amber-200 text-xs font-medium transition-colors"
             >
               <Lock size={11} />
               Activer un mot de passe
+            </button>
+          </div>
+
+          {/* Encart IA locale */}
+          <div className="flex flex-col gap-2.5 rounded-xl border border-red-500/40 bg-red-500/8 px-4 py-3.5">
+            <div className="flex items-center gap-2">
+              <Cpu size={14} className="text-red-500 shrink-0" />
+              <span className="text-xs font-semibold text-red-500">IA en local : installez Ollama et choisissez un modèle adapté à votre PC</span>
+            </div>
+            <p className="text-xs text-secondary/80 leading-relaxed">
+              L'IA locale n'est pas incluse dans NATIA : installez <strong className="text-primary">Ollama</strong> depuis <strong className="text-primary">ollama.com</strong>, puis téléchargez un modèle, par exemple avec <code className="text-[10px] bg-red-500/10 px-1 rounded">ollama pull gemma3:1b</code>.
+            </p>
+            <ul className="text-xs text-secondary/80 leading-relaxed flex flex-col gap-1">
+              {MODEL_TIERS.map((t) => (
+                <li key={t.machine} className="flex flex-col">
+                  <span><strong className="text-primary">{t.machine}</strong> → {t.size}</span>
+                  <span className="flex flex-wrap gap-1 mt-0.5">
+                    {t.models.map((m) => (
+                      <code key={m} className="text-[10px] bg-red-500/10 px-1 rounded">{m}</code>
+                    ))}
+                  </span>
+                </li>
+              ))}
+            </ul>
+            <p className="text-xs text-red-500/90 leading-relaxed">
+              Un modèle trop gros pour votre machine peut mettre plusieurs minutes à répondre, voire ralentir tout le PC.
+            </p>
+            <p className="text-xs text-secondary/80 leading-relaxed">
+              <strong className="text-primary">Sans PC puissant</strong>, utilisez plutôt une IA en ligne : une clé API Claude, OpenAI, Gemini ou Mistral (souvent avec une offre gratuite), ou Claude Code CLI si vous avez un abonnement Claude. Le texte des notes envoyées à l'IA est alors transmis à ce fournisseur.
+            </p>
+            <button
+              onClick={() => openSettings("ai")}
+              className="self-start flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-red-500/15 hover:bg-red-500/25 border border-red-500/30 text-red-500 text-xs font-medium transition-colors"
+            >
+              <Sparkles size={11} />
+              Configurer l'IA
             </button>
           </div>
 
@@ -81,7 +130,7 @@ export default function Disclaimer() {
             J'ai compris — Continuer
           </button>
           <p className="text-[10px] text-muted text-center">
-            Signaler un bug ou une idée : <button onClick={() => { close(); localStorage.setItem("natia_settings_cat", "app"); toggleSettings(); }} className="text-accent hover:underline underline-offset-2">Paramètres → Application</button>
+            Signaler un bug ou une idée : <button onClick={() => openSettings("app")} className="text-accent hover:underline underline-offset-2">Paramètres → Application</button>
           </p>
         </div>
       </div>

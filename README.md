@@ -60,7 +60,7 @@ NATIA est une application de bureau **cross-platform** (Windows, macOS, Linux) c
 - **Quick open** — `Ctrl+P` pour ouvrir une note par nom (notes récentes en priorité)
 
 ### Versionnage
-- **Versionnage Git** — chaque sauvegarde crée un commit ; navigation dans l'historique et restauration
+- **Historique des versions** — chaque sauvegarde crée une version ; navigation dans l'historique et restauration
 - **Diff** — comparaison entre versions
 
 ### Sécurité et données
@@ -269,4 +269,14 @@ Voir [docs/CONTRIBUTING.md](docs/CONTRIBUTING.md) pour le guide de contribution.
 
 ## Licence
 
-MIT
+NATIA est publié sous une **licence « code source consultable »** : le code est public, mais NATIA n'est pas un logiciel libre. Voir le fichier [LICENSE](LICENSE) pour le texte complet.
+
+En résumé :
+
+- ✅ Utiliser NATIA pour un usage personnel et non commercial
+- ✅ Lire et étudier le code, le modifier pour votre usage personnel
+- ✅ Forker le dépôt pour proposer vos améliorations via une pull request
+- ❌ Toute utilisation commerciale sans accord
+- ❌ Redistribuer NATIA ou une version modifiée ailleurs que sur ce dépôt, même gratuitement
+
+Pour toute autre demande, ouvrez une [issue](https://github.com/Buntasam/NATIA/issues).
