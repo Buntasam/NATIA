@@ -37,7 +37,7 @@ pub fn get_password_type(state: State<AppState>) -> Result<String, String> {
 // DPAPI, donc lié à la session Windows), est injecté dans Argon2. Une base copiée
 // sur une autre machine ne permet alors de tester aucun mot de passe ni PIN.
 
-const DEVICE_MISSING: &str = "Clé de sécurité de cet appareil introuvable. Les notes ne peuvent être déchiffrées que sur le PC et la session Windows où le mot de passe a été créé. Si vous avez changé de PC ou de compte Windows, utilisez « Réinitialiser l'app ».";
+const DEVICE_MISSING: &str = "Clé de sécurité de cet appareil introuvable. Les notes ne peuvent être déchiffrées que sur le PC et la session Windows où le mot de passe a été créé. Si vous avez changé de PC ou de compte Windows, utilisez votre clé de récupération.";
 
 fn load_device_secret() -> Option<[u8; 32]> {
     let bytes = B64.decode(keychain_get(DEVICE_SECRET_NAME)?).ok()?;
@@ -98,10 +98,7 @@ fn unwrap_dek_with(db: &rusqlite::Connection, password: &str, load: fn() -> Opti
     if stored.len() != 32 { return Err("Hash corrompu".to_string()); }
     let secret = device_secret_for(db, load)?;
     let keys = derive_keys(password, &salt, secret.as_ref())?;
-
-    let mut diff = 0u8;
-    for (a, b) in keys.verif.iter().zip(stored.iter()) { diff |= a ^ b; }
-    if diff != 0 { return Ok(None); }
+    if !same_bytes(&keys.verif, &stored) { return Ok(None); }
 
     let nonce = config_get(db, "dek_nonce").map_err(|_| "DEK nonce introuvable")?;
     let ct = config_get(db, "dek_encrypted").map_err(|_| "DEK chiffrée introuvable")?;
@@ -122,7 +119,6 @@ fn wrap_dek(db: &rusqlite::Connection, password: &str, dek: &[u8; 32], secret: O
     let verif_b64 = B64.encode(keys.verif);
     let bound = if secret.is_some() { "1" } else { "0" };
 
-    let tx = db.unchecked_transaction().map_err(|e| e.to_string())?;
     let mut rows = vec![
         ("password_salt", salt_b64.as_str()),
         ("password_hash", verif_b64.as_str()),
@@ -131,6 +127,11 @@ fn wrap_dek(db: &rusqlite::Connection, password: &str, dek: &[u8; 32], secret: O
         ("device_bound", bound),
     ];
     if let Some(t) = pw_type { rows.push(("password_type", t)); }
+    config_set_all(db, &rows)
+}
+
+fn config_set_all(db: &rusqlite::Connection, rows: &[(&str, &str)]) -> Result<(), String> {
+    let tx = db.unchecked_transaction().map_err(|e| e.to_string())?;
     for (k, v) in rows {
         tx.execute(
             "INSERT INTO app_config(key,value) VALUES(?1,?2) ON CONFLICT(key) DO UPDATE SET value=?2",
@@ -140,21 +141,143 @@ fn wrap_dek(db: &rusqlite::Connection, password: &str, dek: &[u8; 32], secret: O
     tx.commit().map_err(|e| e.to_string())
 }
 
+/// Comparaison en temps constant.
+fn same_bytes(a: &[u8], b: &[u8]) -> bool {
+    if a.len() != b.len() { return false; }
+    let mut diff = 0u8;
+    for (x, y) in a.iter().zip(b.iter()) { diff |= x ^ y; }
+    diff == 0
+}
+
+// ─── Clé de récupération ──────────────────────────────────────────────────────
+// Une deuxième copie de la DEK, chiffrée par un code aléatoire de 25 caractères
+// (125 bits) affiché une seule fois. Ce code n'est PAS lié à l'appareil : il
+// permet de rouvrir les notes après une réinstallation de Windows, sur un autre
+// PC ou en cas d'oubli du mot de passe. Il est trop long pour être deviné.
+
+const RECOVERY_ALPHABET: &[u8; 32] = b"0123456789ABCDEFGHJKMNPQRSTVWXYZ";
+const RECOVERY_LEN: usize = 25;
+const RECOVERY_CONFIG_KEYS: &str = "'recovery_salt','recovery_hash','recovery_dek_nonce','recovery_dek_encrypted'";
+
+fn generate_recovery_code() -> String {
+    let mut bytes = [0u8; RECOVERY_LEN];
+    rand::thread_rng().fill_bytes(&mut bytes);
+    // 256 est un multiple de 32 : chaque caractère est équiprobable.
+    let chars: Vec<char> = bytes.iter().map(|b| RECOVERY_ALPHABET[(b & 31) as usize] as char).collect();
+    bytes.zeroize();
+    chars.chunks(5).map(|c| c.iter().collect::<String>()).collect::<Vec<_>>().join("-")
+}
+
+/// Saisie tolérante : minuscules, espaces et tirets acceptés, O lu comme 0, I et L comme 1.
+fn normalize_recovery_code(input: &str) -> Option<String> {
+    let s: String = input
+        .chars()
+        .filter(|c| !c.is_whitespace() && *c != '-')
+        .map(|c| match c.to_ascii_uppercase() { 'O' => '0', 'I' | 'L' => '1', c => c })
+        .collect();
+    (s.len() == RECOVERY_LEN && s.bytes().all(|b| RECOVERY_ALPHABET.contains(&b))).then_some(s)
+}
+
+fn wrap_recovery(db: &rusqlite::Connection, code: &str, dek: &[u8; 32]) -> Result<(), String> {
+    let code = normalize_recovery_code(code).ok_or("Clé de récupération invalide")?;
+    let mut salt = [0u8; 16];
+    rand::thread_rng().fill_bytes(&mut salt);
+    let keys = derive_keys(&code, &salt, None)?;
+    let (nonce, ct) = encrypt_dek(dek, &keys.kek);
+    let (salt_b64, verif_b64) = (B64.encode(salt), B64.encode(keys.verif));
+    config_set_all(db, &[
+        ("recovery_salt", salt_b64.as_str()),
+        ("recovery_hash", verif_b64.as_str()),
+        ("recovery_dek_nonce", nonce.as_str()),
+        ("recovery_dek_encrypted", ct.as_str()),
+    ])
+}
+
+/// DEK retrouvée grâce à la clé de récupération. `None` = mauvaise clé.
+fn unwrap_recovery(db: &rusqlite::Connection, code: &str) -> Result<Option<[u8; 32]>, String> {
+    let salt = config_get(db, "recovery_salt").map_err(|_| "Aucune clé de récupération n'a été créée pour ces notes.")?;
+    let Some(code) = normalize_recovery_code(code) else { return Ok(None) };
+    let salt = B64.decode(salt).map_err(|e| e.to_string())?;
+    let stored = B64.decode(config_get(db, "recovery_hash")?).map_err(|e| e.to_string())?;
+    let keys = derive_keys(&code, &salt, None)?;
+    if !same_bytes(&keys.verif, &stored) { return Ok(None); }
+    let nonce = config_get(db, "recovery_dek_nonce")?;
+    let ct = config_get(db, "recovery_dek_encrypted")?;
+    decrypt_dek(&nonce, &ct, &keys.kek).map(Some)
+}
+
+fn has_recovery_in(db: &rusqlite::Connection) -> bool {
+    config_get(db, "recovery_hash").is_ok()
+}
+
+/// Remplace le mot de passe à l'aide de la clé de récupération (la clé reste valable).
+fn recover_in(db: &rusqlite::Connection, code: &str, new_password: &str, pw_type: &str, secret: Option<[u8; 32]>) -> Result<Option<[u8; 32]>, String> {
+    let Some(dek) = unwrap_recovery(db, code)? else { return Ok(None) };
+    wrap_dek(db, new_password, &dek, secret, Some(pw_type))?;
+    Ok(Some(dek))
+}
+
+/// Vérifie un mot de passe saisi dans les paramètres, avec le même compteur
+/// d'échecs que l'écran de verrouillage.
+fn check_password(db: &rusqlite::Connection, password: &str, wrong: &str) -> Result<[u8; 32], String> {
+    begin_attempt(db, unix_now())?;
+    let (dek, _) = unwrap_dek(db, password)?.ok_or_else(|| wrong.to_string())?;
+    write_lockout(db, 0, 0)?;
+    Ok(dek)
+}
+
 // ─── Password commands ────────────────────────────────────────────────────────
 
 #[tauri::command]
-pub fn setup_password(password: String, pw_type: String, state: State<AppState>) -> Result<(), String> {
+/// Renvoie la clé de récupération, à montrer une seule fois à l'utilisateur.
+pub fn setup_password(password: String, pw_type: String, state: State<AppState>) -> Result<String, String> {
     let mut dek = generate_dek();
+    let code = generate_recovery_code();
     {
         let db = state.db.lock().map_err(|e| e.to_string())?;
         wrap_dek(&db, &password, &dek, get_or_create_device_secret(), Some(&pw_type))?;
+        wrap_recovery(&db, &code, &dek)?;
         encrypt_all_data(&db, &state.notes_dir, &dek)?;
         // Réécrit le fichier SQLite pour qu'aucune page libérée ne garde l'ancien texte clair.
         db.execute_batch("VACUUM").map_err(|e| e.to_string())?;
     }
     *state.enc_key.lock().map_err(|e| e.to_string())? = Some(dek);
     dek.zeroize();
-    Ok(())
+    Ok(code)
+}
+
+#[tauri::command]
+pub fn has_recovery_code(state: State<AppState>) -> Result<bool, String> {
+    let db = state.db.lock().map_err(|e| e.to_string())?;
+    Ok(has_recovery_in(&db))
+}
+
+/// Crée (ou remplace) la clé de récupération. L'ancienne clé ne fonctionne plus.
+#[tauri::command]
+pub fn create_recovery_code(password: String, state: State<AppState>) -> Result<String, String> {
+    crate::require_unlocked(&state)?;
+    let db = state.db.lock().map_err(|e| e.to_string())?;
+    let mut dek = check_password(&db, &password, "Mot de passe incorrect")?;
+    let code = generate_recovery_code();
+    let res = wrap_recovery(&db, &code, &dek);
+    dek.zeroize();
+    res.map(|_| code)
+}
+
+/// Écran de verrouillage : clé de récupération + nouveau mot de passe.
+#[tauri::command]
+pub fn recover_with_code(code: String, new_password: String, pw_type: String, state: State<AppState>) -> Result<bool, String> {
+    let result = {
+        let db = state.db.lock().map_err(|e| e.to_string())?;
+        begin_attempt(&db, unix_now())?;
+        let r = recover_in(&db, &code, &new_password, &pw_type, get_or_create_device_secret())?;
+        if r.is_some() { write_lockout(&db, 0, 0)?; }
+        r
+    };
+    let Some(mut dek) = result else { return Ok(false) };
+    *state.enc_key.lock().map_err(|e| e.to_string())? = Some(dek);
+    dek.zeroize();
+    Ok(true)
 }
 
 // ─── Blocage après échecs ─────────────────────────────────────────────────────
@@ -279,7 +402,7 @@ pub fn verify_password(password: String, state: State<AppState>) -> Result<bool,
 pub fn change_password(old_pass: String, new_pass: String, pw_type: Option<String>, state: State<AppState>) -> Result<(), String> {
     let mut dek = {
         let db = state.db.lock().map_err(|e| e.to_string())?;
-        let (dek, _) = unwrap_dek(&db, &old_pass)?.ok_or("Ancien mot de passe incorrect")?;
+        let dek = check_password(&db, &old_pass, "Ancien mot de passe incorrect")?;
         wrap_dek(&db, &new_pass, &dek, get_or_create_device_secret(), pw_type.as_deref())?;
         dek
     };
@@ -292,11 +415,13 @@ pub fn change_password(old_pass: String, new_pass: String, pw_type: Option<Strin
 pub fn remove_password(password: String, state: State<AppState>) -> Result<(), String> {
     {
         let db = state.db.lock().map_err(|e| e.to_string())?;
-        let (mut dek, _) = unwrap_dek(&db, &password)?.ok_or("Mot de passe incorrect")?;
+        let mut dek = check_password(&db, &password, "Mot de passe incorrect")?;
         decrypt_all_data(&db, &state.notes_dir, &dek)?;
         dek.zeroize();
-        db.execute("DELETE FROM app_config WHERE key IN ('password_salt','password_hash','password_type','dek_nonce','dek_encrypted','device_bound')", [])
-            .map_err(|e| e.to_string())?;
+        db.execute(
+            &format!("DELETE FROM app_config WHERE key IN ('password_salt','password_hash','password_type','dek_nonce','dek_encrypted','device_bound',{})", RECOVERY_CONFIG_KEYS),
+            [],
+        ).map_err(|e| e.to_string())?;
     }
     let _ = keychain_set(DEVICE_SECRET_NAME, "");
     *state.enc_key.lock().map_err(|e| e.to_string())? = None;
@@ -705,6 +830,40 @@ mod tests {
 
         write_lockout(&db, 0, 0).unwrap(); // bon mot de passe
         assert_eq!(lock_status_at(&db, t0 + 31).failed_attempts, 0);
+    }
+
+    #[test]
+    fn recovery_code_unlocks_without_the_device_and_sets_a_new_password() {
+        let db = db();
+        let dek = generate_dek();
+        wrap_dek(&db, "1234", &dek, secret_a(), Some("pin")).unwrap();
+        assert!(!has_recovery_in(&db));
+        assert!(unwrap_recovery(&db, "x").is_err(), "aucune clé créée");
+
+        let code = generate_recovery_code();
+        assert_eq!(code.len(), 29);
+        assert_eq!(code.matches('-').count(), 4);
+        wrap_recovery(&db, &code, &dek).unwrap();
+        assert!(has_recovery_in(&db));
+
+        // Saisie tolérante : minuscules, espaces au lieu des tirets, O pour 0.
+        let sloppy = code.replace('-', " ").to_lowercase().replace('0', "o");
+        assert_eq!(unwrap_recovery(&db, &sloppy).unwrap(), Some(dek));
+        let mut wrong = code.clone().into_bytes();
+        wrong[0] = if wrong[0] == b'A' { b'B' } else { b'A' };
+        assert_eq!(unwrap_recovery(&db, std::str::from_utf8(&wrong).unwrap()).unwrap(), None);
+        assert_eq!(unwrap_recovery(&db, "trop court").unwrap(), None);
+
+        // Autre PC (autre secret) : le PIN ne marche plus, la clé de récupération si.
+        assert_eq!(unwrap_dek_with(&db, "1234", secret_b).unwrap(), None);
+        assert_eq!(recover_in(&db, &code, "nouveau-mdp", "alpha", secret_b()).unwrap(), Some(dek));
+        assert_eq!(unwrap_dek_with(&db, "nouveau-mdp", secret_b).unwrap(), Some((dek, true)));
+        assert_eq!(config_get(&db, "password_type").unwrap(), "alpha");
+
+        // Mauvaise clé : rien ne change, et la bonne clé reste valable.
+        assert_eq!(recover_in(&db, "AAAAA-AAAAA-AAAAA-AAAAA-AAAAA", "pirate", "alpha", secret_b()).unwrap(), None);
+        assert_eq!(unwrap_dek_with(&db, "nouveau-mdp", secret_b).unwrap(), Some((dek, true)));
+        assert_eq!(unwrap_recovery(&db, &code).unwrap(), Some(dek));
     }
 
     #[test]

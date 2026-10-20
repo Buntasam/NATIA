@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { AlertTriangle, Cpu, Lock, ShieldAlert, Sparkles } from "lucide-react";
+import { AlertTriangle, BookOpen, Cpu, Lock, ShieldAlert, Sparkles } from "lucide-react";
 import { useStore } from "../store";
 
 export const DISCLAIMER_KEY = "natia_disclaimer_v2";
@@ -24,7 +24,7 @@ export default function Disclaimer() {
     setClosed(true);
   };
 
-  const openSettings = (cat: "security" | "ai" | "app") => {
+  const openSettings = (cat: "security" | "ai" | "app" | "manual") => {
     close();
     localStorage.setItem("natia_settings_cat", cat);
     toggleSettings();
@@ -104,6 +104,13 @@ export default function Disclaimer() {
             >
               <Sparkles size={11} />
               Configurer l'IA
+            </button>
+            <button
+              onClick={() => openSettings("manual")}
+              className="self-start flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-hover hover:bg-active border border-border text-secondary text-xs font-medium transition-colors"
+            >
+              <BookOpen size={11} />
+              Guide d'installation pas à pas (Paramètres → Manuel)
             </button>
           </div>
 

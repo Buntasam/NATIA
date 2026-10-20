@@ -4,6 +4,7 @@ import { Delete, Lock, Plus, AlertTriangle, Eye, EyeOff } from "lucide-react";
 import { useStore } from "../store";
 import D20Roller from "./D20Roller";
 import ResetConfirmDialog from "./ResetConfirmDialog";
+import RecoveryUnlock from "./RecoveryUnlock";
 import { LockPostIt, POSTIT_COLORS, arePostItsHidden, loadPostIts, newPostIt, savePostIts, setPostItsHidden } from "../lib/lockPostIts";
 
 const PIN_DOTS = 8;
@@ -41,6 +42,7 @@ export default function LockScreen() {
   const [postItsHidden, setHidden] = useState(arePostItsHidden);
   const togglePostIts = () => { setPostItsHidden(!postItsHidden); setHidden(!postItsHidden); };
   const [showResetDialog, setShowResetDialog] = useState(false);
+  const [recovering, setRecovering] = useState(false);
 
   // Source de vérité : le backend (compteur persistant en base, non contournable depuis l'interface).
   const [lockedFor, setLockedFor] = useState(0);
@@ -118,7 +120,8 @@ export default function LockScreen() {
   };
 
   useEffect(() => {
-    if (passwordType !== "pin") return;
+    // Pas de pavé numérique clavier pendant la saisie d'une clé de récupération.
+    if (passwordType !== "pin" || recovering || showResetDialog) return;
     const onKey = (e: KeyboardEvent) => {
       if (loading) return;
       if (e.key >= "0" && e.key <= "9") {
@@ -134,11 +137,27 @@ export default function LockScreen() {
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [passwordType, loading, value]);
+  }, [passwordType, loading, value, recovering, showResetDialog]);
 
   const handleBackspace = () => setValue((v) => v.slice(0, -1));
 
-  // ── Post-its layer (partagé entre les deux modes) ────────────────────────────
+  // ── Éléments partagés entre les deux modes ────────────────────────────────────
+
+  const forgotLink = (
+    <button
+      onClick={() => setRecovering(true)}
+      className="mt-4 text-xs text-muted hover:text-accent underline-offset-2 hover:underline transition-colors"
+    >
+      Mot de passe oublié ou nouveau PC ?
+    </button>
+  );
+
+  const dialogs = (
+    <>
+      <ResetConfirmDialog isOpen={showResetDialog} onClose={() => setShowResetDialog(false)} />
+      {recovering && <RecoveryUnlock onClose={() => setRecovering(false)} onDone={() => setRecovering(false)} />}
+    </>
+  );
 
   const postItsLayer = (
     <>
@@ -179,7 +198,7 @@ export default function LockScreen() {
         <button
           onClick={handleReset}
           className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-red-400/10 hover:bg-red-400/15 border border-red-400/20 hover:border-red-400/30 text-red-400 text-xs transition-colors"
-          title="Mot de passe oublié : effacer toutes les données et repartir de zéro"
+          title="Effacer toutes les données et repartir de zéro"
         >
           <AlertTriangle size={12} />
           Réinitialiser l'app
@@ -271,10 +290,11 @@ export default function LockScreen() {
         </div>
 
         {loading && <p className="text-muted text-xs">Vérification…</p>}
+        {forgotLink}
 
         {postItsLayer}
         <D20Roller />
-        <ResetConfirmDialog isOpen={showResetDialog} onClose={() => setShowResetDialog(false)} />
+        {dialogs}
       </div>
     );
   }
@@ -311,10 +331,11 @@ export default function LockScreen() {
           {loading ? "Vérification…" : "Déverrouiller"}
         </button>
       </div>
+      {forgotLink}
 
       {postItsLayer}
       <D20Roller />
-      <ResetConfirmDialog isOpen={showResetDialog} onClose={() => setShowResetDialog(false)} />
+      {dialogs}
     </div>
   );
 }

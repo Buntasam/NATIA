@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from "react";
-import { BarChart2, BrainCircuit, Database, Palette, ScrollText, Search, Shield, Sparkles, Wrench, X } from "lucide-react";
+import { BarChart2, BookOpen, BrainCircuit, Database, Palette, ScrollText, Search, Shield, Sparkles, Wrench, X } from "lucide-react";
 import { useStore } from "../store";
 import { Settings as SettingsType } from "../types";
 import StatsPanel from "./StatsPanel";
@@ -11,10 +11,11 @@ import DataSettings from "./settings/DataSettings";
 import MemorySettings from "./settings/MemorySettings";
 import PromptsSettings from "./settings/PromptsSettings";
 import SecuritySettings from "./settings/SecuritySettings";
+import ManualSettings from "./settings/ManualSettings";
 
 // ─── Catégories de la navigation latérale ─────────────────────────────────────
 
-type SettingsCat = "appearance" | "ai" | "prompts" | "memory" | "security" | "data" | "app" | "stats";
+type SettingsCat = "appearance" | "ai" | "prompts" | "memory" | "security" | "data" | "app" | "stats" | "manual";
 
 const NAV: { key: SettingsCat; label: string; desc: string; icon: React.ReactNode; keywords: string }[] = [
   { key: "appearance", label: "Apparence",                 desc: "Thème, typographie de l'éditeur, extras",              icon: <Palette size={14} />,      keywords: "theme couleur sombre clair police taille largeur editeur de d20 dice" },
@@ -24,6 +25,7 @@ const NAV: { key: SettingsCat; label: string; desc: string; icon: React.ReactNod
   { key: "security",   label: "Sécurité",                  desc: "Mot de passe, chiffrement, verrouillage automatique",  icon: <Shield size={14} />,       keywords: "securite mot de passe pin verrouillage chiffrement aes argon lock" },
   { key: "data",       label: "Données",                   desc: "Export, dossier de données, désinstallation",          icon: <Database size={14} />,     keywords: "export zip sauvegarde donnees dossier desinstaller backup archive" },
   { key: "app",        label: "Application",               desc: "Disclaimer et outils de développement",                icon: <Wrench size={14} />,       keywords: "disclaimer avertissement debogage debug developpement demarrage" },
+  { key: "manual",     label: "Manuel",                    desc: "Guide d'utilisation : installer une IA, utiliser l'app, sécurité, sauvegardes", icon: <BookOpen size={14} />, keywords: "manuel aide guide tutoriel installation ollama api cle claude cli node modele utilisation raccourcis sauvegarde recuperation" },
   { key: "stats",      label: "Statistiques",              desc: "Activité et métriques de tes notes",                   icon: <BarChart2 size={14} />,    keywords: "statistiques graphique mots notes activite tags kpi" },
 ];
 
@@ -167,6 +169,7 @@ export default function Settings() {
             {cat === "security" && <SecuritySettings form={form} set={set} />}
             {cat === "data" && <DataSettings />}
             {cat === "app" && <AppSettings form={form} set={set} />}
+            {cat === "manual" && <ManualSettings />}
             {cat === "stats" && (
               <Section title="Vue d'ensemble">
                 <StatsPanel />

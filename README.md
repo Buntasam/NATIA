@@ -54,7 +54,7 @@ L'installeur n'est pas signé : Windows SmartScreen affiche « Windows a protég
 - **Indicateur « IA en ligne »** — rappelle quand le texte est envoyé à un fournisseur extérieur
 
 ### Recherche et navigation
-- **Recherche plein texte** — titres et contenus, sans tenir compte des majuscules (« RÉUNION » trouve « réunion »)
+- **Recherche plein texte** — titres et contenus, sans tenir compte des majuscules ni des accents (« reunion » trouve « Réunion »)
 - **Quick open** — `Ctrl+P` pour ouvrir une note par son nom
 
 ### Historique
@@ -66,11 +66,14 @@ L'installeur n'est pas signé : Windows SmartScreen affiche « Windows a protég
 - **Blocage après erreurs** — délais croissants, conservés même après redémarrage
 - **Verrouillage automatique** — après inactivité, quand Windows se verrouille ou quand le PC sort de veille
 - **Export / import** — ZIP classique, protégé AES-256 (7-Zip) ou compatible Windows ; rappel de sauvegarde chaque semaine
-- **Réinitialisation** — en cas de mot de passe oublié, depuis l'écran de verrouillage
+- **Clé de récupération** — rouvre les notes en cas d'oubli du mot de passe, de réinstallation de Windows ou de changement de PC
+- **Indicateur de solidité** du mot de passe
+- **Réinitialisation** — pour repartir de zéro, depuis l'écran de verrouillage
 
 ### Divers
 - **Post-its de l'écran de verrouillage**, redimensionnables et masquables (non chiffrés)
 - **Enregistreur vocal** avec transcription par l'IA
+- **Manuel intégré** (Paramètres → Manuel) — installer Ollama, une clé API ou Claude Code CLI, et utiliser l'app pas à pas
 - **Statistiques**, **thèmes**, **dé à 20 faces**
 - **Mises à jour automatiques**
 
@@ -181,7 +184,7 @@ Sans mot de passe, les notes sont stockées **en clair**. Dès qu'un mot de pass
 
 - **Algorithmes** — Argon2id (64 Mo, 3 itérations) pour dériver la clé du mot de passe ; AES-256-GCM avec un nonce aléatoire par valeur pour les données.
 - **Clé liée au PC** — un secret rangé dans le coffre d'identifiants Windows entre dans le calcul : une copie de vos données ne peut pas être ouverte sur un autre PC, même avec le bon mot de passe.
-- **Conséquence** — après une réinstallation de Windows ou un changement de compte, les notes chiffrées sont illisibles. Faites des exports protégés réguliers (Paramètres → Données).
+- **Clé de récupération** — donnée une seule fois à l'activation du mot de passe (ou plus tard dans Paramètres → Sécurité). Elle n'est pas liée au PC : après une réinstallation de Windows, un changement de PC ou un oubli, « Mot de passe oublié ou nouveau PC ? » sur l'écran de verrouillage permet de rouvrir les notes et de choisir un nouveau mot de passe. Conservez-la hors de NATIA.
 - **Ce qui reste en clair** — les dates et le nombre de notes, ainsi que les post-its de l'écran de verrouillage.
 - **IA en ligne** — le texte envoyé à Claude, OpenAI, Gemini ou Mistral quitte votre PC. Utilisez Ollama pour que tout reste local.
 
@@ -216,7 +219,7 @@ Les données sont dans `%APPDATA%\com.natia.app\` :
 - `natia.db` — base SQLite (notes, dossiers, versions, paramètres, clés API, configuration de sécurité)
 - `notes\` — contenu des notes en HTML (chiffré si un mot de passe est actif)
 
-Pour sauvegarder ou changer de PC, utilisez l'export protégé plutôt qu'une copie de ce dossier : une copie ne s'ouvre pas sur un autre PC quand un mot de passe est actif.
+Pour sauvegarder ou changer de PC, le plus simple est l'export protégé. Une copie de ce dossier fonctionne aussi, mais sur un autre PC elle ne s'ouvre qu'avec la clé de récupération.
 
 ---
 

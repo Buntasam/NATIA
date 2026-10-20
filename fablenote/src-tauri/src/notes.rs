@@ -978,10 +978,25 @@ fn strip_html(html: &str) -> String {
     out.split_whitespace().collect::<Vec<_>>().join(" ")
 }
 
-/// Minuscules caractère par caractère : même nombre de caractères que l'original,
-/// ce qui permet de reporter une position trouvée dans le texte d'origine.
+/// Lettre sans accent (« é » → « e »). Une lettre en donne toujours une seule.
+fn strip_accent(c: char) -> char {
+    match c {
+        'à' | 'á' | 'â' | 'ã' | 'ä' | 'å' => 'a',
+        'ç' => 'c',
+        'è' | 'é' | 'ê' | 'ë' => 'e',
+        'ì' | 'í' | 'î' | 'ï' => 'i',
+        'ñ' => 'n',
+        'ò' | 'ó' | 'ô' | 'õ' | 'ö' | 'ø' => 'o',
+        'ù' | 'ú' | 'û' | 'ü' => 'u',
+        'ý' | 'ÿ' => 'y',
+        _ => c,
+    }
+}
+
+/// Minuscules sans accents, caractère par caractère : même nombre de caractères
+/// que l'original, ce qui permet de reporter une position trouvée dans le texte d'origine.
 fn fold(s: &str) -> String {
-    s.chars().map(|c| c.to_lowercase().next().unwrap_or(c)).collect()
+    s.chars().map(|c| strip_accent(c.to_lowercase().next().unwrap_or(c))).collect()
 }
 
 fn char_slice(s: &str, start: usize, end: usize) -> &str {
@@ -1391,6 +1406,10 @@ mod tests {
             assert_eq!(hit[0].snippet, "Acheter du Café");
             assert_eq!(hit[0].folder, None);
             assert_eq!(search_rows(rows(&e), &e.dir, &e.key, &mut cache, "réunion")[0].folder.as_deref(), Some("Travail"));
+            // Sans accents dans un sens comme dans l'autre.
+            assert_eq!(ids(search_rows(rows(&e), &e.dir, &e.key, &mut cache, "reunion")), [a.clone()]);
+            assert_eq!(search_rows(rows(&e), &e.dir, &e.key, &mut cache, "CAFE")[0].snippet, "Acheter du Café");
+            assert_eq!(make_snippet("Une réunion importante", "REUNION", 3), "…ne réunion im…");
 
             // Contenu modifié : le cache doit être invalidé (taille du fichier différente).
             write_content(&e, &b, "<p>Acheter du thé vert</p>");

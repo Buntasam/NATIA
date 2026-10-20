@@ -438,19 +438,6 @@ body,
 .ProseMirror pre .hljs-attr    { color: #e06c75; }
 .ProseMirror pre .hljs-literal { color: #56b6c2; }
 
-/* ─── Presentation mode ─────────────────────────────────────────────────────── */
-.slide-content { color: white; }
-.slide-content h1 { font-size: 3rem; font-weight: 700; margin-bottom: 1.5rem; line-height: 1.2; }
-.slide-content h2 { font-size: 2rem; font-weight: 600; margin-bottom: 1rem; color: rgba(255,255,255,0.85); }
-.slide-content h3 { font-size: 1.5rem; font-weight: 600; margin-bottom: 0.75rem; color: rgba(255,255,255,0.8); }
-.slide-content p { font-size: 1.2rem; line-height: 1.7; color: rgba(255,255,255,0.8); margin-bottom: 0.75rem; }
-.slide-content ul, .slide-content ol { padding-left: 1.5rem; }
-.slide-content li { font-size: 1.1rem; line-height: 1.8; color: rgba(255,255,255,0.75); }
-.slide-content code { background: rgba(255,255,255,0.1); padding: 0.1em 0.4em; border-radius: 4px; font-size: 0.9em; }
-.slide-content blockquote { border-left: 4px solid #d97757; padding-left: 1rem; font-style: italic; color: rgba(255,255,255,0.6); }
-.slide-content strong { color: white; }
-.slide-content mark { background: rgba(217,119,87,0.3); color: white; }
-
 /* ─── Reminders ──────────────────────────────────────────────────────────────── */
 .reminder-block {
   display: flex;

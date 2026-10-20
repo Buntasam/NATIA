@@ -31,7 +31,9 @@ interface AppStore {
   checkSecurity: () => Promise<void>;
   unlock: (password: string) => Promise<boolean>;
   lock: () => Promise<void>;
-  setupPassword: (password: string, pwType: string) => Promise<void>;
+  /** Renvoie la clé de récupération, à afficher une seule fois. */
+  setupPassword: (password: string, pwType: string) => Promise<string>;
+  recoverWithCode: (code: string, newPassword: string, pwType: "pin" | "alpha") => Promise<boolean>;
   changePassword: (oldPass: string, newPass: string, pwType: "pin" | "alpha") => Promise<void>;
   removePassword: (password: string) => Promise<void>;
 
@@ -170,6 +172,9 @@ export const DEFAULT_SETTINGS: Settings = {
   prompt_intensity: "medium",
 };
 
+/** Titre donné à une note qui vient d'être créée. */
+export const NEW_NOTE_TITLE = "Nouvelle note";
+
 const MEMORY_KEY = "memory_nodes";
 
 function persistMemory(nodes: MemoryNode[]): Promise<void> {
@@ -222,8 +227,15 @@ export const useStore = create<AppStore>((set, get) => ({
   },
 
   setupPassword: async (password: string, pwType: string) => {
-    await invoke("setup_password", { password, pwType });
+    const code = await invoke<string>("setup_password", { password, pwType });
     set({ hasPassword: true, passwordType: pwType as "pin" | "alpha" });
+    return code;
+  },
+
+  recoverWithCode: async (code: string, newPassword: string, pwType: "pin" | "alpha") => {
+    const ok = await invoke<boolean>("recover_with_code", { code, newPassword, pwType });
+    if (ok) set({ isLocked: false, passwordType: pwType });
+    return ok;
   },
 
   changePassword: async (oldPass: string, newPass: string, pwType: "pin" | "alpha") => {
@@ -407,7 +419,7 @@ export const useStore = create<AppStore>((set, get) => ({
 
   createNote: async () => {
     const note = await invoke<Note>("create_note", {
-      title: "Nouvelle note",
+      title: NEW_NOTE_TITLE,
       content: "",
       tags: [],
       folder: null,

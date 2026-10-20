@@ -56,7 +56,7 @@ import { registerSaveNow } from "./CloseOverlay";
 import { markdownToHtml } from "../lib/markdown";
 
 const lowlight = createLowlight(common);
-import { useStore } from "../store";
+import { useStore, NEW_NOTE_TITLE } from "../store";
 import Toolbar from "./Toolbar";
 import VoiceRecorder from "./VoiceRecorder";
 
@@ -507,6 +507,7 @@ export default function Editor() {
 
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const titleTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const titleFocused = useRef(false);
   const lastSavedContent = useRef<string>("");
   const importRef = useRef<HTMLInputElement>(null);
   const saveNowRef = useRef<(() => void) | null>(null);
@@ -735,7 +736,8 @@ export default function Editor() {
       editor.commands.setContent(activeNote.content || "");
       lastSavedContent.current = activeNote.content;
     }
-    setLocalTitle(activeNote.title);
+    // Ne pas remettre « Nouvelle note » pendant que l'utilisateur écrit le titre.
+    if (!(titleFocused.current && activeNote.title === NEW_NOTE_TITLE)) setLocalTitle(activeNote.title);
     // Recalculate word count on note switch
     const text = editor.getText();
     setWordCount(text.trim() ? text.trim().split(/\s+/).length : 0);
@@ -797,6 +799,7 @@ export default function Editor() {
       if (!activeNote) return;
       if (titleTimer.current) clearTimeout(titleTimer.current);
       titleTimer.current = setTimeout(() => {
+        titleTimer.current = null;
         renameNote(activeNote.id, title || "Sans titre");
       }, 600);
     },
@@ -981,7 +984,10 @@ export default function Editor() {
             type="text"
             value={localTitle}
             onChange={handleTitleChange}
-            placeholder="Sans titre"
+            // Titre par défaut d'une nouvelle note : effacé au clic pour écrire directement.
+            onFocus={() => { titleFocused.current = true; if (localTitle === NEW_NOTE_TITLE) setLocalTitle(""); }}
+            onBlur={() => { titleFocused.current = false; if (!localTitle && !titleTimer.current && activeNote) setLocalTitle(activeNote.title); }}
+            placeholder={activeNote?.title === NEW_NOTE_TITLE ? NEW_NOTE_TITLE : "Sans titre"}
             aria-label="Titre de la note"
             className="flex-1 bg-transparent text-xl font-semibold text-primary placeholder-muted outline-none"
           />

@@ -268,32 +268,6 @@ pub async fn claude_stream(
     Ok(())
 }
 
-// ─── Image generation ─────────────────────────────────────────────────────────
-
-#[tauri::command]
-pub async fn generate_image(api_key: String, prompt: String, size: String) -> Result<String, String> {
-    let client = reqwest::Client::new();
-    let body = serde_json::json!({
-        "model": "dall-e-3", "prompt": prompt, "n": 1,
-        "size": size, "response_format": "b64_json"
-    });
-    let resp = client
-        .post("https://api.openai.com/v1/images/generations")
-        .header("Authorization", format!("Bearer {}", api_key))
-        .header("Content-Type", "application/json")
-        .json(&body)
-        .send()
-        .await
-        .map_err(|e| e.to_string())?;
-    if !resp.status().is_success() {
-        let text = resp.text().await.unwrap_or_default();
-        return Err(text);
-    }
-    let json: serde_json::Value = resp.json().await.map_err(|e| e.to_string())?;
-    let b64 = json["data"][0]["b64_json"].as_str().unwrap_or("").to_string();
-    Ok(format!("data:image/png;base64,{}", b64))
-}
-
 // ─── OpenAI API commands ──────────────────────────────────────────────────────
 
 #[tauri::command]

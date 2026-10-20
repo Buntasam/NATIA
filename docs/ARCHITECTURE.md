@@ -62,7 +62,7 @@ NATIA est développée et testée sous **Windows**. Le verrouillage avec la sess
 | `BackupReminder.tsx` | Rappel hebdomadaire de sauvegarde |
 | `Disclaimer.tsx` | Avertissements au premier lancement (bêta, chiffrement, IA locale) |
 | `Settings.tsx` | Fenêtre des paramètres : navigation, formulaire, enregistrement |
-| `settings/*.tsx` | Une catégorie de paramètres par fichier (Apparence, IA, Prompts, Mémoire, Sécurité, Données, Application) |
+| `settings/*.tsx` | Une catégorie de paramètres par fichier (Apparence, IA, Prompts, Mémoire, Sécurité, Données, Application, Manuel). Le texte du manuel est dans `settings/manualContent.ts` |
 | `TreeMapPanel.tsx`, `CalendarPanel.tsx`, `GraphPanel.tsx` | Vues arborescence, calendrier, graphe |
 | `BacklinksPanel.tsx`, `TemplatesPanel.tsx` | Notes qui pointent vers la note active, modèles de notes |
 | `VersionTree.tsx` | Historique des versions d'une note, comparaison, restauration |
@@ -70,8 +70,6 @@ NATIA est développée et testée sous **Windows**. Le verrouillage avec la sess
 | `VoiceRecorder.tsx`, `D20Roller.tsx` | Enregistreur vocal, dé à 20 faces |
 | `ReminderDaemon.tsx` | Vérifie les rappels toutes les 60 s et envoie une notification Windows |
 | `CloseOverlay.tsx` | Confirmation de fermeture + enregistrement avant de quitter |
-
-`PresentationMode.tsx` et `ImageGenPanel.tsx` existent mais ne sont reliés à aucun bouton pour l'instant.
 
 **Chargement à la demande** : `Settings`, `VersionTree`, `TrashPanel`, `ShortcutsOverlay`, `TreeMapPanel`, `CalendarPanel`, `PostItsPanel` et `GraphPanel` sont chargés avec `React.lazy` à leur première ouverture, pour alléger le démarrage (le graphe embarque `d3`).
 
@@ -150,6 +148,7 @@ Les commandes de dossiers, corbeille, export et recherche délèguent à des fon
 | `get_user_data`, `set_user_data` | Mémoire IA, bibliothèque de prompts |
 | `has_password`, `get_password_type`, `get_lock_status` | État de la sécurité |
 | `setup_password`, `verify_password`, `change_password`, `remove_password`, `lock_app` | Gestion du mot de passe |
+| `has_recovery_code`, `create_recovery_code`, `recover_with_code` | Clé de récupération |
 | `set_window_theme` | Couleur de la barre de titre Windows |
 
 ### Commandes — `ai.rs`
@@ -160,7 +159,6 @@ Les commandes de dossiers, corbeille, export et recherche délèguent à des fon
 | `claude_chat`, `claude_stream`, `openai_chat`, `openai_stream`, `gemini_chat`, `gemini_stream`, `mistral_chat`, `mistral_stream` | API en ligne |
 | `connection_chat`, `connection_stream` | Connexion par clé API enregistrée |
 | `check_claude_cli`, `claude_cli_chat`, `claude_cli_stream` | Claude Code CLI |
-| `generate_image` | Génération d'image (non reliée à l'interface pour l'instant) |
 
 Tous les fournisseurs diffusent leur réponse avec les événements `ollama-token` puis `ollama-done`.
 
@@ -225,7 +223,8 @@ mot de passe + sel aléatoire (16 octets) + secret de l'appareil
 ```
 
 - **DEK / KEK** : les données sont chiffrées avec une clé aléatoire (DEK). Le mot de passe ne sert qu'à chiffrer cette clé (KEK). Changer de mot de passe ne rechiffre donc que la DEK, pas toutes les notes.
-- **Secret de l'appareil** : un secret aléatoire de 32 octets, rangé dans le coffre d'identifiants Windows (`com.natia.app` / `device_secret`), est passé à Argon2 comme « secret » (pepper). Une base copiée sur une autre machine ne permet de tester aucun mot de passe. Contrepartie : réinstaller Windows ou changer de compte rend les données illisibles, d'où l'export protégé.
+- **Secret de l'appareil** : un secret aléatoire de 32 octets, rangé dans le coffre d'identifiants Windows (`com.natia.app` / `device_secret`), est passé à Argon2 comme « secret » (pepper). Une base copiée sur une autre machine ne permet de tester aucun mot de passe. Contrepartie : réinstaller Windows ou changer de compte rend le mot de passe inutilisable ; seule la clé de récupération permet alors de rouvrir les notes.
+- **Clé de récupération** : 25 caractères aléatoires (alphabet Crockford, 125 bits) affichés une seule fois. Une deuxième copie de la DEK est chiffrée avec une KEK dérivée de ce code par Argon2id, **sans** le secret de l'appareil (`recovery_salt`, `recovery_hash`, `recovery_dek_nonce`, `recovery_dek_encrypted`). `recover_with_code` retrouve la DEK, puis la rechiffre avec un nouveau mot de passe lié au PC courant. Les tentatives passent par le même compteur de blocage.
 - **Migration** : une base créée sans secret d'appareil est liée au premier déverrouillage réussi.
 - **Comparaison** du hash de vérification en temps constant (OU exclusif cumulé).
 - Les écritures de sel, hash et DEK se font dans une seule transaction.
@@ -240,9 +239,10 @@ Le préfixe distingue les valeurs chiffrées des valeurs en clair, ce qui permet
 
 ### Activation, changement, retrait
 
-- `setup_password` : génère la DEK, chiffre toute la base et les fichiers (`encrypt_all_data`), puis `VACUUM`.
+- `setup_password` : génère la DEK et la clé de récupération, chiffre toute la base et les fichiers (`encrypt_all_data`), puis `VACUUM`. Renvoie la clé de récupération à l'interface.
 - `change_password` : rechiffre seulement la DEK avec le nouveau mot de passe ; le type (PIN / alphanumérique) est enregistré.
-- `remove_password` : déchiffre toute la base (`decrypt_all_data`) et supprime le secret de l'appareil.
+- `remove_password` : déchiffre toute la base (`decrypt_all_data`), supprime la clé de récupération et le secret de l'appareil.
+- `change_password`, `remove_password` et `create_recovery_code` vérifient le mot de passe avec le même compteur d'échecs que l'écran de verrouillage.
 
 ### Blocage après échecs
 
@@ -300,7 +300,7 @@ Avec un fournisseur en ligne, le texte envoyé quitte la machine : `CloudAiNotic
 
 ## Recherche
 
-`search_notes` est asynchrone (hors du fil principal). Le texte déchiffré de chaque note est gardé dans `AppState.search_cache`, invalidé quand la taille ou la date du fichier change, et vidé à chaque verrouillage. La recherche ignore la casse caractère par caractère, ce qui gère les lettres accentuées.
+`search_notes` est asynchrone (hors du fil principal). Le texte déchiffré de chaque note est gardé dans `AppState.search_cache`, invalidé quand la taille ou la date du fichier change, et vidé à chaque verrouillage. La recherche ignore la casse et les accents (« reunion » trouve « Réunion ») : `fold()` remplace chaque caractère par un seul autre, ce qui permet de retrouver la position dans le texte d'origine pour l'extrait.
 
 ## Export et import
 

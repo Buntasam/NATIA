@@ -82,6 +82,7 @@ Le détail est dans [ARCHITECTURE.md](ARCHITECTURE.md). En bref :
 - Les actions sur les notes, dossiers et paramètres passent par le store Zustand.
 - Un paramètre enregistré par le bouton « Sauvegarder » se modifie via `form` / `set`, passés par `Settings.tsx` aux composants de `src/components/settings/`.
 - Les liens externes passent par `openUrl` (plugin `opener`) ; toute nouvelle URL doit être ajoutée dans `src-tauri/capabilities/default.json`.
+- Une nouvelle fonctionnalité visible s'accompagne d'une mise à jour du manuel (`src/components/settings/manualContent.ts`).
 
 ### Rust (backend)
 
