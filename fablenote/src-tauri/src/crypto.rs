@@ -8,7 +8,6 @@ use rusqlite::{Connection, Result as SqlResult, params};
 use std::path::PathBuf;
 
 pub(crate) const ENC_PREFIX: &str = "ENC:v1:";
-pub(crate) const ENC_PREFIX_V2: &str = "ENC:v2:";
 const ARGON2_MEM_KB: u32 = 65536;
 const ARGON2_TIME: u32 = 3;
 const ARGON2_PARALLEL: u32 = 1;
@@ -69,6 +68,19 @@ pub(crate) fn maybe_enc(key: &Option<[u8; 32]>, s: &str) -> String {
         Some(k) => encrypt_value(k, s),
         None => s.to_string(),
     }
+}
+
+pub(crate) fn maybe_enc_opt(key: &Option<[u8; 32]>, s: &Option<String>) -> Option<String> {
+    s.as_ref().map(|v| maybe_enc(key, v))
+}
+
+pub(crate) fn maybe_dec_opt(key: &Option<[u8; 32]>, s: &Option<String>) -> Option<String> {
+    s.as_ref().map(|v| maybe_dec(key, v))
+}
+
+/// `path` est `root` lui-même ou l'un de ses sous-dossiers.
+pub(crate) fn in_tree(path: &str, root: &str) -> bool {
+    path == root || (path.len() > root.len() && path.starts_with(root) && path.as_bytes()[root.len()] == b'/')
 }
 
 pub(crate) fn is_valid_uuid(s: &str) -> bool {
@@ -197,7 +209,50 @@ pub(crate) fn encrypt_all_data(db: &Connection, notes_dir: &PathBuf, key: &[u8; 
                 .map_err(|e| e.to_string())?;
         }
     }
+    for (id, m) in collect_rows2(db, "SELECT id, message FROM note_versions")? {
+        if !m.starts_with(ENC_PREFIX) {
+            db.execute("UPDATE note_versions SET message=?1 WHERE id=?2", params![encrypt_value(key, &m), id])
+                .map_err(|e| e.to_string())?;
+        }
+    }
+    for (id, f) in collect_rows2(db, "SELECT id, folder FROM notes WHERE folder IS NOT NULL")? {
+        if !f.starts_with(ENC_PREFIX) {
+            db.execute("UPDATE notes SET folder=?1 WHERE id=?2", params![encrypt_value(key, &f), id])
+                .map_err(|e| e.to_string())?;
+        }
+    }
+    for p in collect_rows1(db, "SELECT path FROM folders")? {
+        if !p.starts_with(ENC_PREFIX) {
+            db.execute("UPDATE folders SET path=?1 WHERE path=?2", params![encrypt_value(key, &p), p])
+                .map_err(|e| e.to_string())?;
+        }
+    }
+    for k in collect_rows1(db, "SELECT item_key FROM item_colors")? {
+        if !k.starts_with(ENC_PREFIX) {
+            db.execute("UPDATE item_colors SET item_key=?1 WHERE item_key=?2", params![encrypt_value(key, &k), k])
+                .map_err(|e| e.to_string())?;
+        }
+    }
+    for (k, v) in collect_rows2(db, "SELECT key, value FROM user_data")? {
+        if !v.starts_with(ENC_PREFIX) {
+            db.execute("UPDATE user_data SET value=?1 WHERE key=?2", params![encrypt_value(key, &v), k])
+                .map_err(|e| e.to_string())?;
+        }
+    }
     Ok(())
+}
+
+fn collect_rows1(db: &Connection, sql: &str) -> Result<Vec<String>, String> {
+    let mut s = db.prepare(sql).map_err(|e| e.to_string())?;
+    let rows = s.query_map([], |r| r.get::<_, String>(0))
+        .map_err(|e| e.to_string())?
+        .collect::<SqlResult<Vec<_>>>()
+        .map_err(|e| e.to_string())?;
+    Ok(rows)
+}
+
+fn dec_or_keep(key: &[u8; 32], v: String) -> Result<String, String> {
+    if v.starts_with(ENC_PREFIX) { decrypt_value(key, &v) } else { Ok(v) }
 }
 
 pub(crate) fn decrypt_all_data(db: &Connection, notes_dir: &PathBuf, key: &[u8; 32]) -> Result<(), String> {
@@ -236,5 +291,98 @@ pub(crate) fn decrypt_all_data(db: &Connection, notes_dir: &PathBuf, key: &[u8; 
         db.execute("UPDATE note_versions SET content=?1 WHERE id=?2", params![pc, id])
             .map_err(|e| e.to_string())?;
     }
+    for (id, m) in collect_rows2(db, "SELECT id, message FROM note_versions")? {
+        db.execute("UPDATE note_versions SET message=?1 WHERE id=?2", params![dec_or_keep(key, m)?, id])
+            .map_err(|e| e.to_string())?;
+    }
+    for (id, f) in collect_rows2(db, "SELECT id, folder FROM notes WHERE folder IS NOT NULL")? {
+        db.execute("UPDATE notes SET folder=?1 WHERE id=?2", params![dec_or_keep(key, f)?, id])
+            .map_err(|e| e.to_string())?;
+    }
+    for (k, v) in collect_rows2(db, "SELECT key, value FROM user_data")? {
+        db.execute("UPDATE user_data SET value=?1 WHERE key=?2", params![dec_or_keep(key, v)?, k])
+            .map_err(|e| e.to_string())?;
+    }
+
+    // Une fois déchiffrés, deux chemins/clés peuvent coïncider (clé primaire) :
+    // on vide puis on réinsère en dédupliquant, les dossiers actifs passant en premier.
+    let mut folders: Vec<(String, Option<String>)> = {
+        let mut s = db.prepare("SELECT path, deleted_at FROM folders").map_err(|e| e.to_string())?;
+        let rows = s.query_map([], |r| Ok((r.get::<_, String>(0)?, r.get::<_, Option<String>>(1)?)))
+            .map_err(|e| e.to_string())?
+            .collect::<SqlResult<Vec<_>>>()
+            .map_err(|e| e.to_string())?;
+        rows
+    };
+    for f in folders.iter_mut() {
+        f.0 = dec_or_keep(key, std::mem::take(&mut f.0))?;
+    }
+    folders.sort_by_key(|f| f.1.is_some());
+    db.execute("DELETE FROM folders", []).map_err(|e| e.to_string())?;
+    for (p, d) in folders {
+        db.execute("INSERT OR IGNORE INTO folders(path, deleted_at) VALUES(?1,?2)", params![p, d])
+            .map_err(|e| e.to_string())?;
+    }
+
+    let colors = collect_rows2(db, "SELECT item_key, color FROM item_colors")?;
+    db.execute("DELETE FROM item_colors", []).map_err(|e| e.to_string())?;
+    for (k, c) in colors {
+        db.execute("INSERT OR REPLACE INTO item_colors(item_key, color) VALUES(?1,?2)", params![dec_or_keep(key, k)?, c])
+            .map_err(|e| e.to_string())?;
+    }
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    const SECRETS: [&str; 6] = ["Journal intime", "Santé/Psy", "rdv psy mardi", "Mémoire perso", "prompt perso", "Modifier : Journal intime"];
+
+    fn dump(db: &Connection) -> String {
+        let mut out = String::new();
+        for t in ["notes", "folders", "item_colors", "note_versions", "user_data"] {
+            let mut s = db.prepare(&format!("SELECT * FROM {}", t)).unwrap();
+            let n = s.column_count();
+            let mut rows = s.query([]).unwrap();
+            while let Some(r) = rows.next().unwrap() {
+                for i in 0..n {
+                    if let Ok(Some(v)) = r.get::<_, Option<String>>(i) { out.push_str(&v); out.push('|'); }
+                }
+            }
+        }
+        out
+    }
+
+    #[test]
+    fn encrypt_all_hides_personal_data_and_roundtrips() {
+        let dir = std::env::temp_dir().join(format!("natia-test-{}", uuid::Uuid::new_v4()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let db = Connection::open_in_memory().unwrap();
+        crate::db::init_db(&db).unwrap();
+        let id = uuid::Uuid::new_v4().to_string();
+        db.execute("INSERT INTO notes(id,title,tags,folder,created_at,updated_at) VALUES(?1,'Journal intime','[]','Santé/Psy','t','t')", [&id]).unwrap();
+        db.execute("INSERT INTO folders(path) VALUES('Santé'),('Santé/Psy')", []).unwrap();
+        db.execute("INSERT INTO folders(path, deleted_at) VALUES('Santé/Old', 't')", []).unwrap();
+        db.execute("INSERT INTO item_colors(item_key,color) VALUES('folder:Santé/Psy','#f00')", []).unwrap();
+        db.execute("INSERT INTO note_versions(id,note_id,content,message,created_at) VALUES('v1',?1,'rdv psy mardi','Modifier : Journal intime','t')", [&id]).unwrap();
+        db.execute("INSERT INTO user_data(key,value) VALUES('memory_nodes','Mémoire perso'),('shadow_prompt_library','prompt perso')", []).unwrap();
+        std::fs::write(dir.join(format!("{}.html", id)), "rdv psy mardi").unwrap();
+
+        let key = generate_dek();
+        encrypt_all_data(&db, &dir, &key).unwrap();
+        let enc = dump(&db) + &std::fs::read_to_string(dir.join(format!("{}.html", id))).unwrap();
+        for s in SECRETS.iter().chain(["Santé", "Old"].iter()) {
+            assert!(!enc.contains(s), "texte en clair trouvé après chiffrement : {}", s);
+        }
+
+        decrypt_all_data(&db, &dir, &key).unwrap();
+        let dec = dump(&db);
+        for s in SECRETS.iter().take(5).chain(["folder:Santé/Psy", "Santé/Old"].iter()) {
+            assert!(dec.contains(s), "donnée perdue après déchiffrement : {}", s);
+        }
+        let deleted: Option<String> = db.query_row("SELECT deleted_at FROM folders WHERE path='Santé/Old'", [], |r| r.get(0)).unwrap();
+        assert_eq!(deleted.as_deref(), Some("t"));
+        let _ = std::fs::remove_dir_all(&dir);
+    }
 }

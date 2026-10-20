@@ -31,6 +31,7 @@ keyring = "3"
 tauri-plugin-dialog = "2"
 tauri-plugin-notification = "2"
 zeroize = "1"
+tauri-plugin-opener = "=2.5.5"
 
 [features]
 default = ["custom-protocol"]

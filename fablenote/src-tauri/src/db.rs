@@ -1,6 +1,5 @@
 use rusqlite::{Connection, Result as SqlResult, params};
-use std::path::PathBuf;
-use std::process::Command;
+use std::path::Path;
 
 use crate::crypto::maybe_enc;
 
@@ -33,6 +32,11 @@ pub(crate) fn keychain_set(key_name: &str, value: &str) -> Result<(), String> {
 pub(crate) fn init_db(db: &Connection) -> SqlResult<()> {
     db.execute_batch(
         "
+        PRAGMA secure_delete = ON;
+        CREATE TABLE IF NOT EXISTS user_data (
+            key TEXT PRIMARY KEY,
+            value TEXT NOT NULL
+        );
         CREATE TABLE IF NOT EXISTS notes (
             id TEXT PRIMARY KEY,
             title TEXT NOT NULL,
@@ -85,32 +89,63 @@ pub(crate) fn init_db(db: &Connection) -> SqlResult<()> {
     Ok(())
 }
 
-pub(crate) fn git_run(notes_dir: &PathBuf, args: &[&str]) -> String {
-    Command::new("git")
-        .args(args)
-        .current_dir(notes_dir)
-        .output()
-        .map(|o| String::from_utf8_lossy(&o.stdout).to_string())
-        .unwrap_or_default()
-}
-
-pub(crate) fn init_git(notes_dir: &PathBuf) {
+/// Les anciennes versions de NATIA versionnaient les notes dans un dépôt Git
+/// jamais relu, qui gardait des copies en clair : on le supprime s'il existe.
+pub(crate) fn remove_legacy_git(notes_dir: &Path) {
     let git_dir = notes_dir.join(".git");
-    if !git_dir.exists() {
-        git_run(notes_dir, &["init"]);
-        git_run(notes_dir, &["config", "user.email", "natia@local"]);
-        git_run(notes_dir, &["config", "user.name", "NATIA"]);
+    if !git_dir.exists() { return; }
+    // Git marque ses objets en lecture seule, ce qui bloque la suppression sous Windows.
+    clear_readonly(&git_dir);
+    if let Err(e) = std::fs::remove_dir_all(&git_dir) {
+        eprintln!("Suppression de l'ancien dépôt Git impossible : {}", e);
     }
 }
 
-pub(crate) fn git_commit_note(notes_dir: &PathBuf, note_id: &str, message: &str) {
-    let file = format!("{}.html", note_id);
-    git_run(notes_dir, &["add", &file]);
-    git_run(notes_dir, &["commit", "-m", message, "--allow-empty"]);
+fn clear_readonly(path: &Path) {
+    if let Ok(meta) = std::fs::symlink_metadata(path) {
+        let mut perms = meta.permissions();
+        if perms.readonly() {
+            #[allow(clippy::permissions_set_readonly_false)]
+            perms.set_readonly(false);
+            let _ = std::fs::set_permissions(path, perms);
+        }
+        if meta.is_dir() {
+            if let Ok(entries) = std::fs::read_dir(path) {
+                for entry in entries.flatten() {
+                    clear_readonly(&entry.path());
+                }
+            }
+        }
+    }
 }
 
-pub(crate) fn git_gc_prune(notes_dir: &PathBuf) {
-    git_run(notes_dir, &["gc", "--prune=now"]);
+/// (clé brute en base, clé en clair, couleur)
+pub(crate) fn load_color_rows(db: &Connection, key: &Option<[u8; 32]>) -> Result<Vec<(String, String, String)>, String> {
+    use crate::crypto::maybe_dec;
+    let mut s = db.prepare("SELECT item_key, color FROM item_colors").map_err(|e| e.to_string())?;
+    let rows = s.query_map([], |r| Ok((r.get::<_, String>(0)?, r.get::<_, String>(1)?)))
+        .map_err(|e| e.to_string())?
+        .collect::<SqlResult<Vec<_>>>()
+        .map_err(|e| e.to_string())?;
+    Ok(rows.into_iter().map(|(raw, c)| { let p = maybe_dec(key, &raw); (raw, p, c) }).collect())
+}
+
+pub(crate) fn delete_color_where(db: &Connection, key: &Option<[u8; 32]>, pred: impl Fn(&str) -> bool) -> Result<(), String> {
+    for (raw, plain, _) in load_color_rows(db, key)? {
+        if pred(&plain) {
+            db.execute("DELETE FROM item_colors WHERE item_key=?1", [&raw]).map_err(|e| e.to_string())?;
+        }
+    }
+    Ok(())
+}
+
+pub(crate) fn upsert_color(db: &Connection, key: &Option<[u8; 32]>, item_key: &str, color: &str) -> Result<(), String> {
+    delete_color_where(db, key, |k| k == item_key)?;
+    db.execute(
+        "INSERT OR REPLACE INTO item_colors(item_key,color) VALUES(?1,?2)",
+        params![maybe_enc(key, item_key), color],
+    ).map_err(|e| e.to_string())?;
+    Ok(())
 }
 
 pub(crate) fn save_version_inner(
@@ -136,7 +171,7 @@ pub(crate) fn save_version_inner(
     let id = uuid::Uuid::new_v4().to_string();
     db.execute(
         "INSERT INTO note_versions(id, note_id, content, message, created_at) VALUES(?1,?2,?3,?4,?5)",
-        params![id, note_id, maybe_enc(key, content_plain), message, now],
+        params![id, note_id, maybe_enc(key, content_plain), maybe_enc(key, message), now],
     )?;
     db.execute(
         "DELETE FROM note_versions WHERE note_id=?1 AND id NOT IN (
@@ -145,4 +180,26 @@ pub(crate) fn save_version_inner(
         [note_id],
     )?;
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    #[test]
+    fn remove_legacy_git_handles_readonly_objects() {
+        let dir = std::env::temp_dir().join(format!("natia-git-{}", uuid::Uuid::new_v4()));
+        let obj = dir.join(".git").join("objects").join("ab");
+        std::fs::create_dir_all(&obj).unwrap();
+        let f = obj.join("cdef");
+        std::fs::write(&f, "blob en clair").unwrap();
+        let mut p = std::fs::metadata(&f).unwrap().permissions();
+        p.set_readonly(true);
+        std::fs::set_permissions(&f, p).unwrap();
+        std::fs::write(dir.join("note.html"), "garde-moi").unwrap();
+
+        super::remove_legacy_git(&dir);
+
+        assert!(!dir.join(".git").exists());
+        assert!(dir.join("note.html").exists());
+        let _ = std::fs::remove_dir_all(&dir);
+    }
 }

@@ -10,7 +10,7 @@ use zeroize::Zeroize;
 
 use crate::{AppState, ApiKey, PromptVersion, Settings};
 use crate::crypto::{decrypt_all_data, derive_64, encrypt_all_data, maybe_dec, maybe_enc, generate_dek, encrypt_dek, decrypt_dek};
-use crate::db::{keychain_get, keychain_set, API_KEY_NAMES, git_gc_prune};
+use crate::db::{delete_color_where, keychain_get, keychain_set, load_color_rows, upsert_color, API_KEY_NAMES};
 
 // ─── Password commands ────────────────────────────────────────────────────────
 
@@ -62,8 +62,8 @@ pub fn setup_password(password: String, pw_type: String, state: State<AppState>)
         }
         let notes_dir = state.notes_dir.clone();
         encrypt_all_data(&db, &notes_dir, &dek)?;
-        drop(db);
-        git_gc_prune(&notes_dir);
+        // Réécrit le fichier SQLite pour qu'aucune page libérée ne garde l'ancien texte clair.
+        db.execute_batch("VACUUM").map_err(|e| e.to_string())?;
     }
     let mut guard = state.enc_key.lock().map_err(|e| e.to_string())?;
     *guard = Some(dek);
@@ -209,15 +209,12 @@ pub fn remove_password(password: String, state: State<AppState>) -> Result<(), S
     kek.zeroize();
     derived.zeroize();
 
-    let notes_dir = {
+    {
         let db = state.db.lock().map_err(|e| e.to_string())?;
-        let nd = state.notes_dir.clone();
-        decrypt_all_data(&db, &nd, &dek)?;
+        decrypt_all_data(&db, &state.notes_dir, &dek)?;
         db.execute("DELETE FROM app_config WHERE key IN ('password_salt','password_hash','password_type','dek_nonce','dek_encrypted')", [])
             .map_err(|e| e.to_string())?;
-        nd
-    };
-    git_gc_prune(&notes_dir);
+    }
     let mut guard = state.enc_key.lock().map_err(|e| e.to_string())?;
     *guard = None;
     Ok(())
@@ -317,6 +314,7 @@ pub fn get_settings(state: State<AppState>) -> Result<Settings, String> {
 
 #[tauri::command]
 pub fn update_settings(settings: Settings, state: State<AppState>) -> Result<(), String> {
+    crate::require_unlocked(&state)?;
     let key = state.enc_key.lock().map_err(|e| e.to_string())?.clone();
     let db = state.db.lock().map_err(|e| e.to_string())?;
     let now = Utc::now().to_rfc3339();
@@ -467,6 +465,7 @@ pub fn get_api_keys(state: State<AppState>) -> Result<Vec<ApiKey>, String> {
 
 #[tauri::command]
 pub fn upsert_api_key(key: ApiKey, state: State<AppState>) -> Result<(), String> {
+    crate::require_unlocked(&state)?;
     let enc_key = state.enc_key.lock().map_err(|e| e.to_string())?.clone();
     let db = state.db.lock().map_err(|e| e.to_string())?;
     db.execute(
@@ -495,30 +494,49 @@ pub fn delete_api_key(id: String, state: State<AppState>) -> Result<(), String> 
 
 #[tauri::command]
 pub fn get_colors(state: State<AppState>) -> Result<HashMap<String, String>, String> {
+    let key = state.enc_key.lock().map_err(|e| e.to_string())?.clone();
     let db = state.db.lock().map_err(|e| e.to_string())?;
-    let mut stmt = db.prepare("SELECT item_key, color FROM item_colors").map_err(|e| e.to_string())?;
-    let map = stmt
-        .query_map([], |row| Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?)))
-        .map_err(|e| e.to_string())?
-        .filter_map(|r| r.ok())
-        .collect::<HashMap<_, _>>();
-    Ok(map)
+    Ok(load_color_rows(&db, &key)?.into_iter().map(|(_, k, c)| (k, c)).collect())
 }
 
 #[tauri::command]
 pub fn set_color(item_key: String, color: String, state: State<AppState>) -> Result<(), String> {
+    crate::require_unlocked(&state)?;
+    let key = state.enc_key.lock().map_err(|e| e.to_string())?.clone();
     let db = state.db.lock().map_err(|e| e.to_string())?;
-    db.execute(
-        "INSERT INTO item_colors(item_key,color) VALUES(?1,?2) ON CONFLICT(item_key) DO UPDATE SET color=?2",
-        params![item_key, color],
-    ).map_err(|e| e.to_string())?;
-    Ok(())
+    upsert_color(&db, &key, &item_key, &color)
 }
 
 #[tauri::command]
 pub fn delete_color(item_key: String, state: State<AppState>) -> Result<(), String> {
+    crate::require_unlocked(&state)?;
+    let key = state.enc_key.lock().map_err(|e| e.to_string())?.clone();
     let db = state.db.lock().map_err(|e| e.to_string())?;
-    db.execute("DELETE FROM item_colors WHERE item_key=?1", [&item_key]).map_err(|e| e.to_string())?;
+    delete_color_where(&db, &key, |k| k == item_key)
+}
+
+// ─── User data (mémoire IA, bibliothèque de prompts…) ─────────────────────────
+
+#[tauri::command]
+pub fn get_user_data(name: String, state: State<AppState>) -> Result<Option<String>, String> {
+    crate::require_unlocked(&state)?;
+    let key = state.enc_key.lock().map_err(|e| e.to_string())?.clone();
+    let db = state.db.lock().map_err(|e| e.to_string())?;
+    let raw: Option<String> = db
+        .query_row("SELECT value FROM user_data WHERE key=?1", [&name], |r| r.get(0))
+        .ok();
+    Ok(raw.map(|r| maybe_dec(&key, &r)))
+}
+
+#[tauri::command]
+pub fn set_user_data(name: String, value: String, state: State<AppState>) -> Result<(), String> {
+    crate::require_unlocked(&state)?;
+    let key = state.enc_key.lock().map_err(|e| e.to_string())?.clone();
+    let db = state.db.lock().map_err(|e| e.to_string())?;
+    db.execute(
+        "INSERT INTO user_data(key,value) VALUES(?1,?2) ON CONFLICT(key) DO UPDATE SET value=?2",
+        params![name, maybe_enc(&key, &value)],
+    ).map_err(|e| e.to_string())?;
     Ok(())
 }
 

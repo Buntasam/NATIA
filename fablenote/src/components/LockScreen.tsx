@@ -32,7 +32,14 @@ interface LockPostIt {
   x: number;
   y: number;
   color: string;
+  width?: number;
+  height?: number;
 }
+
+const POSTIT_DEFAULT_W = 180;
+const POSTIT_DEFAULT_H = 130;
+const POSTIT_MIN_W = 120;
+const POSTIT_MIN_H = 80;
 
 const POSTIT_COLORS = ["#fef08a", "#fbcfe8", "#bbf7d0", "#bae6fd", "#e9d5ff"];
 const POSTIT_KEY = "natia_lock_postits";
@@ -188,6 +195,9 @@ export default function LockScreen() {
               return updated;
             });
           }}
+          onResize={(width, height) =>
+            setPostIts((prev) => prev.map((n) => (n.id === p.id ? { ...n, width, height } : n)))
+          }
           onDelete={() => {
             setPostIts((prev) => {
               const updated = prev.filter((n) => n.id !== p.id);
@@ -197,15 +207,24 @@ export default function LockScreen() {
           }}
         />
       ))}
-      <button
-        onClick={addPostIt}
-        style={{ position: "absolute", bottom: 20, right: 20, zIndex: 220 }}
-        className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-white/5 hover:bg-white/10 border border-white/10 text-white/30 hover:text-white/60 text-xs transition-colors"
-        title="Ajouter un post-it"
-      >
-        <Plus size={12} />
-        Post-it
-      </button>
+      <div style={{ position: "absolute", bottom: 20, right: 20, zIndex: 220 }} className="flex items-center gap-2">
+        <button
+          onClick={handleReset}
+          className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-red-400/10 hover:bg-red-400/15 border border-red-400/20 hover:border-red-400/30 text-red-400 text-xs transition-colors"
+          title="Mot de passe oublié : effacer toutes les données et repartir de zéro"
+        >
+          <AlertTriangle size={12} />
+          Réinitialiser l'app
+        </button>
+        <button
+          onClick={addPostIt}
+          className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-white/5 hover:bg-white/10 border border-white/10 text-white/30 hover:text-white/60 text-xs transition-colors"
+          title="Ajouter un post-it"
+        >
+          <Plus size={12} />
+          Post-it
+        </button>
+      </div>
     </>
   );
 
@@ -274,14 +293,6 @@ export default function LockScreen() {
 
         {loading && <p className="text-muted text-xs">Vérification…</p>}
 
-        <button
-          onClick={handleReset}
-          className="mt-6 flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-red-400/10 border border-red-400/20 text-xs text-red-400 hover:bg-red-400/15 hover:border-red-400/30 transition-colors"
-        >
-          <AlertTriangle size={11} />
-          Réinitialiser l'app
-        </button>
-
         {postItsLayer}
         <D20Roller />
         <ResetConfirmDialog isOpen={showResetDialog} onClose={() => setShowResetDialog(false)} />
@@ -320,14 +331,6 @@ export default function LockScreen() {
         >
           {loading ? "Vérification…" : "Déverrouiller"}
         </button>
-
-        <button
-          onClick={handleReset}
-          className="w-full mt-2 flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg bg-red-400/10 border border-red-400/20 text-xs text-red-400 hover:bg-red-400/15 hover:border-red-400/30 transition-colors"
-        >
-          <AlertTriangle size={11} />
-          Réinitialiser l'app
-        </button>
       </div>
 
       {postItsLayer}
@@ -344,15 +347,38 @@ function DraggablePostIt({
   onMove,
   onMoveEnd,
   onUpdate,
+  onResize,
   onDelete,
 }: {
   note: LockPostIt;
   onMove: (x: number, y: number) => void;
   onMoveEnd: (x: number, y: number) => void;
   onUpdate: (updates: Partial<Omit<LockPostIt, "id">>) => void;
+  onResize: (width: number, height: number) => void;
   onDelete: () => void;
 }) {
   const startRef = useRef<{ mx: number; my: number; nx: number; ny: number } | null>(null);
+  const width = note.width ?? POSTIT_DEFAULT_W;
+  const height = note.height ?? POSTIT_DEFAULT_H;
+
+  // Redimensionnement live via onResize, puis sauvegarde au relâchement via onUpdate.
+  const onResizeStart = (e: React.MouseEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    e.stopPropagation();
+    const start = { mx: e.clientX, my: e.clientY, w: width, h: height };
+    const size = (ev: MouseEvent) => ({
+      width: Math.min(Math.max(start.w + ev.clientX - start.mx, POSTIT_MIN_W), window.innerWidth - note.x),
+      height: Math.min(Math.max(start.h + ev.clientY - start.my, POSTIT_MIN_H), window.innerHeight - note.y),
+    });
+    const onMM = (ev: MouseEvent) => { const s = size(ev); onResize(s.width, s.height); };
+    const onMU = (ev: MouseEvent) => {
+      onUpdate(size(ev));
+      window.removeEventListener("mousemove", onMM);
+      window.removeEventListener("mouseup", onMU);
+    };
+    window.addEventListener("mousemove", onMM);
+    window.addEventListener("mouseup", onMU);
+  };
 
   const onMouseDown = (e: React.MouseEvent<HTMLDivElement>) => {
     const tag = (e.target as HTMLElement).tagName;
@@ -386,8 +412,8 @@ function DraggablePostIt({
   return (
     <div
       onMouseDown={onMouseDown}
-      style={{ position: "absolute", left: note.x, top: note.y, width: 180, zIndex: 210 }}
-      className="rounded-lg shadow-xl overflow-hidden"
+      style={{ position: "absolute", left: note.x, top: note.y, width, height, zIndex: 210 }}
+      className="rounded-lg shadow-xl overflow-hidden flex flex-col"
     >
       {/* Barre de titre / drag handle */}
       <div
@@ -435,10 +461,21 @@ function DraggablePostIt({
         onChange={(e) => onUpdate({ text: e.target.value })}
         onMouseDown={(e) => e.stopPropagation()}
         placeholder="..."
-        rows={4}
         style={{ backgroundColor: note.color, color: "rgba(0,0,0,0.75)", resize: "none" }}
-        className="w-full px-2.5 py-2 text-xs placeholder:text-black/25 outline-none border-0 leading-relaxed"
+        className="w-full flex-1 min-h-0 px-2.5 py-2 text-xs placeholder:text-black/25 outline-none border-0 leading-relaxed"
       />
+
+      {/* Poignée de redimensionnement */}
+      <div
+        onMouseDown={onResizeStart}
+        title="Redimensionner"
+        style={{ position: "absolute", right: 0, bottom: 0, width: 14, height: 14, cursor: "nwse-resize" }}
+        className="flex items-end justify-end p-0.5"
+      >
+        <svg width="9" height="9" viewBox="0 0 10 10" aria-hidden="true">
+          <path d="M9 1L1 9M9 5L5 9" stroke="rgba(0,0,0,0.35)" strokeWidth="1.3" strokeLinecap="round" />
+        </svg>
+      </div>
     </div>
   );
 }

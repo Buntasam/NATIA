@@ -77,6 +77,7 @@ interface AppStore {
   memoryGraphEnabled: boolean;
   setMemoryGraphEnabled: (v: boolean) => void;
   memoryNodes: MemoryNode[];
+  loadMemoryNodes: () => Promise<void>;
   addMemoryNode: (node: Omit<MemoryNode, "id" | "createdAt">) => void;
   updateMemoryNode: (id: string, updates: Partial<Omit<MemoryNode, "id" | "createdAt">>) => void;
   deleteMemoryNode: (id: string) => void;
@@ -169,6 +170,13 @@ export const DEFAULT_SETTINGS: Settings = {
   prompt_intensity: "medium",
 };
 
+const MEMORY_KEY = "memory_nodes";
+
+function persistMemory(nodes: MemoryNode[]): Promise<void> {
+  return invoke<void>("set_user_data", { name: MEMORY_KEY, value: JSON.stringify(nodes) })
+    .catch((e) => console.error("persistMemory:", e));
+}
+
 export const useStore = create<AppStore>((set, get) => ({
   notes: [],
   activeNote: null,
@@ -205,6 +213,7 @@ export const useStore = create<AppStore>((set, get) => ({
       notes: [],
       activeNote: null,
       folders: [],
+      memoryNodes: [],
       versions: [],
       navBackIds: [],
       navForwardIds: [],
@@ -324,35 +333,45 @@ export const useStore = create<AppStore>((set, get) => ({
     localStorage.setItem("natia_memory_graph", v ? "1" : "0");
     set({ memoryGraphEnabled: v });
   },
-  memoryNodes: (() => {
-    try { return JSON.parse(localStorage.getItem("natia_memory_nodes") ?? "[]") as MemoryNode[]; }
-    catch { return []; }
-  })(),
+  // Stockée côté Rust (table user_data, chiffrée quand un mot de passe est actif).
+  memoryNodes: [],
+  loadMemoryNodes: async () => {
+    try {
+      const raw = await invoke<string | null>("get_user_data", { name: MEMORY_KEY });
+      let nodes: MemoryNode[] = raw ? JSON.parse(raw) : [];
+      // Migration depuis l'ancien stockage localStorage (en clair).
+      const legacy = localStorage.getItem("natia_memory_nodes");
+      if (legacy !== null) {
+        if (!raw) {
+          nodes = JSON.parse(legacy) as MemoryNode[];
+          await persistMemory(nodes);
+        }
+        localStorage.removeItem("natia_memory_nodes");
+      }
+      set({ memoryNodes: nodes });
+    } catch (e) {
+      console.error("loadMemoryNodes:", e);
+    }
+  },
   addMemoryNode: (node) => {
-    set((s) => {
-      const newNode: MemoryNode = { ...node, id: crypto.randomUUID(), createdAt: new Date().toISOString() };
-      const nodes = [...s.memoryNodes, newNode];
-      localStorage.setItem("natia_memory_nodes", JSON.stringify(nodes));
-      return { memoryNodes: nodes };
-    });
+    const newNode: MemoryNode = { ...node, id: crypto.randomUUID(), createdAt: new Date().toISOString() };
+    const nodes = [...get().memoryNodes, newNode];
+    set({ memoryNodes: nodes });
+    persistMemory(nodes);
   },
   updateMemoryNode: (id, updates) => {
-    set((s) => {
-      const nodes = s.memoryNodes.map(n => n.id === id ? { ...n, ...updates } : n);
-      localStorage.setItem("natia_memory_nodes", JSON.stringify(nodes));
-      return { memoryNodes: nodes };
-    });
+    const nodes = get().memoryNodes.map(n => n.id === id ? { ...n, ...updates } : n);
+    set({ memoryNodes: nodes });
+    persistMemory(nodes);
   },
   deleteMemoryNode: (id) => {
-    set((s) => {
-      const nodes = s.memoryNodes.filter(n => n.id !== id);
-      localStorage.setItem("natia_memory_nodes", JSON.stringify(nodes));
-      return { memoryNodes: nodes };
-    });
+    const nodes = get().memoryNodes.filter(n => n.id !== id);
+    set({ memoryNodes: nodes });
+    persistMemory(nodes);
   },
   clearMemoryNodes: () => {
-    localStorage.setItem("natia_memory_nodes", "[]");
     set({ memoryNodes: [] });
+    persistMemory([]);
   },
 
   loadNotes: async () => {

@@ -7,7 +7,7 @@ import LockScreen from "./components/LockScreen";
 import CloseOverlay, { waitForCloseConfirm, callSaveNow } from "./components/CloseOverlay";
 
 export default function App() {
-  const { loadNotes, loadSettings, loadFolders, loadColors, theme, setTheme, isDark, checkSecurity, isLocked, hasPassword } = useStore();
+  const { loadNotes, loadSettings, loadFolders, loadColors, loadMemoryNodes, theme, setTheme, isDark, checkSecurity, isLocked, hasPassword } = useStore();
 
   useEffect(() => {
     setTheme(theme);
@@ -20,6 +20,7 @@ export default function App() {
         loadNotes();
         loadFolders();
         loadColors();
+        loadMemoryNodes();
       }
     }).catch(console.error);
   }, []);
@@ -30,6 +31,7 @@ export default function App() {
       loadNotes();
       loadFolders();
       loadColors();
+      loadMemoryNodes();
     }
   }, [isLocked]);
 

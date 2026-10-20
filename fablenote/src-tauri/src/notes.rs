@@ -6,8 +6,38 @@ use tauri::State;
 use uuid::Uuid;
 
 use crate::{AppState, Note, NoteMetadata, ReminderItem, TrashItem, Version};
-use crate::crypto::{is_valid_uuid, maybe_dec, maybe_enc, sanitize_name};
-use crate::db::{git_commit_note, save_version_inner};
+use crate::crypto::{in_tree, is_valid_uuid, maybe_dec, maybe_dec_opt, maybe_enc, maybe_enc_opt, sanitize_name};
+use crate::db::{delete_color_where, load_color_rows, save_version_inner, upsert_color};
+
+// ─── Folder helpers ───────────────────────────────────────────────────────────
+// Les chemins de dossiers sont chiffrés avec un nonce aléatoire quand un mot de
+// passe est actif : aucune comparaison/LIKE possible en SQL, tout le filtrage
+// se fait ici après déchiffrement, et les écritures ciblent la valeur brute.
+
+struct FolderRow { raw: String, path: String, deleted: bool }
+struct NoteFolderRow { id: String, folder: Option<String>, deleted: bool }
+
+fn load_folder_rows(db: &rusqlite::Connection, key: &Option<[u8; 32]>) -> Result<Vec<FolderRow>, String> {
+    let mut s = db.prepare("SELECT path, deleted_at FROM folders").map_err(|e| e.to_string())?;
+    let rows = s.query_map([], |r| Ok((r.get::<_, String>(0)?, r.get::<_, Option<String>>(1)?)))
+        .map_err(|e| e.to_string())?
+        .collect::<SqlResult<Vec<_>>>()
+        .map_err(|e| e.to_string())?;
+    Ok(rows.into_iter().map(|(raw, d)| FolderRow { path: maybe_dec(key, &raw), raw, deleted: d.is_some() }).collect())
+}
+
+fn load_note_folder_rows(db: &rusqlite::Connection, key: &Option<[u8; 32]>) -> Result<Vec<NoteFolderRow>, String> {
+    let mut s = db.prepare("SELECT id, folder, deleted_at FROM notes").map_err(|e| e.to_string())?;
+    let rows = s.query_map([], |r| Ok((r.get::<_, String>(0)?, r.get::<_, Option<String>>(1)?, r.get::<_, Option<String>>(2)?)))
+        .map_err(|e| e.to_string())?
+        .collect::<SqlResult<Vec<_>>>()
+        .map_err(|e| e.to_string())?;
+    Ok(rows.into_iter().map(|(id, f, d)| NoteFolderRow { id, folder: maybe_dec_opt(key, &f), deleted: d.is_some() }).collect())
+}
+
+fn folder_color_in_tree(color_key: &str, root: &str) -> bool {
+    color_key.strip_prefix("folder:").map(|p| in_tree(p, root)).unwrap_or(false)
+}
 
 // ─── Reminder helpers ─────────────────────────────────────────────────────────
 
@@ -125,7 +155,7 @@ pub fn get_all_notes(state: State<AppState>) -> Result<Vec<NoteMetadata>, String
             let title = maybe_dec(&key, &raw_title);
             let tags_str = maybe_dec(&key, &raw_tags);
             let tags: Vec<String> = serde_json::from_str(&tags_str).unwrap_or_default();
-            NoteMetadata { id, title, tags, folder, created_at, updated_at }
+            NoteMetadata { id, title, tags, folder: maybe_dec_opt(&key, &folder), created_at, updated_at }
         })
         .collect();
     Ok(notes)
@@ -162,7 +192,7 @@ pub fn get_note(id: String, state: State<AppState>) -> Result<Note, String> {
         String::new()
     };
     let content = maybe_dec(&key, &raw_content);
-    Ok(Note { id, title, content, tags, folder, created_at, updated_at })
+    Ok(Note { id, title, content, tags, folder: maybe_dec_opt(&key, &folder), created_at, updated_at })
 }
 
 #[tauri::command]
@@ -182,12 +212,11 @@ pub fn create_note(
         let db = state.db.lock().map_err(|e| e.to_string())?;
         db.execute(
             "INSERT INTO notes (id, title, tags, folder, created_at, updated_at) VALUES (?1,?2,?3,?4,?5,?6)",
-            params![id, maybe_enc(&key, &title), maybe_enc(&key, &tags_json), folder, now, now],
+            params![id, maybe_enc(&key, &title), maybe_enc(&key, &tags_json), maybe_enc_opt(&key, &folder), now, now],
         ).map_err(|e| e.to_string())?;
     }
     let file_path = state.notes_dir.join(format!("{}.html", id));
     std::fs::write(&file_path, maybe_enc(&key, &content)).map_err(|e| e.to_string())?;
-    git_commit_note(&state.notes_dir, &id, "create");
     Ok(Note { id, title, content, tags, folder, created_at: now.clone(), updated_at: now })
 }
 
@@ -210,12 +239,11 @@ pub fn update_note(
         let db = state.db.lock().map_err(|e| e.to_string())?;
         db.execute(
             "UPDATE notes SET title=?1, tags=?2, folder=?3, updated_at=?4 WHERE id=?5",
-            params![maybe_enc(&key, &title), maybe_enc(&key, &tags_json), folder, now, id],
+            params![maybe_enc(&key, &title), maybe_enc(&key, &tags_json), maybe_enc_opt(&key, &folder), now, id],
         ).map_err(|e| e.to_string())?;
     }
     let file_path = state.notes_dir.join(format!("{}.html", id));
     std::fs::write(&file_path, maybe_enc(&key, &content)).map_err(|e| e.to_string())?;
-    git_commit_note(&state.notes_dir, &id, "update");
     let created_at = {
         let db = state.db.lock().map_err(|e| e.to_string())?;
         let ca = db.query_row("SELECT created_at FROM notes WHERE id=?1", [&id], |r| r.get::<_, String>(0))
@@ -270,6 +298,7 @@ pub fn trim_note_versions(note_id: String, keep: i64, state: State<AppState>) ->
 
 #[tauri::command]
 pub fn get_versions(note_id: String, state: State<AppState>) -> Result<Vec<Version>, String> {
+    let key = state.enc_key.lock().map_err(|e| e.to_string())?.clone();
     let db = state.db.lock().map_err(|e| e.to_string())?;
     let mut stmt = db.prepare(
         "SELECT id, message, created_at FROM note_versions WHERE note_id=?1 ORDER BY created_at DESC LIMIT 50"
@@ -278,7 +307,8 @@ pub fn get_versions(note_id: String, state: State<AppState>) -> Result<Vec<Versi
         .query_map([&note_id], |row| {
             let id: String = row.get(0)?;
             let short = id[..8.min(id.len())].to_string();
-            Ok(Version { hash: id, short_hash: short, message: row.get(1)?, date: row.get(2)? })
+            let message: String = row.get(1)?;
+            Ok(Version { hash: id, short_hash: short, message: maybe_dec(&key, &message), date: row.get(2)? })
         })
         .map_err(|e| e.to_string())?
         .collect::<SqlResult<Vec<_>>>()
@@ -330,67 +360,87 @@ pub fn restore_version(note_id: String, hash: String, state: State<AppState>) ->
 
 #[tauri::command]
 pub fn get_folders(state: State<AppState>) -> Result<Vec<String>, String> {
+    let key = state.enc_key.lock().map_err(|e| e.to_string())?.clone();
     let db = state.db.lock().map_err(|e| e.to_string())?;
-    let mut stmt = db.prepare("SELECT path FROM folders WHERE deleted_at IS NULL ORDER BY path").map_err(|e| e.to_string())?;
-    let folders = stmt
-        .query_map([], |row| row.get::<_, String>(0))
-        .map_err(|e| e.to_string())?
-        .collect::<SqlResult<Vec<String>>>()
-        .map_err(|e| e.to_string())?;
+    let mut folders: Vec<String> = load_folder_rows(&db, &key)?
+        .into_iter()
+        .filter(|f| !f.deleted)
+        .map(|f| f.path)
+        .collect();
+    folders.sort();
+    folders.dedup();
     Ok(folders)
 }
 
 #[tauri::command]
 pub fn create_folder(path: String, state: State<AppState>) -> Result<(), String> {
     crate::require_unlocked(&state)?;
+    let key = state.enc_key.lock().map_err(|e| e.to_string())?.clone();
     let db = state.db.lock().map_err(|e| e.to_string())?;
-    db.execute("INSERT OR IGNORE INTO folders(path) VALUES(?1)", [&path]).map_err(|e| e.to_string())?;
+    if load_folder_rows(&db, &key)?.iter().any(|f| f.path == path) { return Ok(()); }
+    db.execute("INSERT OR IGNORE INTO folders(path) VALUES(?1)", [maybe_enc(&key, &path)]).map_err(|e| e.to_string())?;
     Ok(())
 }
 
 #[tauri::command]
 pub fn delete_folder(path: String, state: State<AppState>) -> Result<(), String> {
     crate::require_unlocked(&state)?;
+    let key = state.enc_key.lock().map_err(|e| e.to_string())?.clone();
     let now = Utc::now().to_rfc3339();
     let db = state.db.lock().map_err(|e| e.to_string())?;
-    let prefix = format!("{}/%", path);
-    db.execute(
-        "UPDATE folders SET deleted_at=?1 WHERE (path=?2 OR path LIKE ?3) AND deleted_at IS NULL",
-        params![now, path, prefix],
-    ).map_err(|e| e.to_string())?;
-    db.execute(
-        "UPDATE notes SET deleted_at=?1 WHERE (folder=?2 OR folder LIKE ?3) AND deleted_at IS NULL",
-        params![now, path, prefix],
-    ).map_err(|e| e.to_string())?;
+    for f in load_folder_rows(&db, &key)?.iter().filter(|f| !f.deleted && in_tree(&f.path, &path)) {
+        db.execute("UPDATE folders SET deleted_at=?1 WHERE path=?2", params![now, f.raw])
+            .map_err(|e| e.to_string())?;
+    }
+    for n in load_note_folder_rows(&db, &key)? {
+        if !n.deleted && n.folder.as_deref().map(|f| in_tree(f, &path)).unwrap_or(false) {
+            db.execute("UPDATE notes SET deleted_at=?1 WHERE id=?2", params![now, n.id])
+                .map_err(|e| e.to_string())?;
+        }
+    }
     Ok(())
 }
 
 #[tauri::command]
 pub fn rename_folder(old_path: String, new_path: String, state: State<AppState>) -> Result<(), String> {
     crate::require_unlocked(&state)?;
+    let key = state.enc_key.lock().map_err(|e| e.to_string())?.clone();
     let db = state.db.lock().map_err(|e| e.to_string())?;
-    let op = format!("{}/%", old_path);
-    let np = format!("{}/%", new_path);
-    db.execute(
-        "UPDATE folders SET path=REPLACE(path,?1,?2) WHERE path=?1 OR path LIKE ?3",
-        params![old_path, new_path, op],
-    ).map_err(|e| e.to_string())?;
-    db.execute(
-        "UPDATE notes SET folder=REPLACE(folder,?1,?2) WHERE folder=?1 OR folder LIKE ?3",
-        params![old_path, new_path, op],
-    ).map_err(|e| e.to_string())?;
-    db.execute("INSERT OR IGNORE INTO folders(path) VALUES(?1)", [&new_path]).map_err(|e| e.to_string())?;
-    db.execute(
-        "DELETE FROM folders WHERE path LIKE ?1 AND path NOT LIKE ?2",
-        params![op, np],
-    ).map_err(|e| e.to_string())?;
-    let oc = format!("folder:{}", old_path);
-    let nc = format!("folder:{}", new_path);
-    let ocp = format!("folder:{}/%", old_path);
-    db.execute(
-        "UPDATE item_colors SET item_key=REPLACE(item_key,?1,?2) WHERE item_key=?1 OR item_key LIKE ?3",
-        params![oc, nc, ocp],
-    ).map_err(|e| e.to_string())?;
+    let renamed = |p: &str| format!("{}{}", new_path, &p[old_path.len()..]);
+
+    let rows = load_folder_rows(&db, &key)?;
+    let mut existing: std::collections::HashSet<String> = rows.iter()
+        .filter(|f| !in_tree(&f.path, &old_path))
+        .map(|f| f.path.clone())
+        .collect();
+    for f in rows.iter().filter(|f| in_tree(&f.path, &old_path)) {
+        let np = renamed(&f.path);
+        if existing.contains(&np) {
+            db.execute("DELETE FROM folders WHERE path=?1", [&f.raw]).map_err(|e| e.to_string())?;
+        } else {
+            db.execute("UPDATE folders SET path=?1 WHERE path=?2", params![maybe_enc(&key, &np), f.raw])
+                .map_err(|e| e.to_string())?;
+            existing.insert(np);
+        }
+    }
+    if !existing.contains(&new_path) {
+        db.execute("INSERT OR IGNORE INTO folders(path) VALUES(?1)", [maybe_enc(&key, &new_path)])
+            .map_err(|e| e.to_string())?;
+    }
+
+    for n in load_note_folder_rows(&db, &key)? {
+        if let Some(f) = n.folder.as_deref().filter(|f| in_tree(f, &old_path)) {
+            db.execute("UPDATE notes SET folder=?1 WHERE id=?2", params![maybe_enc(&key, &renamed(f)), n.id])
+                .map_err(|e| e.to_string())?;
+        }
+    }
+
+    for (raw, plain, color) in load_color_rows(&db, &key)? {
+        if folder_color_in_tree(&plain, &old_path) {
+            db.execute("DELETE FROM item_colors WHERE item_key=?1", [&raw]).map_err(|e| e.to_string())?;
+            upsert_color(&db, &key, &format!("folder:{}", renamed(&plain["folder:".len()..])), &color)?;
+        }
+    }
     Ok(())
 }
 
@@ -401,17 +451,17 @@ pub fn move_note(id: String, folder: Option<String>, state: State<AppState>) -> 
     let key = state.enc_key.lock().map_err(|e| e.to_string())?.clone();
     let now = Utc::now().to_rfc3339();
     let db = state.db.lock().map_err(|e| e.to_string())?;
-    db.execute("UPDATE notes SET folder=?1, updated_at=?2 WHERE id=?3", params![folder, now, id])
+    db.execute("UPDATE notes SET folder=?1, updated_at=?2 WHERE id=?3", params![maybe_enc_opt(&key, &folder), now, id])
         .map_err(|e| e.to_string())?;
-    let (raw_title, raw_tags, new_folder, created_at, updated_at) = db.query_row(
-        "SELECT title, tags, folder, created_at, updated_at FROM notes WHERE id=?1",
+    let (raw_title, raw_tags, created_at, updated_at) = db.query_row(
+        "SELECT title, tags, created_at, updated_at FROM notes WHERE id=?1",
         [&id],
-        |r| Ok((r.get::<_, String>(0)?, r.get::<_, String>(1)?, r.get::<_, Option<String>>(2)?, r.get::<_, String>(3)?, r.get::<_, String>(4)?)),
+        |r| Ok((r.get::<_, String>(0)?, r.get::<_, String>(1)?, r.get::<_, String>(2)?, r.get::<_, String>(3)?)),
     ).map_err(|e| e.to_string())?;
     let title = maybe_dec(&key, &raw_title);
     let tags_str = maybe_dec(&key, &raw_tags);
     let tags: Vec<String> = serde_json::from_str(&tags_str).unwrap_or_default();
-    Ok(NoteMetadata { id, title, tags, folder: new_folder, created_at, updated_at })
+    Ok(NoteMetadata { id, title, tags, folder, created_at, updated_at })
 }
 
 // ─── Trash commands ───────────────────────────────────────────────────────────
@@ -422,28 +472,33 @@ pub fn get_trash(state: State<AppState>) -> Result<Vec<TrashItem>, String> {
     let db = state.db.lock().map_err(|e| e.to_string())?;
     let mut items: Vec<TrashItem> = Vec::new();
 
-    let mut stmt = db.prepare(
-        "SELECT path, deleted_at FROM folders WHERE deleted_at IS NOT NULL ORDER BY deleted_at DESC"
-    ).map_err(|e| e.to_string())?;
-    let folder_rows = stmt.query_map([], |row| {
-        Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?))
-    }).map_err(|e| e.to_string())?
-      .collect::<SqlResult<Vec<_>>>()
-      .map_err(|e| e.to_string())?;
+    let folder_rows: Vec<(String, String)> = {
+        let mut stmt = db.prepare("SELECT path, deleted_at FROM folders WHERE deleted_at IS NOT NULL")
+            .map_err(|e| e.to_string())?;
+        let rows = stmt.query_map([], |row| Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?)))
+            .map_err(|e| e.to_string())?
+            .collect::<SqlResult<Vec<_>>>()
+            .map_err(|e| e.to_string())?;
+        rows.into_iter().map(|(p, d)| (maybe_dec(&key, &p), d)).collect()
+    };
+    let note_rows: Vec<(String, String, Option<String>, String)> = {
+        let mut stmt = db.prepare("SELECT id, title, folder, deleted_at FROM notes WHERE deleted_at IS NOT NULL")
+            .map_err(|e| e.to_string())?;
+        let rows = stmt.query_map([], |row| {
+            Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?, row.get::<_, Option<String>>(2)?, row.get::<_, String>(3)?))
+        }).map_err(|e| e.to_string())?
+          .collect::<SqlResult<Vec<_>>>()
+          .map_err(|e| e.to_string())?;
+        rows.into_iter().map(|(id, t, f, d)| (id, maybe_dec(&key, &t), maybe_dec_opt(&key, &f), d)).collect()
+    };
 
-    let deleted_folder_paths: Vec<String> = folder_rows.iter()
-        .filter(|(p, _)| !folder_rows.iter().any(|(df, _)| df != p && p.starts_with(&format!("{}/", df))))
-        .map(|(p, _)| p.clone())
-        .collect();
+    let is_child = |p: &str| folder_rows.iter().any(|(df, _)| df != p && in_tree(p, df));
+    let top_folders: Vec<&(String, String)> = folder_rows.iter().filter(|(p, _)| !is_child(p)).collect();
 
-    for (path, deleted_at) in &folder_rows {
-        let is_child = folder_rows.iter().any(|(df, _)| df != path && path.starts_with(&format!("{}/", df)));
-        if is_child { continue; }
-        let note_count: i64 = db.query_row(
-            "SELECT COUNT(*) FROM notes WHERE (folder=?1 OR folder LIKE ?2) AND deleted_at IS NOT NULL",
-            params![path, format!("{}/%", path)],
-            |r| r.get(0),
-        ).unwrap_or(0);
+    for (path, deleted_at) in &top_folders {
+        let note_count = note_rows.iter()
+            .filter(|(_, _, f, _)| f.as_deref().map(|f| in_tree(f, path)).unwrap_or(false))
+            .count();
         items.push(TrashItem {
             id: path.clone(),
             title: path.split('/').last().unwrap_or(path).to_string(),
@@ -454,21 +509,11 @@ pub fn get_trash(state: State<AppState>) -> Result<Vec<TrashItem>, String> {
         });
     }
 
-    let mut stmt2 = db.prepare(
-        "SELECT id, title, folder, deleted_at FROM notes WHERE deleted_at IS NOT NULL ORDER BY deleted_at DESC"
-    ).map_err(|e| e.to_string())?;
-    let note_rows = stmt2.query_map([], |row| {
-        Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?, row.get::<_, Option<String>>(2)?, row.get::<_, String>(3)?))
-    }).map_err(|e| e.to_string())?
-      .collect::<SqlResult<Vec<_>>>()
-      .map_err(|e| e.to_string())?;
-
-    for (id, raw_title, folder, deleted_at) in note_rows {
-        let in_deleted_folder = folder.as_ref().map(|f| {
-            deleted_folder_paths.iter().any(|df| f == df || f.starts_with(&format!("{}/", df)))
-        }).unwrap_or(false);
+    for (id, title, folder, deleted_at) in note_rows.iter().cloned() {
+        let in_deleted_folder = folder.as_deref()
+            .map(|f| top_folders.iter().any(|(df, _)| in_tree(f, df)))
+            .unwrap_or(false);
         if in_deleted_folder { continue; }
-        let title = maybe_dec(&key, &raw_title);
         items.push(TrashItem { id, title, item_type: "note".to_string(), folder, deleted_at, note_count: None });
     }
 
@@ -479,17 +524,33 @@ pub fn get_trash(state: State<AppState>) -> Result<Vec<TrashItem>, String> {
 #[tauri::command]
 pub fn restore_from_trash(id: String, item_type: String, state: State<AppState>) -> Result<(), String> {
     crate::require_unlocked(&state)?;
+    let key = state.enc_key.lock().map_err(|e| e.to_string())?.clone();
     let db = state.db.lock().map_err(|e| e.to_string())?;
     if item_type == "note" {
         db.execute("UPDATE notes SET deleted_at=NULL WHERE id=?1", [&id])
             .map_err(|e| e.to_string())?;
     } else {
-        let prefix = format!("{}/%", id);
-        db.execute("UPDATE folders SET deleted_at=NULL WHERE path=?1 OR path LIKE ?2", params![id, prefix])
-            .map_err(|e| e.to_string())?;
-        db.execute("UPDATE notes SET deleted_at=NULL WHERE folder=?1 OR folder LIKE ?2", params![id, prefix])
-            .map_err(|e| e.to_string())?;
+        for f in load_folder_rows(&db, &key)?.iter().filter(|f| in_tree(&f.path, &id)) {
+            db.execute("UPDATE folders SET deleted_at=NULL WHERE path=?1", [&f.raw])
+                .map_err(|e| e.to_string())?;
+        }
+        for n in load_note_folder_rows(&db, &key)? {
+            if n.folder.as_deref().map(|f| in_tree(f, &id)).unwrap_or(false) {
+                db.execute("UPDATE notes SET deleted_at=NULL WHERE id=?1", [&n.id])
+                    .map_err(|e| e.to_string())?;
+            }
+        }
     }
+    Ok(())
+}
+
+fn purge_note(db: &rusqlite::Connection, notes_dir: &std::path::Path, key: &Option<[u8; 32]>, id: &str) -> Result<(), String> {
+    db.execute("DELETE FROM notes WHERE id=?1", [id]).map_err(|e| e.to_string())?;
+    db.execute("DELETE FROM note_versions WHERE note_id=?1", [id]).map_err(|e| e.to_string())?;
+    let color_key = format!("note:{}", id);
+    delete_color_where(db, key, |k| k == color_key)?;
+    let fp = notes_dir.join(format!("{}.html", id));
+    if fp.exists() { let _ = std::fs::remove_file(&fp); }
     Ok(())
 }
 
@@ -497,43 +558,20 @@ pub fn restore_from_trash(id: String, item_type: String, state: State<AppState>)
 pub fn permanent_delete_item(id: String, item_type: String, state: State<AppState>) -> Result<(), String> {
     crate::require_unlocked(&state)?;
     if item_type == "note" && !is_valid_uuid(&id) { return Err("ID invalide".to_string()); }
+    let key = state.enc_key.lock().map_err(|e| e.to_string())?.clone();
+    let db = state.db.lock().map_err(|e| e.to_string())?;
     if item_type == "note" {
-        {
-            let db = state.db.lock().map_err(|e| e.to_string())?;
-            db.execute("DELETE FROM notes WHERE id=?1", [&id]).map_err(|e| e.to_string())?;
-            db.execute("DELETE FROM item_colors WHERE item_key=?1", [&format!("note:{}", id)])
-                .map_err(|e| e.to_string())?;
-            db.execute("DELETE FROM note_versions WHERE note_id=?1", [&id])
-                .map_err(|e| e.to_string())?;
-        }
-        let fp = state.notes_dir.join(format!("{}.html", id));
-        if fp.exists() { let _ = std::fs::remove_file(&fp); }
+        purge_note(&db, &state.notes_dir, &key, &id)?;
     } else {
-        let prefix = format!("{}/%", id);
-        let note_ids: Vec<String> = {
-            let db = state.db.lock().map_err(|e| e.to_string())?;
-            let mut stmt = db.prepare(
-                "SELECT id FROM notes WHERE (folder=?1 OR folder LIKE ?2) AND deleted_at IS NOT NULL"
-            ).map_err(|e| e.to_string())?;
-            let result = stmt.query_map(params![id, prefix], |row| row.get::<_, String>(0))
-                .map_err(|e| e.to_string())?
-                .collect::<SqlResult<Vec<_>>>()
-                .map_err(|e| e.to_string())?;
-            result
-        };
-        for note_id in &note_ids {
-            let fp = state.notes_dir.join(format!("{}.html", note_id));
-            if fp.exists() { let _ = std::fs::remove_file(&fp); }
+        for n in load_note_folder_rows(&db, &key)? {
+            if n.deleted && n.folder.as_deref().map(|f| in_tree(f, &id)).unwrap_or(false) {
+                purge_note(&db, &state.notes_dir, &key, &n.id)?;
+            }
         }
-        let db = state.db.lock().map_err(|e| e.to_string())?;
-        db.execute("DELETE FROM notes WHERE (folder=?1 OR folder LIKE ?2) AND deleted_at IS NOT NULL", params![id, prefix])
-            .map_err(|e| e.to_string())?;
-        db.execute("DELETE FROM folders WHERE (path=?1 OR path LIKE ?2) AND deleted_at IS NOT NULL", params![id, prefix])
-            .map_err(|e| e.to_string())?;
-        let ck = format!("folder:{}", id);
-        let cp = format!("folder:{}/%", id);
-        db.execute("DELETE FROM item_colors WHERE item_key=?1 OR item_key LIKE ?2", params![ck, cp])
-            .map_err(|e| e.to_string())?;
+        for f in load_folder_rows(&db, &key)?.iter().filter(|f| f.deleted && in_tree(&f.path, &id)) {
+            db.execute("DELETE FROM folders WHERE path=?1", [&f.raw]).map_err(|e| e.to_string())?;
+        }
+        delete_color_where(&db, &key, |k| folder_color_in_tree(k, &id))?;
     }
     Ok(())
 }
@@ -541,23 +579,16 @@ pub fn permanent_delete_item(id: String, item_type: String, state: State<AppStat
 #[tauri::command]
 pub fn empty_trash(state: State<AppState>) -> Result<(), String> {
     crate::require_unlocked(&state)?;
-    let note_ids: Vec<String> = {
-        let db = state.db.lock().map_err(|e| e.to_string())?;
-        let mut stmt = db.prepare("SELECT id FROM notes WHERE deleted_at IS NOT NULL")
-            .map_err(|e| e.to_string())?;
-        let result = stmt.query_map([], |row| row.get::<_, String>(0))
-            .map_err(|e| e.to_string())?
-            .collect::<SqlResult<Vec<_>>>()
-            .map_err(|e| e.to_string())?;
-        result
-    };
-    for id in &note_ids {
-        let fp = state.notes_dir.join(format!("{}.html", id));
-        if fp.exists() { let _ = std::fs::remove_file(&fp); }
-    }
+    let key = state.enc_key.lock().map_err(|e| e.to_string())?.clone();
     let db = state.db.lock().map_err(|e| e.to_string())?;
-    db.execute("DELETE FROM notes WHERE deleted_at IS NOT NULL", []).map_err(|e| e.to_string())?;
-    db.execute("DELETE FROM folders WHERE deleted_at IS NOT NULL", []).map_err(|e| e.to_string())?;
+    for n in load_note_folder_rows(&db, &key)?.into_iter().filter(|n| n.deleted) {
+        purge_note(&db, &state.notes_dir, &key, &n.id)?;
+    }
+    let deleted: Vec<FolderRow> = load_folder_rows(&db, &key)?.into_iter().filter(|f| f.deleted).collect();
+    for f in &deleted {
+        db.execute("DELETE FROM folders WHERE path=?1", [&f.raw]).map_err(|e| e.to_string())?;
+    }
+    delete_color_where(&db, &key, |k| deleted.iter().any(|f| k == format!("folder:{}", f.path)))?;
     Ok(())
 }
 
@@ -609,13 +640,14 @@ pub fn export_zip(state: State<AppState>) -> Result<String, String> {
     for (id, title, tags, folder, created_at, updated_at) in &rows {
         let title_dec = maybe_dec(&enc_key, title);
         let tags_dec = maybe_dec(&enc_key, tags);
+        let folder = maybe_dec_opt(&enc_key, folder);
         let fp = notes_dir.join(format!("{}.html", id));
         let content = if fp.exists() {
             let raw = std::fs::read_to_string(&fp).map_err(|e| e.to_string())?;
             maybe_dec(&enc_key, &raw)
         } else { String::new() };
         let safe_title = sanitize_name(&title_dec);
-        let zip_path = match folder {
+        let zip_path = match &folder {
             Some(f) => format!("notes/{}/{}.html", sanitize_name(f), safe_title),
             None => format!("notes/{}.html", safe_title),
         };
@@ -651,13 +683,14 @@ pub fn save_zip_to_path(path: String, state: State<AppState>) -> Result<(), Stri
     for (id, title, tags, folder, created_at, updated_at) in &rows {
         let title_dec = maybe_dec(&enc_key, title);
         let tags_dec = maybe_dec(&enc_key, tags);
+        let folder = maybe_dec_opt(&enc_key, folder);
         let fp = notes_dir.join(format!("{}.html", id));
         let content = if fp.exists() {
             let raw = std::fs::read_to_string(&fp).map_err(|e| e.to_string())?;
             maybe_dec(&enc_key, &raw)
         } else { String::new() };
         let safe_title = sanitize_name(&title_dec);
-        let zip_path = match folder {
+        let zip_path = match &folder {
             Some(f) => format!("notes/{}/{}.html", sanitize_name(f), safe_title),
             None => format!("notes/{}.html", safe_title),
         };
@@ -773,7 +806,7 @@ pub fn search_notes(state: State<AppState>, query: String) -> Result<Vec<SearchR
         let plain = strip_html(&content_raw);
         if title.to_lowercase().contains(&lower_q) || plain.to_lowercase().contains(&lower_q) {
             let snippet = make_snippet(&plain, &query, 80);
-            results.push(SearchResult { id, title, folder, updated_at, snippet });
+            results.push(SearchResult { id, title, folder: maybe_dec_opt(&key, &folder), updated_at, snippet });
         }
     }
     Ok(results)

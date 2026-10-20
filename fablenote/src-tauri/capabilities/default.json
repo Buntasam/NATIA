@@ -8,6 +8,14 @@
     "core:default",
     "dialog:allow-save",
     "dialog:allow-open",
-    "notification:default"
+    "notification:default",
+    {
+      "identifier": "opener:allow-open-url",
+      "allow": [
+        { "url": "https://github.com/Buntasam/NATIA" },
+        { "url": "https://github.com/Buntasam/NATIA/issues" },
+        { "url": "https://github.com/Buntasam/NATIA/discussions" }
+      ]
+    }
   ]
 }

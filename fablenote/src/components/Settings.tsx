@@ -1,7 +1,8 @@
 import { useState, useEffect, useRef } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { save } from "@tauri-apps/plugin-dialog";
-import { BarChart2, BookMarked, BrainCircuit, CheckCircle2, Copy, Database, Download, Eye, EyeOff, ExternalLink, FolderOpen, Github, Leaf, Lightbulb, Lock, LogOut, Mail, Minus, Palette, Plus, RotateCcw, ScrollText, Search, Shield, ShieldOff, Sparkles, Star, Terminal, Trash2 as TrashIcon, TrendingUp, Wrench, X, ChevronDown, Clock, Trash2, XCircle, Zap, Activity, AlertTriangle, Bug } from "lucide-react";
+import { openUrl } from "@tauri-apps/plugin-opener";
+import { BarChart2, BookMarked, BrainCircuit, CheckCircle2, Database, Download, Eye, EyeOff, ExternalLink, FolderOpen, Github, Leaf, Lightbulb, Lock, LogOut, Minus, Palette, Plus, RotateCcw, ScrollText, Search, Shield, ShieldOff, Sparkles, Star, Terminal, Trash2 as TrashIcon, TrendingUp, Wrench, X, ChevronDown, Clock, Trash2, XCircle, Zap, Activity, AlertTriangle, Bug } from "lucide-react";
 import { useStore } from "../store";
 import { DEFAULT_SETTINGS } from "../store";
 import { Settings as SettingsType, PromptVersion } from "../types";
@@ -27,27 +28,15 @@ const NAV: { key: SettingsCat; label: string; desc: string; icon: React.ReactNod
 
 const normalize = (s: string) => s.toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "");
 
-const CONTACT_EMAIL = "email@test.fr";
 const GITHUB_URL = "https://github.com/Buntasam/NATIA";
-const REPORT_TEMPLATE = (date: string) =>
-`À : ${CONTACT_EMAIL}
-Objet : [NATIA bêta] — Rapport du ${date}
 
-Type : [ ] Bug  [ ] Idée  [ ] Autre
-
-Description :
-
-
-Étapes pour reproduire (si bug) :
-1.
-2.
-
-Comportement attendu :
-
-Comportement observé :
-
----
-Merci pour ton retour !`;
+// La webview Tauri n'ouvre pas les liens externes : on passe par le navigateur du système.
+// Les URLs autorisées sont listées dans src-tauri/capabilities/default.json.
+const openExternal = (e: React.MouseEvent<HTMLAnchorElement>) => {
+  e.preventDefault();
+  const url = e.currentTarget.getAttribute("href");
+  if (url) openUrl(url).catch((err) => console.error("openUrl:", err));
+};
 
 const PROMPT_FIELDS: { key: keyof SettingsType; label: string; rows: number }[] = [
   { key: "global_shadow_prompt", label: "Prompt global (injecté dans chaque requête)", rows: 3 },
@@ -134,8 +123,23 @@ const PROMPT_PRESETS: Record<string, { label: string; value: string }[]> = {
 
 interface ShadowLibEntry { id: string; name: string; value: string; }
 
-function loadLib(): ShadowLibEntry[] {
-  try { return JSON.parse(localStorage.getItem("natia_shadow_prompt_library") ?? "[]"); } catch { return []; }
+const LIB_KEY = "shadow_prompt_library";
+const LEGACY_LIB_KEY = "natia_shadow_prompt_library";
+
+async function loadLib(): Promise<ShadowLibEntry[]> {
+  const raw = await invoke<string | null>("get_user_data", { name: LIB_KEY });
+  const legacy = localStorage.getItem(LEGACY_LIB_KEY);
+  if (legacy !== null) {
+    if (!raw) await saveLib(JSON.parse(legacy));
+    localStorage.removeItem(LEGACY_LIB_KEY);
+    if (!raw) return JSON.parse(legacy);
+  }
+  return raw ? JSON.parse(raw) : [];
+}
+
+function saveLib(entries: ShadowLibEntry[]): Promise<void> {
+  return invoke<void>("set_user_data", { name: LIB_KEY, value: JSON.stringify(entries) })
+    .catch((e) => console.error("saveLib:", e));
 }
 
 function fmtDate(iso: string) {
@@ -162,8 +166,6 @@ export default function Settings() {
   const [exportDone, setExportDone] = useState(false);
   const [openDefault, setOpenDefault] = useState<string | null>(null);
   const [allReset, setAllReset] = useState(false);
-  const [copiedReport, setCopiedReport] = useState(false);
-  const [copiedEmail, setCopiedEmail] = useState(false);
 
   // Security state
   type SecMode = "idle" | "setup" | "change" | "remove";
@@ -178,7 +180,8 @@ export default function Settings() {
   const [secShowB, setSecShowB] = useState(false);
 
   // Shadow prompt library
-  const [shadowLib, setShadowLib] = useState<ShadowLibEntry[]>(loadLib);
+  const [shadowLib, setShadowLib] = useState<ShadowLibEntry[]>([]);
+  useEffect(() => { loadLib().then(setShadowLib).catch((e) => console.error("loadLib:", e)); }, []);
   const [libSaveName, setLibSaveName] = useState("");
   const [libSaveOpen, setLibSaveOpen] = useState(false);
   const [libOpen, setLibOpen] = useState(false);
@@ -293,14 +296,14 @@ export default function Settings() {
     if (!libSaveName.trim()) return;
     const next = [{ id: crypto.randomUUID(), name: libSaveName.trim(), value: form.global_shadow_prompt }, ...shadowLib];
     setShadowLib(next);
-    localStorage.setItem("natia_shadow_prompt_library", JSON.stringify(next));
+    saveLib(next);
     setLibSaveName(""); setLibSaveOpen(false);
   };
 
   const removeFromLib = (id: string) => {
     const next = shadowLib.filter(e => e.id !== id);
     setShadowLib(next);
-    localStorage.setItem("natia_shadow_prompt_library", JSON.stringify(next));
+    saveLib(next);
   };
 
   const cancelSec = () => { setSecMode("idle"); setSecA(""); setSecB(""); setSecC(""); setSecError(""); };
@@ -343,20 +346,6 @@ export default function Settings() {
     localStorage.removeItem("natia_disclaimer_v1");
     setDisclaimerReset(true);
     setTimeout(() => setDisclaimerReset(false), 2000);
-  };
-
-  const reportTemplate = REPORT_TEMPLATE(new Date().toLocaleDateString("fr-FR"));
-
-  const copyReportTemplate = () => {
-    navigator.clipboard.writeText(reportTemplate).catch(() => {});
-    setCopiedReport(true);
-    setTimeout(() => setCopiedReport(false), 2000);
-  };
-
-  const copyContactEmail = () => {
-    navigator.clipboard.writeText(CONTACT_EMAIL).catch(() => {});
-    setCopiedEmail(true);
-    setTimeout(() => setCopiedEmail(false), 2000);
   };
 
   const resetPrompt = (key: keyof SettingsType) => { set(key, DEFAULT_SETTINGS[key] as string); setOpenDefault(null); };
@@ -1218,36 +1207,26 @@ export default function Settings() {
       </Section>
 
       <Section title="Signaler un bug ou une idée">
-        <div className="flex items-center gap-2 px-2.5 py-2 rounded-lg bg-hover border border-border">
-          <Mail size={12} className="text-accent shrink-0" />
-          <span className="text-xs text-primary font-mono flex-1 truncate">{CONTACT_EMAIL}</span>
-          <button onClick={copyContactEmail} title="Copier l'adresse" className="text-muted hover:text-primary transition-colors shrink-0">
-            {copiedEmail ? <span className="text-[10px] text-accent">✓ Copié</span> : <Copy size={11} />}
-          </button>
-        </div>
-
-        <div className="flex flex-col gap-1.5 mt-3">
-          <div className="flex items-center gap-1.5">
-            <Bug size={11} className="text-red-400" />
-            <Lightbulb size={11} className="text-amber-400" />
-            <span className="text-[10px] text-muted">Modèle de rapport</span>
-          </div>
-          <pre className="text-[10px] leading-[1.5] font-mono text-secondary/70 bg-black/20 border border-border/50 rounded-lg px-2.5 py-2 whitespace-pre-wrap overflow-hidden max-h-32 overflow-y-auto">
-            {reportTemplate}
-          </pre>
-          <div className="flex gap-2 mt-1">
-            <button onClick={copyReportTemplate} className="flex-1 flex items-center justify-center gap-1.5 py-1.5 rounded-lg border border-border bg-hover hover:bg-active text-xs text-secondary hover:text-primary transition-colors">
-              <Copy size={11} />
-              {copiedReport ? "Copié !" : "Copier"}
-            </button>
-            <a
-              href={`mailto:${CONTACT_EMAIL}?subject=${encodeURIComponent("[NATIA bêta] Rapport")}&body=${encodeURIComponent(reportTemplate)}`}
-              className="flex-1 flex items-center justify-center gap-1.5 py-1.5 rounded-lg border border-accent/30 bg-accent/10 hover:bg-accent/20 text-xs text-accent transition-colors"
-            >
-              <Mail size={11} />
-              Envoyer
-            </a>
-          </div>
+        <p className="text-[10px] text-muted mb-2">Les retours se font sur GitHub — un compte GitHub (gratuit) est nécessaire pour poster.</p>
+        <div className="flex gap-2">
+          <a
+            href={`${GITHUB_URL}/issues`}
+            onClick={openExternal}
+            className="flex-1 flex items-center justify-center gap-1.5 py-2 rounded-lg border border-border bg-hover hover:bg-active text-xs text-secondary hover:text-primary transition-colors"
+          >
+            <Bug size={12} className="text-red-400" />
+            Signaler un bug
+            <ExternalLink size={10} className="text-muted" />
+          </a>
+          <a
+            href={`${GITHUB_URL}/discussions`}
+            onClick={openExternal}
+            className="flex-1 flex items-center justify-center gap-1.5 py-2 rounded-lg border border-border bg-hover hover:bg-active text-xs text-secondary hover:text-primary transition-colors"
+          >
+            <Lightbulb size={12} className="text-amber-400" />
+            Idées & discussions
+            <ExternalLink size={10} className="text-muted" />
+          </a>
         </div>
       </Section>
 
@@ -1255,8 +1234,7 @@ export default function Settings() {
         <div className="flex items-center gap-3">
           <a
             href={GITHUB_URL}
-            target="_blank"
-            rel="noopener noreferrer"
+            onClick={openExternal}
             className="flex items-center gap-2 px-3 py-1.5 rounded-lg border border-border bg-hover hover:bg-active text-xs text-secondary hover:text-primary transition-colors shrink-0"
           >
             <Github size={13} />
@@ -1265,7 +1243,7 @@ export default function Settings() {
           </a>
           <p className="text-xs text-muted">
             Si NATIA te plaît, une{" "}
-            <a href={GITHUB_URL} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-amber-400 hover:text-amber-300 transition-colors font-medium">
+            <a href={GITHUB_URL} onClick={openExternal} className="inline-flex items-center gap-1 text-amber-400 hover:text-amber-300 transition-colors font-medium">
               <Star size={11} className="fill-amber-400" />
               étoile sur GitHub
             </a>
