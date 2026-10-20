@@ -92,6 +92,23 @@ NATIA est développée et testée sous **Windows**. Le verrouillage avec la sess
 | `lockPostIts.ts` | Stockage des post-its de l'écran de verrouillage (localStorage, en clair par conception) |
 | `memoryContext.ts` | Construit le contexte « mémoire IA » ajouté aux prompts |
 | `markdown.ts` | Conversion Markdown → HTML |
+| `imageToDataUrl.ts` | Réduit les images collées ou insérées (1600 px max, WebP si plus léger) |
+| `windowPrefs.ts` | Préférence « fermer = ranger près de l'horloge » |
+| `passwordStrength.ts` | Indicateur de solidité du mot de passe ou du PIN |
+
+### Traduction (`src/i18n/`)
+
+| Fichier | Rôle |
+|---|---|
+| `index.ts` | `useT()` (composants), `tr()` (hors composant), `useLang` (langue choisie), `locale()` pour les dates, `trError()` pour les erreurs du backend |
+| `en.ts` | Dictionnaire « texte français → anglais » |
+| `prompts.ts` | Prompts IA par défaut et préréglages en anglais, `localizePrompts()` |
+
+Le texte français sert de clé : `t("Nouvelle note")`. Une traduction manquante affiche le français. `msg("…")` marque un texte stocké dans une constante et traduit à l'affichage. Une clé `"Moyen@@intensité"` permet deux traductions pour un même texte français. `npm run i18n:check` liste les textes sans traduction.
+
+Les prompts IA connus (valeurs par défaut, préréglages, consignes de longueur) suivent la langue : `localizePrompts()` est appliqué au chargement et à l'enregistrement des paramètres, et quand la langue change. Un prompt modifié par l'utilisateur n'est jamais converti. Les messages d'erreur du backend restent en français et sont traduits par `trError()`.
+
+Le manuel existe en deux fichiers (`settings/manualContent.ts` et `manualContent.en.ts`) avec les mêmes identifiants de chapitres.
 
 ### State (Zustand) — `src/store/index.ts`
 
@@ -118,8 +135,11 @@ src-tauri/src/
 ├── ai.rs           ← fournisseurs IA (chat + streaming)
 ├── crypto.rs       ← AES-256-GCM, Argon2id, chiffrement/déchiffrement de toute la base
 ├── db.rs           ← schéma SQLite, coffre d'identifiants, couleurs, versions
-└── system_lock.rs  ← verrouillage quand la session Windows se verrouille ou sort de veille
+├── system_lock.rs  ← verrouillage quand la session Windows se verrouille ou sort de veille
+└── tray.rs         ← icône près de l'horloge, lancement avec Windows
 ```
+
+Plugins : `single-instance` (enregistré en premier : un second lancement remet la fenêtre existante au premier plan), `autostart` (lancement avec Windows, argument `--minimized` pour démarrer caché), `dialog`, `notification`, `opener`, `updater`.
 
 Les commandes de dossiers, corbeille, export et recherche délèguent à des fonctions qui prennent une connexion SQLite brute (`*_in`, `search_rows`…) : elles sont testables sans Tauri.
 
@@ -133,6 +153,7 @@ Les commandes de dossiers, corbeille, export et recherche délèguent à des fon
 | `get_versions`, `get_version_content`, `restore_version`, `trim_note_versions` | Historique des versions |
 | `get_trash`, `restore_from_trash`, `permanent_delete_item`, `empty_trash` | Corbeille |
 | `save_zip_to_path`, `export_note_to_path`, `reveal_data_dir` | Export |
+| `write_export_file` | Écrit une note exportée (`.md`, `.txt`, `.html` uniquement) à l'emplacement choisi |
 | `inspect_import`, `import_zip` | Import des trois formats d'export |
 | `search_notes` | Recherche plein texte (asynchrone, avec cache) |
 | `get_global_stats`, `get_all_reminders` | Statistiques, rappels |
@@ -169,6 +190,14 @@ Tous les fournisseurs diffusent leur réponse avec les événements `ollama-toke
 | `reset_app` | Supprime toutes les données, vide le coffre et recrée une base vide |
 | `toggle_maximize_window`, `exit_app` | Fenêtre, fermeture après enregistrement |
 
+### Commandes — `tray.rs`
+
+| Commande | Description |
+|---|---|
+| `hide_main_window` | Cache la fenêtre (fermeture vers l'icône près de l'horloge) |
+| `get_autostart`, `set_autostart` | Lancement avec Windows |
+| `set_tray_language` | Langue du menu de l'icône |
+
 ---
 
 ## Stockage
@@ -178,7 +207,7 @@ Tous les fournisseurs diffusent leur réponse avec les événements `ollama-toke
 ├── natia.db
 │   ├── notes            (id, title*, tags*, folder*, created_at, updated_at, deleted_at)
 │   ├── folders          (path*, deleted_at)
-│   ├── note_versions    (id, note_id, content*, message*, created_at) — 200 versions max par note
+│   ├── note_versions    (id, note_id, content*, message*, created_at, session_start) — 200 versions max par note
 │   ├── settings         (key, value*)
 │   ├── api_keys         (id, name*, provider*, key_value*, color, model)
 │   ├── prompt_versions  (id, prompt_key, value*, saved_at)
@@ -276,13 +305,17 @@ Editor (onChange)
       → renvoie la note déchiffrée
 ```
 
+Un enregistrement automatique (sans libellé) met à jour la dernière version automatique tant que sa session (`session_start`) a moins de 5 minutes, au lieu d'en créer une nouvelle : les 200 versions couvrent ainsi des jours d'historique. Les versions nommées (IA, restauration, import) ne sont jamais remplacées.
+
 ## Flux — fermeture de l'app
 
 ```
 Clic sur [X] → onCloseRequested → preventDefault
-  → CloseOverlay « Quitter NATIA ? »
-  → Quitter : enregistre la note (callSaveNow), attend la fin (5 s max)
-  → invoke("exit_app") → app_handle.exit(0)
+  → réglage « garder NATIA active » (par défaut) : enregistre la note, cache la fenêtre (hide_main_window)
+  → sinon, ou « Quitter » dans le menu de l'icône (événement tray-quit) :
+      CloseOverlay « Quitter NATIA ? »
+      → enregistre la note (callSaveNow), attend la fin (5 s max)
+      → invoke("exit_app") → app_handle.exit(0)
 ```
 
 `app_handle.exit(0)` est la méthode fiable en Tauri v2 depuis un handler `onCloseRequested` asynchrone : `win.close()` et `win.destroy()` redéclenchent l'événement.

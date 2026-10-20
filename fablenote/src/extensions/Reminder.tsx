@@ -2,6 +2,7 @@ import { useState } from "react";
 import { Node, mergeAttributes } from "@tiptap/core";
 import { NodeViewWrapper, NodeViewContent, ReactNodeViewRenderer } from "@tiptap/react";
 import { Bell, BellOff, Trash2 } from "lucide-react";
+import { locale, tr, useT } from "../i18n";
 
 declare module "@tiptap/core" {
   interface Commands<ReturnType> {
@@ -17,15 +18,15 @@ function formatDue(iso: string): string {
   const now = new Date();
   const diff = d.getTime() - now.getTime();
   const abs = Math.abs(diff);
-  if (abs < 60_000) return "maintenant";
+  if (abs < 60_000) return tr("maintenant");
   if (diff < 0) {
-    if (abs < 3_600_000) return `il y a ${Math.floor(abs / 60_000)} min`;
-    if (abs < 86_400_000) return `il y a ${Math.floor(abs / 3_600_000)} h`;
-    return `il y a ${Math.floor(abs / 86_400_000)} j`;
+    if (abs < 3_600_000) return tr("il y a {n} min", { n: Math.floor(abs / 60_000) });
+    if (abs < 86_400_000) return tr("il y a {n} h", { n: Math.floor(abs / 3_600_000) });
+    return tr("il y a {n} j", { n: Math.floor(abs / 86_400_000) });
   }
-  if (diff < 3_600_000) return `dans ${Math.floor(diff / 60_000)} min`;
-  if (diff < 86_400_000) return `dans ${Math.floor(diff / 3_600_000)} h`;
-  return d.toLocaleDateString("fr", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" });
+  if (diff < 3_600_000) return tr("dans {n} min", { n: Math.floor(diff / 60_000) });
+  if (diff < 86_400_000) return tr("dans {n} h", { n: Math.floor(diff / 3_600_000) });
+  return d.toLocaleDateString(locale(), { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" });
 }
 
 function ReminderView({
@@ -40,6 +41,7 @@ function ReminderView({
   const dueDate = node.attrs.dueDate as string;
   const done = node.attrs.done as boolean;
   const [editing, setEditing] = useState(false);
+  const t = useT();
   const [draft, setDraft] = useState(dueDate);
 
   const isPast = dueDate && new Date(dueDate) < new Date() && !done;
@@ -73,7 +75,7 @@ function ReminderView({
                 onClick={() => setEditing(false)}
                 className="text-xs text-muted hover:text-primary"
               >
-                Annuler
+                {t("Annuler")}
               </button>
             </div>
           ) : (
@@ -81,20 +83,21 @@ function ReminderView({
               onClick={() => { setDraft(dueDate); setEditing(true); }}
               className={`reminder-date ${isPast ? "text-red-500" : "text-muted"} hover:underline`}
             >
-              {dueDate ? formatDue(dueDate) : "+ Ajouter une date"}
+              {dueDate ? formatDue(dueDate) : t("+ Ajouter une date")}
             </button>
           )}
         </div>
         <div className="flex items-center gap-1 ml-2 shrink-0">
           <button
             onClick={() => updateAttributes({ done: !done })}
-            title={done ? "Marquer comme en attente" : "Marquer comme fait"}
+            title={done ? t("Marquer comme en attente") : t("Marquer comme fait")}
             className={`p-1 rounded transition-colors ${done ? "text-green-500" : "text-muted hover:text-primary"}`}
           >
             <span className="text-base">{done ? "✓" : "○"}</span>
           </button>
           <button
             onClick={deleteNode}
+            title={t("Supprimer")}
             className="p-1 rounded text-muted hover:text-red-500 transition-colors"
           >
             <Trash2 size={12} />
@@ -135,7 +138,7 @@ export const Reminder = Node.create({
           commands.insertContent({
             type: "reminder",
             attrs: { dueDate: "", done: false, ...attrs },
-            content: [{ type: "text", text: "Rappel" }],
+            content: [{ type: "text", text: tr("Rappel") }],
           }),
     };
   },

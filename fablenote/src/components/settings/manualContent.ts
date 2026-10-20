@@ -57,6 +57,13 @@ export const MANUAL: ManualChapter[] = [
           { p: "Une note ou un dossier supprimé va dans la corbeille (bouton en bas de la barre latérale). Vous pouvez le restaurer ou le supprimer définitivement." },
         ],
       },
+      {
+        title: "Langue de l'application",
+        blocks: [
+          { p: "Paramètres → Apparence → **Langue** : français ou anglais. Au premier lancement, NATIA prend la langue de Windows." },
+          { p: "Les prompts IA par défaut changent aussi de langue (cliquez sur **Sauvegarder** dans les paramètres pour garder le changement). Les prompts que vous avez écrits vous-même ne sont pas modifiés, ni le contenu de vos notes." },
+        ],
+      },
     ],
   },
 
@@ -69,7 +76,8 @@ export const MANUAL: ManualChapter[] = [
         title: "Mise en forme",
         blocks: [
           { p: "La barre d'outils au-dessus de la note propose : titres, gras, italique, souligné, barré, surlignage, couleurs, listes, cases à cocher, citations, blocs de code, liens, images et tableaux." },
-          { p: "Le Markdown fonctionne aussi en tapant : `# ` pour un titre, `- ` pour une liste, `[ ] ` pour une case à cocher, `**texte**` pour du gras." },
+          { p: "Le Markdown fonctionne aussi en tapant : `# ` pour un titre, `- ` pour une liste, `[ ] ` pour une case à cocher, `**texte**` pour du gras. Tapez `/` pour ouvrir le menu d'insertion." },
+          { tip: "Les images collées ou insérées sont réduites automatiquement (1600 px au maximum) pour que la base reste légère." },
         ],
       },
       {
@@ -88,7 +96,7 @@ export const MANUAL: ManualChapter[] = [
           { steps: [
             "Bouton « Insérer un rappel » de la barre d'outils.",
             "Écrivez le texte du rappel et choisissez la date et l'heure.",
-            "À l'échéance, Windows affiche une notification (l'app doit être ouverte).",
+            "À l'échéance, Windows affiche une notification. NATIA doit tourner, éventuellement rangée près de l'horloge (voir « Démarrage et fermeture »).",
           ] },
         ],
       },
@@ -112,6 +120,12 @@ export const MANUAL: ManualChapter[] = [
           ] },
         ],
       },
+      {
+        title: "Exporter une note",
+        blocks: [
+          { p: "Menu « Plus d'actions » (⋯) en haut de la note : export en Markdown, texte brut, HTML ou PDF. Pour le PDF, choisissez « Microsoft Print to PDF » dans la fenêtre d'impression." },
+        ],
+      },
     ],
   },
 
@@ -124,7 +138,7 @@ export const MANUAL: ManualChapter[] = [
         title: "Trouver une note",
         blocks: [
           { list: [
-            "**Quick open** `Ctrl+P` : tapez quelques lettres du titre, puis `Entrée`. Il donne aussi accès aux commandes (thème, corbeille, verrouillage…).",
+            "**Quick open** `Ctrl+P` : tapez quelques lettres du titre, puis `Entrée`. Tapez `>` pour lancer une commande (thème, corbeille, verrouillage…).",
             "**Recherche globale** `Ctrl+Shift+F` : cherche dans les titres et le contenu, sans tenir compte des majuscules ni des accents.",
             "`Alt+←` / `Alt+→` : note précédente / suivante.",
           ] },
@@ -143,7 +157,7 @@ export const MANUAL: ManualChapter[] = [
       {
         title: "Historique des versions",
         blocks: [
-          { p: "Chaque enregistrement crée une version (200 par note). `Ctrl+Shift+H` ouvre l'historique : comparez deux versions ou restaurez-en une." },
+          { p: "`Ctrl+Shift+H` ouvre l'historique : comparez deux versions ou restaurez-en une. Les enregistrements automatiques sont regroupés par tranches de 5 minutes, et chaque note garde jusqu'à 200 versions." },
         ],
       },
       {
@@ -280,8 +294,7 @@ export const MANUAL: ManualChapter[] = [
           { steps: [
             "Paramètres → Intelligence artificielle → **Clés API & connexions**.",
             "Ajoutez une connexion : nom, fournisseur, clé, couleur et modèle.",
-            "Cliquez sur **Tester** pour vérifier la clé.",
-            "Dans le panneau IA, choisissez la connexion dans le sélecteur.",
+            "Dans le panneau IA, choisissez la connexion dans le sélecteur, puis cliquez sur **Tester** pour vérifier la clé.",
           ] },
           { p: "Vous pouvez enregistrer plusieurs clés (par exemple une perso et une pro) et passer de l'une à l'autre. Les clés sont rangées dans le coffre d'identifiants Windows." },
           { tip: "Un bandeau « IA en ligne » rappelle quand le texte de vos notes part chez un fournisseur extérieur." },
@@ -323,11 +336,11 @@ export const MANUAL: ManualChapter[] = [
       {
         title: "Le panneau IA",
         blocks: [
-          { p: "`Ctrl+Shift+A` ou le bouton IA en haut de la note. Les opérations s'appliquent à la note ouverte (ou au texte sélectionné) :" },
+          { p: "`Ctrl+Shift+A` ou le bouton IA en haut de la note. Les opérations s'appliquent à la note ouverte :" },
           { list: [
             "**Corriger** : orthographe et grammaire, avec les changements surlignés avant d'appliquer.",
-            "**Résumer**, **Titre** (propose un titre), **Trier** (range la note dans un dossier).",
-            "**Traduire**, **Email** (reformule en email), **Continuer** le texte.",
+            "**Résumer**, **Renommer** (donne un titre à la note), **Trier toutes les notes** (propose un dossier pour chaque note).",
+            "**Traduire**, **Formaliser** (reformule en email), **Continuer** le texte.",
           ] },
         ],
       },
@@ -349,7 +362,7 @@ export const MANUAL: ManualChapter[] = [
           { list: [
             "**Température** : bas = réponses précises et constantes, haut = plus créatives.",
             "**Consommation de tokens** (Éco → Maxi) : la longueur des réponses. Éco coûte moins cher avec une API payante.",
-            "**Prompts** : modifiez les instructions de chaque opération dans Paramètres → Prompts.",
+            "**Prompts** : modifiez les instructions de chaque opération dans Paramètres → Prompts. Les prompts par défaut suivent la langue de l'application.",
           ] },
         ],
       },
@@ -390,7 +403,7 @@ export const MANUAL: ManualChapter[] = [
         blocks: [
           { list: [
             "**Automatique** après inactivité (réglable), quand Windows se verrouille (`Windows+L`) ou quand le PC sort de veille.",
-            "**Manuel** : bouton cadenas de la barre latérale.",
+            "**Manuel** : bouton cadenas de la barre latérale, ou « Verrouiller » dans le menu de l'icône près de l'horloge.",
             "**Erreurs** : après 4 essais ratés, l'app bloque de plus en plus longtemps (30 s, 1 min… jusqu'à 24 h), même après un redémarrage.",
           ] },
         ],
@@ -446,8 +459,19 @@ export const MANUAL: ManualChapter[] = [
   // ─── Mises à jour et aide ──────────────────────────────────────────────────
   {
     id: "help",
-    title: "Mises à jour et aide",
+    title: "Démarrage, mises à jour et aide",
     topics: [
+      {
+        title: "Démarrage et fermeture",
+        blocks: [
+          { list: [
+            "**Fermer la fenêtre** range NATIA près de l'horloge Windows : elle continue de tourner et les rappels sonnent toujours. Cliquez sur l'icône pour retrouver la fenêtre.",
+            "**Pour quitter vraiment** : clic droit sur l'icône → **Quitter**.",
+            "Paramètres → Application → **Démarrage et fermeture** : désactivez ce comportement, ou lancez NATIA au démarrage de Windows.",
+            "Ouvrir NATIA une deuxième fois ramène la fenêtre déjà ouverte.",
+          ] },
+        ],
+      },
       {
         title: "Mises à jour",
         blocks: [

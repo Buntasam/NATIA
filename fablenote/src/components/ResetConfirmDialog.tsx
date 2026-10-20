@@ -1,6 +1,7 @@
-import React, { useState } from "react";
+import { useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { AlertTriangle } from "lucide-react";
+import { useT } from "../i18n";
 
 interface ResetConfirmDialogProps {
   isOpen: boolean;
@@ -9,6 +10,7 @@ interface ResetConfirmDialogProps {
 
 export default function ResetConfirmDialog({ isOpen, onClose }: ResetConfirmDialogProps) {
   const [isResetting, setIsResetting] = useState(false);
+  const t = useT();
   const [progress, setProgress] = useState(0);
 
   const handleConfirmReset = async () => {
@@ -41,9 +43,9 @@ export default function ResetConfirmDialog({ isOpen, onClose }: ResetConfirmDial
         <div className="flex items-start gap-3 mb-4">
           <AlertTriangle size={20} className="text-red-400 mt-0.5 flex-shrink-0" />
           <div>
-            <h2 className="text-lg font-semibold text-primary">Réinitialiser l'app ?</h2>
+            <h2 className="text-lg font-semibold text-primary">{t("Réinitialiser l'app ?")}</h2>
             <p className="text-sm text-muted mt-1">
-              Toutes vos notes, paramètres et mot de passe seront supprimés. Cette action est irréversible.
+              {t("Toutes vos notes, paramètres et mot de passe seront supprimés. Cette action est irréversible.")}
             </p>
           </div>
         </div>
@@ -53,7 +55,7 @@ export default function ResetConfirmDialog({ isOpen, onClose }: ResetConfirmDial
             <div className="flex items-center gap-2 mb-2">
               <div className="w-2 h-2 rounded-full bg-accent animate-pulse" />
               <span className="text-xs text-muted">
-                {progress === 30 ? "Préparation…" : progress === 60 ? "Suppression en cours…" : "Finalisation…"}
+                {progress === 30 ? t("Préparation…") : progress === 60 ? t("Suppression en cours…") : t("Finalisation…")}
               </span>
             </div>
             <div className="w-full h-2 bg-hover rounded-full overflow-hidden">
@@ -71,13 +73,13 @@ export default function ResetConfirmDialog({ isOpen, onClose }: ResetConfirmDial
               onClick={onClose}
               className="flex-1 px-4 py-2 rounded-lg bg-hover hover:bg-active border border-border text-primary text-sm font-medium transition-colors"
             >
-              Annuler
+              {t("Annuler")}
             </button>
             <button
               onClick={handleConfirmReset}
               className="flex-1 px-4 py-2 rounded-lg bg-red-400/20 hover:bg-red-400/30 border border-red-400/30 text-red-400 text-sm font-medium transition-colors"
             >
-              Oui, supprimer
+              {t("Oui, supprimer")}
             </button>
           </div>
         )}
@@ -87,7 +89,7 @@ export default function ResetConfirmDialog({ isOpen, onClose }: ResetConfirmDial
             disabled
             className="w-full px-4 py-2 rounded-lg bg-accent/30 border border-accent/20 text-accent text-sm font-medium opacity-50 cursor-not-allowed"
           >
-            Réinitialisation en cours…
+            {t("Réinitialisation en cours…")}
           </button>
         )}
       </div>

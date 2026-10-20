@@ -3,6 +3,7 @@ import { listen } from "@tauri-apps/api/event";
 import { Check, ChevronDown, ChevronUp, GripVertical, Loader2, Mic, MicOff, Pause, Play, Sparkles, X } from "lucide-react";
 import { aiStream } from "../lib/aiInvoke";
 import { useStore } from "../store";
+import { locale, tr, trError, useT } from "../i18n";
 
 // Web Speech API interfaces
 interface ISpeechRecognitionResult { readonly isFinal: boolean; readonly length: number; [index: number]: { transcript: string }; }
@@ -34,6 +35,7 @@ interface Props { onInsert: (text: string) => void; }
 
 export default function VoiceRecorder({ onInsert }: Props) {
   const { settings } = useStore();
+  const t = useT();
 
   const [isAvailable, setIsAvailable]       = useState(false);
   const [isRecording, setIsRecording]       = useState(false);
@@ -101,7 +103,7 @@ export default function VoiceRecorder({ onInsert }: Props) {
     if (!Rec) return;
 
     const rec = new Rec();
-    rec.lang = "fr-FR";
+    rec.lang = locale();
     rec.continuous = true;
     rec.interimResults = true;
 
@@ -134,7 +136,7 @@ export default function VoiceRecorder({ onInsert }: Props) {
     };
 
     rec.onerror = (ev: ISpeechRecognitionErrorEvent) => {
-      if (ev.error !== "no-speech") setError(`Erreur : ${ev.error}`);
+      if (ev.error !== "no-speech") setError(tr("Erreur : {e}", { e: ev.error }));
     };
 
     // Only reset recording state if we stopped intentionally (not for pause)
@@ -170,7 +172,7 @@ export default function VoiceRecorder({ onInsert }: Props) {
       mr.start(500);
       mediaRecRef.current = mr;
     } catch {
-      setError("Accès microphone refusé");
+      setError(tr("Accès microphone refusé"));
       return;
     }
 
@@ -230,7 +232,7 @@ export default function VoiceRecorder({ onInsert }: Props) {
   const buildText = (segs: Segment[]): string => {
     const multi = new Set(segs.map(s => s.speaker)).size > 1;
     if (!multi) return segs.map(s => s.text).join(" ");
-    return segs.map(s => `[Intervenant ${String.fromCharCode(65 + s.speaker)}] ${s.text}`).join("\n");
+    return segs.map(s => `[${tr("Intervenant {x}", { x: String.fromCharCode(65 + s.speaker) })}] ${s.text}`).join("\n");
   };
 
   const reformatWithAi = async () => {
@@ -254,16 +256,18 @@ export default function VoiceRecorder({ onInsert }: Props) {
     try {
       await aiStream(
         settings,
-        `Tu es un expert en mise en forme de transcriptions audio. Tu reçois une transcription brute avec ${speakerCount} intervenant(s).
-Tâches :
-- Corrige l'orthographe et la ponctuation
-- Améliore la lisibilité et la structure
-${speakerCount > 1 ? "- Si tu peux déduire les prénoms ou rôles des intervenants depuis le contenu, remplace \"Intervenant A/B/…\" par ces noms. Sinon garde les lettres." : ""}
-Réponds UNIQUEMENT avec la transcription mise en forme. Aucun commentaire.`,
+        [
+          tr("Tu es un expert en mise en forme de transcriptions audio. Tu reçois une transcription brute avec {n} intervenant(s).", { n: speakerCount }),
+          tr("Tâches :"),
+          tr("- Corrige l'orthographe et la ponctuation"),
+          tr("- Améliore la lisibilité et la structure"),
+          speakerCount > 1 ? tr("- Si tu peux déduire les prénoms ou rôles des intervenants depuis le contenu, remplace « Intervenant A/B/… » par ces noms. Sinon garde les lettres.") : "",
+          tr("Réponds UNIQUEMENT avec la transcription mise en forme, dans la langue de la transcription. Aucun commentaire."),
+        ].join("\n"),
         buildText(segmentsRef.current),
       );
     } catch (e: unknown) {
-      setAiText(`Erreur : ${e instanceof Error ? e.message : String(e)}`);
+      setAiText(tr("Erreur : {e}", { e: e instanceof Error ? e.message : trError(e) }));
       setIsReformatting(false);
     }
   };
@@ -311,7 +315,7 @@ Réponds UNIQUEMENT avec la transcription mise en forme. Aucun commentaire.`,
       {/* Toolbar button */}
       <button
         onClick={isRecording ? stop : (showPanel ? () => setShowPanel(true) : start)}
-        title={isRecording ? "Arrêter l'enregistrement" : "Dictée vocale"}
+        title={isRecording ? t("Arrêter l'enregistrement") : t("Dictée vocale")}
         className={`p-1.5 rounded transition-colors ${
           isRecording ? "text-red-400 bg-red-400/10 animate-pulse" : "text-secondary hover:text-primary hover:bg-hover"
         }`}
@@ -340,14 +344,14 @@ Réponds UNIQUEMENT avec la transcription mise en forme. Aucun commentaire.`,
               )}
               <span className="text-xs text-muted truncate">
                 {isRecording
-                  ? "Enregistrement en cours…"
+                  ? t("Enregistrement en cours…")
                   : isPaused
-                    ? "En pause"
-                    : hasContent ? "Enregistrement terminé" : "Aucune parole détectée"}
+                    ? t("En pause")
+                    : hasContent ? t("Enregistrement terminé") : t("Aucune parole détectée")}
               </span>
               {isMulti && !isRecording && !isPaused && (
                 <span className="text-[10px] text-muted/50 px-1.5 py-0.5 rounded bg-hover shrink-0">
-                  {speakerSet.size} intervenants
+                  {t("{n} intervenants", { n: speakerSet.size })}
                 </span>
               )}
             </div>
@@ -356,13 +360,14 @@ Réponds UNIQUEMENT avec la transcription mise en forme. Aucun commentaire.`,
                 onPointerDown={(e) => e.stopPropagation()}
                 onClick={() => setCollapsed(c => !c)}
                 className="p-0.5 text-muted hover:text-primary transition-colors"
-                title={collapsed ? "Agrandir" : "Réduire"}
+                title={collapsed ? t("Agrandir") : t("Réduire")}
               >
                 {collapsed ? <ChevronUp size={13} /> : <ChevronDown size={13} />}
               </button>
               <button
                 onPointerDown={(e) => e.stopPropagation()}
                 onClick={discard}
+                title={t("Fermer")}
                 className="p-0.5 text-muted hover:text-primary transition-colors"
               >
                 <X size={13} />
@@ -408,7 +413,7 @@ Réponds UNIQUEMENT avec la transcription mise en forme. Aucun commentaire.`,
                     className="flex items-center gap-1.5 text-xs text-secondary hover:text-primary transition-colors"
                   >
                     {isPlaying ? <Pause size={12} className="text-accent" /> : <Play size={12} className="text-accent" />}
-                    <span>{isPlaying ? "Pause" : "Réécouter"}</span>
+                    <span>{isPlaying ? t("Pause") : t("Réécouter")}</span>
                   </button>
                   <audio ref={audioRef} src={audioUrl} onEnded={() => setIsPlaying(false)} className="hidden" />
                 </div>
@@ -419,7 +424,7 @@ Réponds UNIQUEMENT avec la transcription mise en forme. Aucun commentaire.`,
                 <div className="flex flex-col gap-2 px-4 py-3 border-t border-border/50 shrink-0">
                   <div className="flex items-center gap-1.5 text-xs text-muted">
                     <Sparkles size={10} className="text-accent" />
-                    <span>Mise en forme IA</span>
+                    <span>{t("Mise en forme IA")}</span>
                     {isReformatting && <Loader2 size={10} className="animate-spin text-accent ml-1" />}
                   </div>
                   {aiText && (
@@ -434,7 +439,7 @@ Réponds UNIQUEMENT avec la transcription mise en forme. Aucun commentaire.`,
                         onClick={() => { onInsert(aiText); discard(); }}
                         className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-accent hover:bg-accent/90 text-white text-xs transition-colors"
                       >
-                        <Check size={11} />Insérer la version IA
+                        <Check size={11} />{t("Insérer la version IA")}
                       </button>
                     </div>
                   )}
@@ -451,7 +456,7 @@ Réponds UNIQUEMENT avec la transcription mise en forme. Aucun commentaire.`,
                         disabled={isReformatting}
                         className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-hover border border-border text-xs text-secondary hover:text-accent hover:border-accent/30 transition-colors disabled:opacity-40"
                       >
-                        <Sparkles size={11} />Reformater avec l'IA
+                        <Sparkles size={11} />{t("Reformater avec l'IA")}
                       </button>
                     )}
                   </div>
@@ -460,13 +465,13 @@ Réponds UNIQUEMENT avec la transcription mise en forme. Aucun commentaire.`,
                       onClick={discard}
                       className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-hover border border-border text-xs text-secondary hover:text-primary transition-colors"
                     >
-                      <X size={11} />Ignorer
+                      <X size={11} />{t("Ignorer")}
                     </button>
                     <button
                       onClick={() => { onInsert(buildText(segments)); discard(); }}
                       className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-accent hover:bg-accent/90 text-white text-xs transition-colors"
                     >
-                      <Check size={11} />Insérer
+                      <Check size={11} />{t("Insérer")}
                     </button>
                   </div>
                 </div>
@@ -481,7 +486,7 @@ Réponds UNIQUEMENT avec la transcription mise en forme. Aucun commentaire.`,
                       className="flex items-center gap-2 px-4 py-2 rounded-lg bg-amber-500/10 border border-amber-500/20 text-amber-400 hover:bg-amber-500/20 transition-colors text-xs"
                     >
                       <Pause size={13} />
-                      Pause
+                      {t("Pause")}
                     </button>
                   )}
                   {isPaused && (
@@ -490,7 +495,7 @@ Réponds UNIQUEMENT avec la transcription mise en forme. Aucun commentaire.`,
                       className="flex items-center gap-2 px-4 py-2 rounded-lg bg-green-500/10 border border-green-500/20 text-green-400 hover:bg-green-500/20 transition-colors text-xs"
                     >
                       <Play size={13} />
-                      Reprendre
+                      {t("Reprendre")}
                     </button>
                   )}
                   <button
@@ -498,7 +503,7 @@ Réponds UNIQUEMENT avec la transcription mise en forme. Aucun commentaire.`,
                     className="flex items-center gap-2 px-4 py-2 rounded-lg bg-red-500/10 border border-red-500/20 text-red-400 hover:bg-red-500/20 transition-colors text-xs"
                   >
                     <MicOff size={13} />
-                    Arrêter
+                    {t("Arrêter")}
                   </button>
                 </div>
               )}

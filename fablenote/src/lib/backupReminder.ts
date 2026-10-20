@@ -1,3 +1,4 @@
+import { tr } from "../i18n";
 // Rappel hebdomadaire de sauvegarde : depuis que le chiffrement est lié au PC,
 // un export est la seule façon de récupérer ses notes après une réinstallation.
 
@@ -43,9 +44,9 @@ export function isBackupDue(now = Date.now()): boolean {
 
 export function formatLastBackup(now = Date.now()): string {
   const last = getLastBackup();
-  if (last === null) return "jamais";
+  if (last === null) return tr("jamais");
   const days = Math.floor((now - last) / (24 * 3600 * 1000));
-  if (days <= 0) return "aujourd'hui";
-  if (days === 1) return "hier";
-  return `il y a ${days} jours`;
+  if (days <= 0) return tr("aujourd'hui");
+  if (days === 1) return tr("hier");
+  return tr("il y a {n} jours", { n: days });
 }

@@ -12,27 +12,29 @@ import MemorySettings from "./settings/MemorySettings";
 import PromptsSettings from "./settings/PromptsSettings";
 import SecuritySettings from "./settings/SecuritySettings";
 import ManualSettings from "./settings/ManualSettings";
+import { msg, useT } from "../i18n";
 
 // ─── Catégories de la navigation latérale ─────────────────────────────────────
 
 type SettingsCat = "appearance" | "ai" | "prompts" | "memory" | "security" | "data" | "app" | "stats" | "manual";
 
 const NAV: { key: SettingsCat; label: string; desc: string; icon: React.ReactNode; keywords: string }[] = [
-  { key: "appearance", label: "Apparence",                 desc: "Thème, typographie de l'éditeur, extras",              icon: <Palette size={14} />,      keywords: "theme couleur sombre clair police taille largeur editeur de d20 dice" },
-  { key: "ai",         label: "Intelligence artificielle", desc: "Fournisseur, clés API, modèles et comportement",       icon: <Sparkles size={14} />,     keywords: "ia modele cle api ollama claude openai gemini mistral cli temperature contexte tokens fournisseur connexion historique conversation" },
-  { key: "prompts",    label: "Prompts",                   desc: "Prompts système des opérations IA",                    icon: <ScrollText size={14} />,   keywords: "prompt correction resume traduction titre tri email continuation bibliotheque historique systeme shadow" },
-  { key: "memory",     label: "Mémoire IA",                desc: "Mémoire persistante et graphe neuronal",               icon: <BrainCircuit size={14} />, keywords: "memoire graphe noeud neuronal collecte" },
-  { key: "security",   label: "Sécurité",                  desc: "Mot de passe, chiffrement, verrouillage automatique",  icon: <Shield size={14} />,       keywords: "securite mot de passe pin verrouillage chiffrement aes argon lock" },
-  { key: "data",       label: "Données",                   desc: "Export, dossier de données, désinstallation",          icon: <Database size={14} />,     keywords: "export zip sauvegarde donnees dossier desinstaller backup archive" },
-  { key: "app",        label: "Application",               desc: "Disclaimer et outils de développement",                icon: <Wrench size={14} />,       keywords: "disclaimer avertissement debogage debug developpement demarrage" },
-  { key: "manual",     label: "Manuel",                    desc: "Guide d'utilisation : installer une IA, utiliser l'app, sécurité, sauvegardes", icon: <BookOpen size={14} />, keywords: "manuel aide guide tutoriel installation ollama api cle claude cli node modele utilisation raccourcis sauvegarde recuperation" },
-  { key: "stats",      label: "Statistiques",              desc: "Activité et métriques de tes notes",                   icon: <BarChart2 size={14} />,    keywords: "statistiques graphique mots notes activite tags kpi" },
+  { key: "appearance", label: msg("Apparence"),                 desc: msg("Langue, thème, typographie de l'éditeur, extras"),   icon: <Palette size={14} />,      keywords: msg("langue theme couleur sombre clair police taille largeur editeur de d20 dice") },
+  { key: "ai",         label: msg("Intelligence artificielle"), desc: msg("Fournisseur, clés API, modèles et comportement"),       icon: <Sparkles size={14} />,     keywords: msg("ia modele cle api ollama claude openai gemini mistral cli temperature contexte tokens fournisseur connexion historique conversation") },
+  { key: "prompts",    label: msg("Prompts"),                   desc: msg("Prompts système des opérations IA"),                    icon: <ScrollText size={14} />,   keywords: msg("prompt correction resume traduction titre tri email continuation bibliotheque historique systeme shadow") },
+  { key: "memory",     label: msg("Mémoire IA"),                desc: msg("Mémoire persistante et graphe neuronal"),               icon: <BrainCircuit size={14} />, keywords: msg("memoire graphe noeud neuronal collecte") },
+  { key: "security",   label: msg("Sécurité"),                  desc: msg("Mot de passe, chiffrement, verrouillage automatique"),  icon: <Shield size={14} />,       keywords: msg("securite mot de passe pin verrouillage chiffrement aes argon lock recuperation") },
+  { key: "data",       label: msg("Données"),                   desc: msg("Export, dossier de données, désinstallation"),          icon: <Database size={14} />,     keywords: msg("export zip sauvegarde donnees dossier desinstaller backup archive import") },
+  { key: "app",        label: msg("Application"),               desc: msg("Démarrage, mises à jour, outils de développement"),     icon: <Wrench size={14} />,       keywords: msg("disclaimer avertissement debogage debug developpement demarrage mise a jour fermeture windows") },
+  { key: "manual",     label: msg("Manuel"),                    desc: msg("Guide d'utilisation : installer une IA, utiliser l'app, sécurité, sauvegardes"), icon: <BookOpen size={14} />, keywords: msg("manuel aide guide tutoriel installation ollama api cle claude cli node modele utilisation raccourcis sauvegarde recuperation") },
+  { key: "stats",      label: msg("Statistiques"),              desc: msg("Activité et métriques de tes notes"),                   icon: <BarChart2 size={14} />,    keywords: msg("statistiques graphique mots notes activite tags kpi") },
 ];
 
 const normalize = (s: string) => s.toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "");
 
 export default function Settings() {
   const { settings, saveSettings, toggleSettings } = useStore();
+  const t = useT();
   const [form, setForm] = useState<SettingsType>({ ...settings });
   const [cat, setCat] = useState<SettingsCat>(() => {
     const saved = localStorage.getItem("natia_settings_cat") as SettingsCat | null;
@@ -49,7 +51,7 @@ export default function Settings() {
   };
 
   const filteredNav = navQuery.trim()
-    ? NAV.filter((n) => normalize(`${n.label} ${n.desc} ${n.keywords}`).includes(normalize(navQuery)))
+    ? NAV.filter((n) => normalize(`${t(n.label)} ${t(n.desc)} ${t(n.keywords)} ${n.keywords}`).includes(normalize(navQuery)))
     : NAV;
 
   // Si la catégorie sélectionnée sort du filtre, bascule sur le premier résultat
@@ -98,10 +100,10 @@ export default function Settings() {
 
         {/* Header */}
         <div className="flex items-center justify-between px-5 py-3.5 border-b border-border shrink-0">
-          <h2 className="text-base font-semibold text-primary">Paramètres</h2>
+          <h2 className="text-base font-semibold text-primary">{t("Paramètres")}</h2>
           <button
             onClick={requestClose}
-            aria-label="Fermer les paramètres"
+            aria-label={t("Fermer les paramètres")}
             className="text-muted hover:text-primary transition-colors p-1"
           >
             <X size={16} />
@@ -117,12 +119,12 @@ export default function Settings() {
                 <input
                   value={navQuery}
                   onChange={(e) => setNavQuery(e.target.value)}
-                  placeholder="Chercher un réglage…"
-                  aria-label="Chercher un réglage"
+                  placeholder={t("Chercher un réglage…")}
+                  aria-label={t("Chercher un réglage")}
                   className="bg-transparent text-xs text-primary placeholder-muted outline-none w-full"
                 />
                 {navQuery && (
-                  <button onClick={() => setNavQuery("")} aria-label="Effacer" className="text-muted hover:text-primary transition-colors shrink-0">
+                  <button onClick={() => setNavQuery("")} aria-label={t("Effacer")} className="text-muted hover:text-primary transition-colors shrink-0">
                     <X size={11} />
                   </button>
                 )}
@@ -130,7 +132,7 @@ export default function Settings() {
             </div>
             <div className="flex-1 overflow-y-auto px-2 pb-2 flex flex-col gap-0.5">
               {filteredNav.length === 0 && (
-                <p className="text-xs text-muted text-center py-4 px-2">Aucun réglage ne correspond</p>
+                <p className="text-xs text-muted text-center py-4 px-2">{t("Aucun réglage ne correspond")}</p>
               )}
               {filteredNav.map((item) => {
                 const active = cat === item.key;
@@ -146,7 +148,7 @@ export default function Settings() {
                     }`}
                   >
                     <span className={active ? "text-accent" : "text-muted"}>{item.icon}</span>
-                    <span className="truncate">{item.label}</span>
+                    <span className="truncate">{t(item.label)}</span>
                   </button>
                 );
               })}
@@ -158,9 +160,9 @@ export default function Settings() {
             <div className="pb-1 border-b border-border/50">
               <h3 className="text-sm font-semibold text-primary flex items-center gap-2">
                 <span className="text-accent">{current.icon}</span>
-                {current.label}
+                {t(current.label)}
               </h3>
-              <p className="text-xs text-muted mt-1">{current.desc}</p>
+              <p className="text-xs text-muted mt-1">{t(current.desc)}</p>
             </div>
             {cat === "appearance" && <AppearanceSettings form={form} set={set} />}
             {cat === "ai" && <AiSettings form={form} set={set} setForm={setForm} />}
@@ -171,7 +173,7 @@ export default function Settings() {
             {cat === "app" && <AppSettings form={form} set={set} />}
             {cat === "manual" && <ManualSettings />}
             {cat === "stats" && (
-              <Section title="Vue d'ensemble">
+              <Section title={t("Vue d'ensemble")}>
                 <StatsPanel />
               </Section>
             )}
@@ -183,44 +185,44 @@ export default function Settings() {
           {closeAttempt ? (
             <>
               <span className="flex-1 text-xs text-amber-700 dark:text-amber-300 flex items-center gap-1.5">
-                ⚠ Modifications non sauvegardées — que faire ?
+                ⚠ {t("Modifications non sauvegardées — que faire ?")}
               </span>
               <button
                 onClick={() => setCloseAttempt(false)}
                 className="px-3 py-2 rounded-lg text-sm text-secondary hover:text-primary hover:bg-hover transition-colors"
               >
-                Continuer l'édition
+                {t("Continuer l'édition")}
               </button>
               <button
                 onClick={toggleSettings}
                 className="px-3 py-2 rounded-lg text-sm text-red-400 hover:bg-red-400/10 transition-colors"
               >
-                Ignorer et fermer
+                {t("Ignorer et fermer")}
               </button>
               <button
                 onClick={handleSave}
                 className="px-4 py-2 rounded-lg text-sm bg-accent hover:bg-accent-hover text-white transition-colors"
               >
-                Sauvegarder et fermer
+                {t("Sauvegarder et fermer")}
               </button>
             </>
           ) : (
             <>
               <span className={`flex-1 text-xs transition-colors ${dirty ? "text-amber-700 dark:text-amber-300" : "text-muted/50"}`}>
-                {dirty ? "● Modifications non sauvegardées" : "Aucune modification en attente"}
+                {dirty ? `● ${t("Modifications non sauvegardées")}` : t("Aucune modification en attente")}
               </span>
               <button
                 onClick={requestClose}
                 className="px-4 py-2 rounded-lg text-sm text-secondary hover:text-primary hover:bg-hover transition-colors"
               >
-                {dirty ? "Annuler" : "Fermer"}
+                {dirty ? t("Annuler") : t("Fermer")}
               </button>
               <button
                 onClick={handleSave}
                 disabled={!dirty}
                 className="px-4 py-2 rounded-lg text-sm bg-accent hover:bg-accent-hover text-white transition-colors disabled:opacity-40"
               >
-                Sauvegarder
+                {t("Sauvegarder")}
               </button>
             </>
           )}

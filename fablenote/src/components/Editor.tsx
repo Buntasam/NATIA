@@ -56,7 +56,11 @@ import { registerSaveNow } from "./CloseOverlay";
 import { markdownToHtml } from "../lib/markdown";
 
 const lowlight = createLowlight(common);
-import { useStore, NEW_NOTE_TITLE } from "../store";
+import { useStore, isNewNoteTitle } from "../store";
+import { imageToDataUrl } from "../lib/imageToDataUrl";
+import { save } from "@tauri-apps/plugin-dialog";
+import { invoke } from "@tauri-apps/api/core";
+import { msg, tr, useLocale, useT } from "../i18n";
 import Toolbar from "./Toolbar";
 import VoiceRecorder from "./VoiceRecorder";
 
@@ -75,47 +79,47 @@ interface SlashItem {
 
 const SLASH_ITEMS: SlashItem[] = [
   {
-    id: "h1", label: "Titre 1", desc: "Grand titre de section", icon: <Heading1 size={14} />,
+    id: "h1", label: msg("Titre 1"), desc: msg("Grand titre de section"), icon: <Heading1 size={14} />,
     keywords: ["titre", "h1", "heading"],
     apply: (e) => e?.chain().focus().toggleHeading({ level: 1 }).run(),
   },
   {
-    id: "h2", label: "Titre 2", desc: "Titre moyen", icon: <Heading2 size={14} />,
+    id: "h2", label: msg("Titre 2"), desc: msg("Titre moyen"), icon: <Heading2 size={14} />,
     keywords: ["titre", "h2", "heading"],
     apply: (e) => e?.chain().focus().toggleHeading({ level: 2 }).run(),
   },
   {
-    id: "h3", label: "Titre 3", desc: "Petit titre", icon: <Heading3 size={14} />,
+    id: "h3", label: msg("Titre 3"), desc: msg("Petit titre"), icon: <Heading3 size={14} />,
     keywords: ["titre", "h3", "heading"],
     apply: (e) => e?.chain().focus().toggleHeading({ level: 3 }).run(),
   },
   {
-    id: "ul", label: "Liste à puces", desc: "Liste non ordonnée", icon: <List size={14} />,
+    id: "ul", label: msg("Liste à puces"), desc: msg("Liste non ordonnée"), icon: <List size={14} />,
     keywords: ["liste", "ul", "bullet"],
     apply: (e) => e?.chain().focus().toggleBulletList().run(),
   },
   {
-    id: "ol", label: "Liste numérotée", desc: "Liste ordonnée", icon: <ListOrdered size={14} />,
+    id: "ol", label: msg("Liste numérotée"), desc: msg("Liste ordonnée"), icon: <ListOrdered size={14} />,
     keywords: ["liste", "ol", "numbered"],
     apply: (e) => e?.chain().focus().toggleOrderedList().run(),
   },
   {
-    id: "todo", label: "Liste de tâches", desc: "Cases à cocher", icon: <ListChecks size={14} />,
+    id: "todo", label: msg("Liste de tâches"), desc: msg("Cases à cocher"), icon: <ListChecks size={14} />,
     keywords: ["todo", "tache", "checkbox", "task"],
     apply: (e) => e?.chain().focus().toggleTaskList().run(),
   },
   {
-    id: "quote", label: "Citation", desc: "Bloc de citation", icon: <Quote size={14} />,
+    id: "quote", label: msg("Citation"), desc: msg("Bloc de citation"), icon: <Quote size={14} />,
     keywords: ["citation", "quote", "blockquote"],
     apply: (e) => e?.chain().focus().toggleBlockquote().run(),
   },
   {
-    id: "code", label: "Bloc de code", desc: "Code avec coloration syntaxique", icon: <Code size={14} />,
+    id: "code", label: msg("Bloc de code"), desc: msg("Code avec coloration syntaxique"), icon: <Code size={14} />,
     keywords: ["code", "bloc"],
     apply: (e) => e?.chain().focus().toggleCodeBlock().run(),
   },
   {
-    id: "table", label: "Tableau", desc: "Tableau 3×3", icon: <TableIcon size={14} />,
+    id: "table", label: msg("Tableau"), desc: msg("Tableau 3×3"), icon: <TableIcon size={14} />,
     keywords: ["tableau", "table", "grid"],
     apply: (e) => {
       if (!e) return;
@@ -128,18 +132,18 @@ const SLASH_ITEMS: SlashItem[] = [
     },
   },
   {
-    id: "postit", label: "Post-it", desc: "Note adhésive colorée", icon: <StickyNote size={14} />,
+    id: "postit", label: msg("Post-it"), desc: msg("Note adhésive colorée"), icon: <StickyNote size={14} />,
     keywords: ["postit", "post", "note", "adhesive"],
     apply: (e) => e?.chain().focus().insertPostIt().run(),
   },
   {
-    id: "reminder", label: "Rappel", desc: "Bloc de rappel avec date", icon: <Bell size={14} />,
+    id: "reminder", label: msg("Rappel"), desc: msg("Bloc de rappel avec date"), icon: <Bell size={14} />,
     keywords: ["rappel", "reminder", "alarm"],
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     apply: (e) => (e?.chain().focus() as any)?.insertReminder().run(),
   },
   {
-    id: "hr", label: "Séparateur", desc: "Ligne horizontale", icon: <Minus size={14} />,
+    id: "hr", label: msg("Séparateur"), desc: msg("Ligne horizontale"), icon: <Minus size={14} />,
     keywords: ["separateur", "hr", "ligne", "divider"],
     apply: (e) => e?.chain().focus().setHorizontalRule().run(),
   },
@@ -151,6 +155,7 @@ function filterSlashItems(query: string): SlashItem[] {
   return SLASH_ITEMS.filter(
     (item) =>
       item.label.toLowerCase().includes(q) ||
+      tr(item.label).toLowerCase().includes(q) ||
       item.keywords.some((k) => k.includes(q))
   );
 }
@@ -166,6 +171,7 @@ function SlashMenu({
   onSelect: (item: SlashItem) => void;
 }) {
   const listRef = useRef<HTMLDivElement>(null);
+  const t = useT();
 
   useEffect(() => {
     const el = listRef.current?.children[selectedIdx] as HTMLElement | undefined;
@@ -178,7 +184,7 @@ function SlashMenu({
       style={{ left: pos.x, top: pos.y }}
     >
       {items.length === 0 ? (
-        <p className="px-3 py-2 text-xs text-muted">Aucune commande</p>
+        <p className="px-3 py-2 text-xs text-muted">{t("Aucune commande")}</p>
       ) : (
         <div ref={listRef}>
           {items.map((item, i) => (
@@ -195,8 +201,8 @@ function SlashMenu({
                 {item.icon}
               </span>
               <div>
-                <p className="text-xs font-medium leading-none mb-0.5">{item.label}</p>
-                <p className="text-[11px] text-muted">{item.desc}</p>
+                <p className="text-xs font-medium leading-none mb-0.5">{t(item.label)}</p>
+                <p className="text-[11px] text-muted">{t(item.desc)}</p>
               </div>
             </button>
           ))}
@@ -291,6 +297,7 @@ function FindReplaceBar({
   const [matches, setMatches] = useState<{ from: number; to: number }[]>([]);
   const [idx, setIdx] = useState(0);
   const inputRef = useRef<HTMLInputElement>(null);
+  const t = useT();
 
   useEffect(() => { inputRef.current?.focus(); }, []);
 
@@ -345,29 +352,29 @@ function FindReplaceBar({
           if (e.key === "Enter") { e.preventDefault(); goTo(idx + (e.shiftKey ? -1 : 1)); }
           if (e.key === "Escape") onClose();
         }}
-        placeholder="Rechercher…"
+        placeholder={t("Rechercher…")}
         className="bg-hover border border-border rounded-md px-2 py-1 text-xs text-primary outline-none focus:border-accent/50 w-40"
       />
       <span className="text-[11px] text-muted shrink-0 min-w-10">
-        {matches.length > 0 ? `${idx + 1}/${matches.length}` : search ? "0 résultat" : ""}
+        {matches.length > 0 ? `${idx + 1}/${matches.length}` : search ? t("0 résultat") : ""}
       </span>
-      <button onClick={() => goTo(idx - 1)} disabled={matches.length === 0} className="p-1 text-muted hover:text-primary disabled:opacity-30 transition-colors text-xs">↑</button>
-      <button onClick={() => goTo(idx + 1)} disabled={matches.length === 0} className="p-1 text-muted hover:text-primary disabled:opacity-30 transition-colors text-xs">↓</button>
+      <button onClick={() => goTo(idx - 1)} disabled={matches.length === 0} aria-label={t("Résultat précédent")} className="p-1 text-muted hover:text-primary disabled:opacity-30 transition-colors text-xs">↑</button>
+      <button onClick={() => goTo(idx + 1)} disabled={matches.length === 0} aria-label={t("Résultat suivant")} className="p-1 text-muted hover:text-primary disabled:opacity-30 transition-colors text-xs">↓</button>
       <div className="w-px h-4 bg-border mx-1" />
       <input
         value={replace}
         onChange={(e) => setReplace(e.target.value)}
         onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); replaceCurrent(); } if (e.key === "Escape") onClose(); }}
-        placeholder="Remplacer…"
+        placeholder={t("Remplacer…")}
         className="bg-hover border border-border rounded-md px-2 py-1 text-xs text-primary outline-none focus:border-accent/50 w-40"
       />
       <button onClick={replaceCurrent} disabled={matches.length === 0} className="px-2 py-1 text-xs bg-hover border border-border rounded-md text-secondary hover:text-primary disabled:opacity-30 transition-colors">
-        Remplacer
+        {t("Remplacer")}
       </button>
       <button onClick={replaceAll} disabled={matches.length === 0} className="px-2 py-1 text-xs bg-hover border border-border rounded-md text-secondary hover:text-primary disabled:opacity-30 transition-colors">
-        Tout
+        {t("Tout")}
       </button>
-      <button onClick={onClose} className="ml-auto text-muted hover:text-primary transition-colors p-1">
+      <button onClick={onClose} aria-label={t("Fermer")} className="ml-auto text-muted hover:text-primary transition-colors p-1">
         <X size={13} />
       </button>
     </div>
@@ -417,14 +424,24 @@ function htmlToMarkdown(html: string): string {
   return nodeToMd(div).trim();
 }
 
-function downloadFile(content: string, filename: string, mime: string) {
-  const blob = new Blob([content], { type: mime });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = filename;
-  a.click();
-  URL.revokeObjectURL(url);
+const EXPORT_FORMATS = {
+  md: { name: "Markdown" },
+  txt: { name: msg("Texte") },
+  html: { name: msg("Page HTML") },
+} as const;
+
+/** « Enregistrer sous » puis écriture par le backend (un lien de téléchargement ne marche pas dans Tauri). */
+async function saveExport(content: string, title: string, ext: keyof typeof EXPORT_FORMATS) {
+  const path = await save({
+    defaultPath: `${safeFilename(title)}.${ext}`,
+    filters: [{ name: tr(EXPORT_FORMATS[ext].name), extensions: [ext] }],
+  });
+  if (!path) return;
+  await invoke("write_export_file", { path, content });
+}
+
+function escapeHtml(s: string) {
+  return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 }
 
 function safeFilename(title: string) {
@@ -508,6 +525,8 @@ export default function Editor() {
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const titleTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const titleFocused = useRef(false);
+  const t = useT();
+  const loc = useLocale();
   const lastSavedContent = useRef<string>("");
   const importRef = useRef<HTMLInputElement>(null);
   const saveNowRef = useRef<(() => void) | null>(null);
@@ -539,15 +558,10 @@ export default function Editor() {
         if (!files?.length) return false;
         const file = files[0];
         if (!file.type.startsWith("image/")) return false;
-        const reader = new FileReader();
-        reader.onload = (e) => {
-          const src = e.target?.result as string;
-          const { schema } = view.state;
-          const node = schema.nodes.image.create({ src });
-          const tr = view.state.tr.replaceSelectionWith(node);
-          view.dispatch(tr);
-        };
-        reader.readAsDataURL(file);
+        imageToDataUrl(file).then((src) => {
+          const node = view.state.schema.nodes.image.create({ src });
+          view.dispatch(view.state.tr.replaceSelectionWith(node));
+        }).catch((err) => console.error("Image :", err));
         return true;
       },
       handlePaste: (view, event) => {
@@ -557,15 +571,10 @@ export default function Editor() {
           if (item.type.startsWith("image/")) {
             const file = item.getAsFile();
             if (!file) continue;
-            const reader = new FileReader();
-            reader.onload = (e) => {
-              const src = e.target?.result as string;
-              const { schema } = view.state;
-              const node = schema.nodes.image.create({ src });
-              const tr = view.state.tr.replaceSelectionWith(node);
-              view.dispatch(tr);
-            };
-            reader.readAsDataURL(file);
+            imageToDataUrl(file).then((src) => {
+              const node = view.state.schema.nodes.image.create({ src });
+              view.dispatch(view.state.tr.replaceSelectionWith(node));
+            }).catch((err) => console.error("Image :", err));
             return true;
           }
         }
@@ -580,7 +589,7 @@ export default function Editor() {
       TaskList,
       TaskItem.configure({ nested: true }),
       Placeholder.configure({
-        placeholder: "Commence à écrire… ou tape / pour insérer un élément",
+        placeholder: () => tr("Commence à écrire… ou tape / pour insérer un élément"),
       }),
       Table.configure({ resizable: true }),
       TableRow,
@@ -602,7 +611,7 @@ export default function Editor() {
       if (saveTimer.current) clearTimeout(saveTimer.current);
 
       const delay = saveModeRef.current === "manual" ? null
-        : saveModeRef.current === "auto" ? 1500 : 5000;
+        : saveModeRef.current === "auto" ? AUTOSAVE_DELAY : 5000;
       if (delay === null) return;
 
       saveTimer.current = setTimeout(() => {
@@ -737,7 +746,7 @@ export default function Editor() {
       lastSavedContent.current = activeNote.content;
     }
     // Ne pas remettre « Nouvelle note » pendant que l'utilisateur écrit le titre.
-    if (!(titleFocused.current && activeNote.title === NEW_NOTE_TITLE)) setLocalTitle(activeNote.title);
+    if (!(titleFocused.current && isNewNoteTitle(activeNote.title))) setLocalTitle(activeNote.title);
     // Recalculate word count on note switch
     const text = editor.getText();
     setWordCount(text.trim() ? text.trim().split(/\s+/).length : 0);
@@ -800,7 +809,7 @@ export default function Editor() {
       if (titleTimer.current) clearTimeout(titleTimer.current);
       titleTimer.current = setTimeout(() => {
         titleTimer.current = null;
-        renameNote(activeNote.id, title || "Sans titre");
+        renameNote(activeNote.id, title || tr("Sans titre"));
       }, 600);
     },
     [activeNote, renameNote]
@@ -831,21 +840,40 @@ export default function Editor() {
 
   const exportMarkdown = () => {
     if (!editor || !activeNote) return;
-    const md = htmlToMarkdown(editor.getHTML());
-    downloadFile(md, `${safeFilename(activeNote.title)}.md`, "text/markdown");
     setShowMoreMenu(false);
+    const title = localTitle || activeNote.title;
+    saveExport(`# ${title}
+
+${htmlToMarkdown(editor.getHTML())}`, title, "md").catch((e) => console.error("Export :", e));
   };
 
   const exportText = () => {
     if (!editor || !activeNote) return;
-    downloadFile(editor.getText(), `${safeFilename(activeNote.title)}.txt`, "text/plain");
     setShowMoreMenu(false);
+    const title = localTitle || activeNote.title;
+    saveExport(`${title}
+
+${editor.getText()}`, title, "txt").catch((e) => console.error("Export :", e));
   };
 
   const exportHtml = () => {
     if (!editor || !activeNote) return;
-    downloadFile(editor.getHTML(), `${safeFilename(activeNote.title)}.html`, "text/html");
     setShowMoreMenu(false);
+    const title = escapeHtml(localTitle || activeNote.title);
+    const page = `<!DOCTYPE html>
+<html lang="${document.documentElement.lang || "fr"}">
+<head>
+<meta charset="utf-8">
+<title>${title}</title>
+<style>body{font-family:system-ui,sans-serif;max-width:800px;margin:40px auto;padding:0 20px;line-height:1.6}img{max-width:100%}</style>
+</head>
+<body>
+<h1>${title}</h1>
+${editor.getHTML()}
+</body>
+</html>
+`;
+    saveExport(page, localTitle || activeNote.title, "html").catch((e) => console.error("Export :", e));
   };
 
   const exportPdf = () => {
@@ -861,7 +889,7 @@ export default function Editor() {
 
     const h1 = document.createElement("h1");
     h1.className = "print-title";
-    h1.textContent = localTitle || activeNote.title || "Note";
+    h1.textContent = localTitle || activeNote.title || t("Note");
 
     const contentDiv = document.createElement("div");
     contentDiv.innerHTML = editor.getHTML();
@@ -920,7 +948,7 @@ export default function Editor() {
     return (
       <div className="flex flex-col flex-1 items-center justify-center h-full text-muted gap-3">
         <div className="text-5xl opacity-20 select-none">✦</div>
-        <p className="text-sm">Sélectionne une note ou crée-en une nouvelle</p>
+        <p className="text-sm">{t("Sélectionne une note ou crée-en une nouvelle")}</p>
       </div>
     );
   }
@@ -945,7 +973,7 @@ export default function Editor() {
                   <button
                     onClick={() => window.dispatchEvent(new CustomEvent("natia:reveal-folder", { detail: path }))}
                     className="hover:text-accent transition-colors"
-                    aria-label={`Afficher le dossier ${path} dans la sidebar`}
+                    aria-label={t("Afficher le dossier {path} dans la barre latérale", { path })}
                   >
                     {part}
                   </button>
@@ -958,21 +986,21 @@ export default function Editor() {
         <div className="flex items-center gap-3">
           {/* Navigation historique */}
           <div className="flex items-center shrink-0 -ml-2">
-            <Tip label="Note précédente" shortcut="Alt+←">
+            <Tip label={t("Note précédente")} shortcut="Alt+←">
               <button
                 onClick={goBack}
                 disabled={navBackIds.length === 0}
-                aria-label="Note précédente"
+                aria-label={t("Note précédente")}
                 className="p-1 rounded transition-colors text-muted hover:text-primary hover:bg-hover disabled:opacity-25 disabled:pointer-events-none"
               >
                 <ChevronLeft size={16} />
               </button>
             </Tip>
-            <Tip label="Note suivante" shortcut="Alt+→">
+            <Tip label={t("Note suivante")} shortcut="Alt+→">
               <button
                 onClick={goForward}
                 disabled={navForwardIds.length === 0}
-                aria-label="Note suivante"
+                aria-label={t("Note suivante")}
                 className="p-1 rounded transition-colors text-muted hover:text-primary hover:bg-hover disabled:opacity-25 disabled:pointer-events-none"
               >
                 <ChevronRight size={16} />
@@ -985,18 +1013,18 @@ export default function Editor() {
             value={localTitle}
             onChange={handleTitleChange}
             // Titre par défaut d'une nouvelle note : effacé au clic pour écrire directement.
-            onFocus={() => { titleFocused.current = true; if (localTitle === NEW_NOTE_TITLE) setLocalTitle(""); }}
+            onFocus={() => { titleFocused.current = true; if (isNewNoteTitle(localTitle)) setLocalTitle(""); }}
             onBlur={() => { titleFocused.current = false; if (!localTitle && !titleTimer.current && activeNote) setLocalTitle(activeNote.title); }}
-            placeholder={activeNote?.title === NEW_NOTE_TITLE ? NEW_NOTE_TITLE : "Sans titre"}
-            aria-label="Titre de la note"
+            placeholder={activeNote && isNewNoteTitle(activeNote.title) ? activeNote.title : t("Sans titre")}
+            aria-label={t("Titre de la note")}
             className="flex-1 bg-transparent text-xl font-semibold text-primary placeholder-muted outline-none"
           />
           <div className="flex items-center gap-1 shrink-0">
             {saveMode === "manual" && (
-              <Tip label="Sauvegarder" shortcut="Ctrl+S">
+              <Tip label={t("Sauvegarder")} shortcut="Ctrl+S">
                 <button
                   onClick={saveNow}
-                  aria-label="Sauvegarder"
+                  aria-label={t("Sauvegarder")}
                   className={`p-1.5 rounded transition-colors ${
                     isSaving ? "text-accent" : "text-secondary hover:text-primary hover:bg-hover"
                   }`}
@@ -1005,10 +1033,10 @@ export default function Editor() {
                 </button>
               </Tip>
             )}
-            <Tip label="Liens & backlinks">
+            <Tip label={t("Liens & backlinks")}>
               <button
                 onClick={() => setShowBacklinks((s) => !s)}
-                aria-label="Liens et backlinks"
+                aria-label={t("Liens et backlinks")}
                 className={`p-1.5 rounded transition-colors ${
                   showBacklinks ? "text-accent bg-accent/10" : "text-secondary hover:text-primary hover:bg-hover"
                 }`}
@@ -1016,10 +1044,10 @@ export default function Editor() {
                 <Link2 size={17} />
               </button>
             </Tip>
-            <Tip label="Historique des versions" shortcut="Ctrl+Shift+H">
+            <Tip label={t("Historique des versions")} shortcut="Ctrl+Shift+H">
               <button
                 onClick={handleVersionToggle}
-                aria-label="Historique des versions"
+                aria-label={t("Historique des versions")}
                 className={`p-1.5 rounded transition-colors ${
                   showVersionPanel ? "text-accent bg-accent/10" : "text-secondary hover:text-primary hover:bg-hover"
                 }`}
@@ -1027,10 +1055,10 @@ export default function Editor() {
                 <Clock size={17} />
               </button>
             </Tip>
-            <Tip label={focusMode ? "Quitter le mode focus" : "Mode focus"}>
+            <Tip label={focusMode ? t("Quitter le mode focus") : t("Mode focus")}>
               <button
                 onClick={toggleFocusMode}
-                aria-label={focusMode ? "Quitter le mode focus" : "Mode focus"}
+                aria-label={focusMode ? t("Quitter le mode focus") : t("Mode focus")}
                 className={`p-1.5 rounded transition-colors ${
                   focusMode ? "text-accent bg-accent/10" : "text-secondary hover:text-primary hover:bg-hover"
                 }`}
@@ -1045,10 +1073,10 @@ export default function Editor() {
                 }
               }}
             />
-            <Tip label="Panneau IA" shortcut="Ctrl+Shift+A">
+            <Tip label={t("Panneau IA")} shortcut="Ctrl+Shift+A">
               <button
                 onClick={toggleAiPanel}
-                aria-label="Panneau IA"
+                aria-label={t("Panneau IA")}
                 className={`p-1.5 rounded transition-colors ${
                   showAiPanel ? "text-accent bg-accent/10" : "text-secondary hover:text-primary hover:bg-hover"
                 }`}
@@ -1059,10 +1087,10 @@ export default function Editor() {
 
             {/* Menu ⋯ : actions occasionnelles */}
             <div className="relative">
-              <Tip label="Plus d'actions">
+              <Tip label={t("Plus d'actions")}>
                 <button
                   onClick={() => setShowMoreMenu((s) => !s)}
-                  aria-label="Plus d'actions"
+                  aria-label={t("Plus d'actions")}
                   className={`p-1.5 rounded transition-colors ${
                     showMoreMenu ? "text-accent bg-accent/10" : "text-secondary hover:text-primary hover:bg-hover"
                   }`}
@@ -1079,38 +1107,38 @@ export default function Editor() {
                       className="w-full flex items-center gap-2 px-3 py-2 text-sm text-secondary hover:text-primary hover:bg-hover transition-colors"
                     >
                       <LayoutTemplate size={14} className="text-muted" />
-                      Templates
+                      {t("Modèles")}
                     </button>
                     <button
                       onClick={() => { importRef.current?.click(); setShowMoreMenu(false); }}
                       className="w-full flex items-center gap-2 px-3 py-2 text-sm text-secondary hover:text-primary hover:bg-hover transition-colors"
                     >
                       <FileInput size={14} className="text-muted" />
-                      Importer (.md, .txt)
+                      {t("Importer (.md, .txt)")}
                     </button>
                     <button
                       onClick={copyAsMarkdown}
                       className="w-full flex items-center gap-2 px-3 py-2 text-sm text-secondary hover:text-primary hover:bg-hover transition-colors"
                     >
                       {copied ? <Check size={14} className="text-accent" /> : <Clipboard size={14} className="text-muted" />}
-                      {copied ? "Copié !" : "Copier en Markdown"}
+                      {copied ? t("Copié !") : t("Copier en Markdown")}
                     </button>
                     <div className="border-t border-border my-1" />
                     <button onClick={exportMarkdown} className="w-full flex items-center gap-2 px-3 py-2 text-sm text-secondary hover:text-primary hover:bg-hover transition-colors">
                       <FileOutput size={14} className="text-muted" />
-                      Exporter en Markdown
+                      {t("Exporter en Markdown")}
                     </button>
                     <button onClick={exportText} className="w-full flex items-center gap-2 px-3 py-2 text-sm text-secondary hover:text-primary hover:bg-hover transition-colors">
                       <FileOutput size={14} className="text-muted" />
-                      Exporter en texte brut
+                      {t("Exporter en texte brut")}
                     </button>
                     <button onClick={exportHtml} className="w-full flex items-center gap-2 px-3 py-2 text-sm text-secondary hover:text-primary hover:bg-hover transition-colors">
                       <FileOutput size={14} className="text-muted" />
-                      Exporter en HTML
+                      {t("Exporter en HTML")}
                     </button>
                     <button onClick={exportPdf} className="w-full flex items-center gap-2 px-3 py-2 text-sm text-secondary hover:text-primary hover:bg-hover transition-colors">
                       <FileOutput size={14} className="text-muted" />
-                      Exporter en PDF
+                      {t("Exporter en PDF (impression)")}
                     </button>
                   </div>
                 </>
@@ -1165,12 +1193,12 @@ export default function Editor() {
                     const note = await inv<{ content: string }>("get_note", { id: found.id });
                     const div = document.createElement("div");
                     div.innerHTML = note.content;
-                    snippet = (div.textContent ?? "").trim().slice(0, 200) || "(note vide)";
+                    snippet = (div.textContent ?? "").trim().slice(0, 200) || tr("(note vide)");
                   } catch {
-                    snippet = "(impossible de charger)";
+                    snippet = tr("(impossible de charger)");
                   }
                 } else {
-                  snippet = "(note introuvable)";
+                  snippet = tr("(note introuvable)");
                 }
                 previewCacheRef.current.set(noteTitle, snippet ?? "");
               }
@@ -1226,29 +1254,29 @@ export default function Editor() {
           {/* Indicateur de sauvegarde */}
           <span className={`text-[11px] transition-colors ${isSaving ? "text-accent" : "text-muted/60"}`}>
             {isSaving
-              ? "Enregistrement…"
+              ? t("Enregistrement…")
               : saveMode === "manual"
               ? (lastSavedAt
-                  ? `Manuel — enregistré à ${lastSavedAt.toLocaleTimeString("fr", { hour: "2-digit", minute: "2-digit" })}`
-                  : "Manuel — Ctrl+S pour enregistrer")
+                  ? t("Manuel — enregistré à {time}", { time: lastSavedAt.toLocaleTimeString(loc, { hour: "2-digit", minute: "2-digit" }) })
+                  : t("Manuel — Ctrl+S pour enregistrer"))
               : lastSavedAt
-              ? `✓ Enregistré à ${lastSavedAt.toLocaleTimeString("fr", { hour: "2-digit", minute: "2-digit" })}`
-              : "✓ Enregistré"}
+              ? t("✓ Enregistré à {time}", { time: lastSavedAt.toLocaleTimeString(loc, { hour: "2-digit", minute: "2-digit" }) })
+              : t("✓ Enregistré")}
           </span>
           {/* Provider */}
           <span className="text-[11px] text-muted/40 capitalize">{settings.ai_provider}</span>
         </div>
         <div className="flex items-center gap-3">
           <span className="text-[11px] text-muted">
-            {wordCount} mot{wordCount !== 1 ? "s" : ""}
+            {wordCount === 1 ? t("{n} mot", { n: 1 }) : t("{n} mots", { n: wordCount })}
           </span>
           <span className="text-[11px] text-muted/60">
-            {Math.max(1, Math.ceil(wordCount / 200))} min
+            {t("{n} min de lecture", { n: Math.max(1, Math.ceil(wordCount / 200)) })}
           </span>
-          <Tip label="Chercher & remplacer" shortcut="Ctrl+F" side="top">
+          <Tip label={t("Chercher & remplacer")} shortcut="Ctrl+F" side="top">
             <button
               onClick={() => setShowFindReplace((s) => !s)}
-              aria-label="Chercher et remplacer"
+              aria-label={t("Chercher et remplacer")}
               className={`transition-colors ${showFindReplace ? "text-accent" : "text-muted/50 hover:text-muted"}`}
             >
               <Search size={11} />
@@ -1262,7 +1290,7 @@ export default function Editor() {
           onClose={() => setShowTemplates(false)}
           onApply={(content, title) => {
             if (editor) editor.commands.setContent(content);
-            if (title !== "Note vide") {
+            if (title !== tr("Note vide")) {
               setLocalTitle(title);
               if (activeNote) renameNote(activeNote.id, title);
             }
@@ -1310,6 +1338,7 @@ function TagsBar({
 }) {
   const { activeNote, updateNote, setSearchQuery } = useStore();
   const [input, setInput] = useState("");
+  const t = useT();
 
   const addTag = () => {
     const tag = input.trim();
@@ -1335,11 +1364,11 @@ function TagsBar({
           <button
             onClick={() => setSearchQuery(`#${tag}`)}
             className="hover:text-accent transition-colors"
-            aria-label={`Filtrer les notes par le tag ${tag}`}
+            aria-label={t("Filtrer les notes par le tag {tag}", { tag })}
           >
             {tag}
           </button>
-          <button onClick={() => removeTag(tag)} aria-label={`Retirer le tag ${tag}`} className="text-muted hover:text-primary transition-colors">
+          <button onClick={() => removeTag(tag)} aria-label={t("Retirer le tag {tag}", { tag })} className="text-muted hover:text-primary transition-colors">
             ×
           </button>
         </span>
@@ -1354,7 +1383,7 @@ function TagsBar({
             addTag();
           }
         }}
-        placeholder="+ ajouter un tag"
+        placeholder={t("+ ajouter un tag")}
         className="bg-transparent text-xs text-muted placeholder-muted outline-none min-w-24"
       />
     </div>

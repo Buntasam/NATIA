@@ -6,6 +6,8 @@ import { PromptVersion, Settings as SettingsType } from "../../types";
 import { Section } from "./SettingsWidgets";
 import { PROMPT_FIELDS, PROMPT_PRESETS } from "./promptPresets";
 import { SettingsFormProps } from "./types";
+import { locale, useLang, useT } from "../../i18n";
+import { promptIn } from "../../i18n/prompts";
 
 interface ShadowLibEntry { id: string; name: string; value: string; }
 
@@ -30,7 +32,7 @@ function saveLib(entries: ShadowLibEntry[]): Promise<void> {
 
 function fmtDate(iso: string) {
   try {
-    return new Intl.DateTimeFormat("fr-FR", {
+    return new Intl.DateTimeFormat(locale(), {
       day: "2-digit", month: "2-digit", year: "numeric",
       hour: "2-digit", minute: "2-digit",
     }).format(new Date(iso));
@@ -39,6 +41,9 @@ function fmtDate(iso: string) {
 
 export default function PromptsSettings({ form, set, setForm }: SettingsFormProps) {
   const { settings } = useStore();
+  const t = useT();
+  const lang = useLang((s) => s.lang);
+  const localDefault = (key: keyof SettingsType) => promptIn(DEFAULT_SETTINGS[key] as string, lang);
   const [openDefault, setOpenDefault] = useState<string | null>(null);
   const [allReset, setAllReset] = useState(false);
   const [shadowLib, setShadowLib] = useState<ShadowLibEntry[]>([]);
@@ -68,16 +73,19 @@ export default function PromptsSettings({ form, set, setForm }: SettingsFormProp
 
   const isUnsaved = (key: keyof SettingsType) => form[key] !== settings[key];
 
-  const resetPrompt = (key: keyof SettingsType) => { set(key, DEFAULT_SETTINGS[key] as string); setOpenDefault(null); };
+  const resetPrompt = (key: keyof SettingsType) => { set(key, localDefault(key)); setOpenDefault(null); };
 
   const resetAllPrompts = () => {
     setForm((f) => ({
       ...f,
-      global_shadow_prompt: DEFAULT_SETTINGS.global_shadow_prompt,
-      correct_prompt:        DEFAULT_SETTINGS.correct_prompt,
-      summary_prompt:        DEFAULT_SETTINGS.summary_prompt,
-      rename_prompt:         DEFAULT_SETTINGS.rename_prompt,
-      sort_prompt:           DEFAULT_SETTINGS.sort_prompt,
+      global_shadow_prompt: localDefault("global_shadow_prompt"),
+      correct_prompt:        localDefault("correct_prompt"),
+      summary_prompt:        localDefault("summary_prompt"),
+      rename_prompt:         localDefault("rename_prompt"),
+      sort_prompt:           localDefault("sort_prompt"),
+      formalize_prompt:      localDefault("formalize_prompt"),
+      translate_prompt:      localDefault("translate_prompt"),
+      continue_prompt:       localDefault("continue_prompt"),
     }));
     setOpenDefault(null); setHistoryKey(null);
     setAllReset(true); setTimeout(() => setAllReset(false), 2000);
@@ -101,25 +109,25 @@ export default function PromptsSettings({ form, set, setForm }: SettingsFormProp
   };
   return (
     <>
-      <Section title="Prompts système">
+      <Section title={t("Prompts système")}>
         <div className="flex flex-col gap-7">
           {PROMPT_FIELDS.map(({ key, label, rows }) => (
             <div key={key}>
               {/* Label row */}
               <div className="flex items-center justify-between mb-1.5">
                 <label htmlFor={key} className="text-sm text-secondary flex items-center gap-2">
-                  {label}
+                  {t(label)}
                   {isUnsaved(key) && (
-                    <span className="text-[9px] px-1.5 py-0.5 rounded bg-amber-400/15 text-amber-500 border border-amber-400/20 font-medium">non sauvegardé</span>
+                    <span className="text-[9px] px-1.5 py-0.5 rounded bg-amber-400/15 text-amber-500 border border-amber-400/20 font-medium">{t("non sauvegardé")}</span>
                   )}
                 </label>
                 <div className="flex items-center gap-2 shrink-0">
                   <button onClick={() => openHistory(key)} className={`flex items-center gap-1 text-[10px] transition-colors ${historyKey === key ? "text-accent" : "text-muted hover:text-primary"}`}>
-                    <Clock size={10} />Historique
+                    <Clock size={10} />{t("Historique")}
                   </button>
                   <button onClick={() => setOpenDefault(openDefault === key ? null : key)} className={`flex items-center gap-1 text-[10px] transition-colors ${openDefault === key ? "text-accent" : "text-muted hover:text-primary"}`}>
                     <ChevronDown size={10} className={`transition-transform ${openDefault === key ? "rotate-180" : ""}`} />
-                    Défaut
+                    {t("Défaut")}
                   </button>
                 </div>
               </div>
@@ -128,9 +136,9 @@ export default function PromptsSettings({ form, set, setForm }: SettingsFormProp
               {PROMPT_PRESETS[key] && (
                 <div className="flex flex-wrap gap-1.5 mb-1.5">
                   {PROMPT_PRESETS[key].map((preset) => (
-                    <button key={preset.label} onClick={() => set(key, preset.value)} title={preset.value}
-                      className={`px-2 py-0.5 rounded-full text-[10px] border transition-colors ${form[key] === preset.value ? "bg-accent/15 border-accent/40 text-accent" : "bg-hover border-border text-muted hover:text-primary hover:border-border/80"}`}>
-                      {preset.label}
+                    <button key={preset.label} onClick={() => set(key, promptIn(preset.value, lang))} title={promptIn(preset.value, lang)}
+                      className={`px-2 py-0.5 rounded-full text-[10px] border transition-colors ${form[key] === promptIn(preset.value, lang) ? "bg-accent/15 border-accent/40 text-accent" : "bg-hover border-border text-muted hover:text-primary hover:border-border/80"}`}>
+                      {t(preset.label)}
                     </button>
                   ))}
                 </div>
@@ -145,10 +153,10 @@ export default function PromptsSettings({ form, set, setForm }: SettingsFormProp
               {/* Default preview */}
               {openDefault === key && (
                 <div className="mt-1.5 rounded-lg border border-border bg-panel p-3 flex flex-col gap-2">
-                  <p className="text-[10px] text-muted uppercase tracking-wider">Valeur par défaut</p>
-                  <pre className="text-[11px] text-secondary/80 whitespace-pre-wrap font-mono leading-relaxed break-all">{DEFAULT_SETTINGS[key]}</pre>
+                  <p className="text-[10px] text-muted uppercase tracking-wider">{t("Valeur par défaut")}</p>
+                  <pre className="text-[11px] text-secondary/80 whitespace-pre-wrap font-mono leading-relaxed break-all">{localDefault(key)}</pre>
                   <button onClick={() => resetPrompt(key)} className="self-start flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-hover border border-border text-xs text-secondary hover:text-primary hover:border-accent/40 transition-colors">
-                    <RotateCcw size={10} />Restaurer ce prompt
+                    <RotateCcw size={10} />{t("Restaurer ce prompt")}
                   </button>
                 </div>
               )}
@@ -158,12 +166,12 @@ export default function PromptsSettings({ form, set, setForm }: SettingsFormProp
                 <div className="mt-1.5 rounded-lg border border-border bg-panel overflow-hidden">
                   <div className="flex items-center gap-2 px-3 py-2 border-b border-border">
                     <Clock size={11} className="text-accent" />
-                    <span className="text-xs font-medium text-secondary">Historique des versions</span>
+                    <span className="text-xs font-medium text-secondary">{t("Historique des versions")}</span>
                   </div>
                   {loadingHistory ? (
-                    <p className="text-xs text-muted px-3 py-4 text-center">Chargement…</p>
+                    <p className="text-xs text-muted px-3 py-4 text-center">{t("Chargement…")}</p>
                   ) : versions.length === 0 ? (
-                    <p className="text-xs text-muted px-3 py-4 text-center italic">Aucune version sauvegardée</p>
+                    <p className="text-xs text-muted px-3 py-4 text-center italic">{t("Aucune version sauvegardée")}</p>
                   ) : (
                     <div className="max-h-56 overflow-y-auto">
                       {versions.map((v, i) => (
@@ -176,7 +184,7 @@ export default function PromptsSettings({ form, set, setForm }: SettingsFormProp
                             <div className="flex-1 min-w-0">
                               <div className="flex items-center justify-between gap-2 mb-1">
                                 <span className="text-[10px] text-muted font-mono">{fmtDate(v.saved_at)}</span>
-                                {i === 0 && <span className="text-[9px] px-1.5 py-0.5 rounded bg-accent/15 text-accent border border-accent/20">actuel</span>}
+                                {i === 0 && <span className="text-[9px] px-1.5 py-0.5 rounded bg-accent/15 text-accent border border-accent/20">{t("actuel")}</span>}
                               </div>
                               <p className="text-[11px] text-secondary/70 font-mono truncate cursor-pointer hover:text-secondary transition-colors" onClick={() => setPreviewId(previewId === v.id ? null : v.id)}>
                                 {v.value.slice(0, 80)}{v.value.length > 80 ? "…" : ""}
@@ -187,11 +195,11 @@ export default function PromptsSettings({ form, set, setForm }: SettingsFormProp
                               <div className="flex items-center gap-2 mt-1.5 opacity-0 group-hover:opacity-100 transition-opacity">
                                 {i !== 0 && (
                                   <button onClick={() => restoreVersion(v)} className="flex items-center gap-1 text-[10px] px-2 py-0.5 rounded bg-accent/10 text-accent hover:bg-accent/20 border border-accent/20 transition-colors">
-                                    <RotateCcw size={9} />Restaurer
+                                    <RotateCcw size={9} />{t("Restaurer")}
                                   </button>
                                 )}
                                 <button onClick={() => deleteVersion(v.id)} className="flex items-center gap-1 text-[10px] px-2 py-0.5 rounded text-muted hover:text-red-400 transition-colors">
-                                  <Trash2 size={9} />Supprimer
+                                  <Trash2 size={9} />{t("Supprimer")}
                                 </button>
                               </div>
                             </div>
@@ -209,11 +217,11 @@ export default function PromptsSettings({ form, set, setForm }: SettingsFormProp
                   <div className="flex items-center justify-between mb-1.5">
                     <button onClick={() => setLibOpen(v => !v)} className="flex items-center gap-1.5 text-[10px] text-muted hover:text-primary transition-colors">
                       <BookMarked size={10} />
-                      Bibliothèque{shadowLib.length > 0 ? ` (${shadowLib.length})` : ""}
+                      {t("Bibliothèque")}{shadowLib.length > 0 ? ` (${shadowLib.length})` : ""}
                       <ChevronDown size={10} className={`transition-transform ${libOpen ? "rotate-180" : ""}`} />
                     </button>
                     <button onClick={() => { setLibSaveOpen(v => !v); setLibSaveName(""); }} className="flex items-center gap-1 text-[10px] text-muted hover:text-accent transition-colors">
-                      <Plus size={10} />Sauvegarder
+                      <Plus size={10} />{t("Sauvegarder")}
                     </button>
                   </div>
 
@@ -223,7 +231,7 @@ export default function PromptsSettings({ form, set, setForm }: SettingsFormProp
                         value={libSaveName}
                         onChange={e => setLibSaveName(e.target.value)}
                         onKeyDown={e => e.key === "Enter" && addToLib()}
-                        placeholder="Nom du prompt (ex : Assistant créatif)"
+                        placeholder={t("Nom du prompt (ex : Assistant créatif)")}
                         className="flex-1 bg-hover border border-border rounded-lg px-2.5 py-1.5 text-xs text-primary outline-none focus:border-accent/50 transition-colors"
                         autoFocus
                       />
@@ -234,7 +242,7 @@ export default function PromptsSettings({ form, set, setForm }: SettingsFormProp
 
                   {libOpen && (
                     shadowLib.length === 0 ? (
-                      <p className="text-[10px] text-muted italic py-1">Aucun prompt sauvegardé · cliquez sur "Sauvegarder" pour en ajouter un</p>
+                      <p className="text-[10px] text-muted italic py-1">{t("Aucun prompt sauvegardé · cliquez sur « Sauvegarder » pour en ajouter un")}</p>
                     ) : (
                       <div className="flex flex-col gap-1 max-h-48 overflow-y-auto">
                         {shadowLib.map(entry => (
@@ -260,7 +268,7 @@ export default function PromptsSettings({ form, set, setForm }: SettingsFormProp
           <div className="pt-1 border-t border-border">
             <button onClick={resetAllPrompts} className="flex items-center gap-2 px-3 py-2 rounded-lg bg-red-400/10 border border-red-400/20 text-xs text-red-400 hover:bg-red-400/15 hover:border-red-400/30 transition-colors">
               <RotateCcw size={11} />
-              {allReset ? "Tous les prompts ont été réinitialisés ✓" : "Tout réinitialiser aux valeurs par défaut"}
+              {allReset ? t("Tous les prompts ont été réinitialisés ✓") : t("Tout réinitialiser aux valeurs par défaut")}
             </button>
           </div>
         </div>

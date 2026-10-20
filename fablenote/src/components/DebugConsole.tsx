@@ -1,6 +1,9 @@
 import { useEffect, useRef, useState } from "react";
 import { AlertTriangle, Download, Search, Trash2, X } from "lucide-react";
 import { type LogEntry, type LogLevel, subscribe, getBuffer, clearBuffer } from "../debug/logger";
+import { invoke } from "@tauri-apps/api/core";
+import { save } from "@tauri-apps/plugin-dialog";
+import { useT } from "../i18n";
 
 type Filter = LogLevel | "all";
 
@@ -36,6 +39,7 @@ function fmtTime(ts: number): string {
 
 export default function DebugConsole() {
   const [entries, setEntries] = useState<LogEntry[]>(getBuffer);
+  const t = useT();
   const [filter, setFilter] = useState<Filter>("all");
   const [search, setSearch] = useState("");
   const [autoScroll, setAutoScroll] = useState(true);
@@ -76,17 +80,16 @@ export default function DebugConsole() {
 
   const hasLoop = entries.some((e) => e.loopFlag);
 
-  const exportLog = () => {
+  const exportLog = async () => {
     const text = entries
       .map((e) => `[${fmtTime(e.ts)}] [${e.level.toUpperCase().padEnd(5)}] ${e.source.padEnd(12)} › ${e.msg}${e.loopFlag ? " ⟳LOOP" : ""}`)
       .join("\n");
-    const blob = new Blob([text], { type: "text/plain" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `natia-log-${new Date().toISOString().slice(0, 19).replace(/:/g, "-")}.txt`;
-    a.click();
-    URL.revokeObjectURL(url);
+    // Un lien de téléchargement ne fonctionne pas dans Tauri : « Enregistrer sous » puis écriture par le backend.
+    const path = await save({
+      defaultPath: `natia-log-${new Date().toISOString().slice(0, 19).replace(/:/g, "-")}.txt`,
+      filters: [{ name: t("Texte"), extensions: ["txt"] }],
+    });
+    if (path) await invoke("write_export_file", { path, content: text }).catch((e) => console.error("Export du log :", e));
   };
 
   return (
@@ -94,28 +97,28 @@ export default function DebugConsole() {
       {/* Header */}
       <div className="flex items-center gap-1.5">
         <AlertTriangle size={11} className={counts.error ? "text-red-400" : "text-muted"} />
-        <span className="text-xs text-muted">Console debug</span>
+        <span className="text-xs text-muted">{t("Console de débogage")}</span>
         {!!counts.error && (
           <span className="text-[10px] px-1 rounded bg-red-400/15 text-red-400 border border-red-400/20">
             {counts.error}
           </span>
         )}
         {hasLoop && (
-          <span className="text-[10px] px-1 rounded bg-amber-400/15 text-amber-400 border border-amber-400/20" title="Boucle détectée">
+          <span className="text-[10px] px-1 rounded bg-amber-400/15 text-amber-400 border border-amber-400/20" title={t("Boucle détectée")}>
             ⟳ loop
           </span>
         )}
         <div className="ml-auto flex items-center gap-1">
           <button
             onClick={exportLog}
-            title="Exporter le log (.txt)"
+            title={t("Exporter le log (.txt)")}
             className="p-0.5 rounded text-muted hover:text-primary transition-colors"
           >
             <Download size={10} />
           </button>
           <button
             onClick={() => { clearBuffer(); setEntries([]); }}
-            title="Effacer tous les logs"
+            title={t("Effacer tous les logs")}
             className="p-0.5 rounded text-muted hover:text-primary transition-colors"
           >
             <Trash2 size={10} />
@@ -152,7 +155,7 @@ export default function DebugConsole() {
           <input
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            placeholder="filtrer…"
+            placeholder={t("filtrer…")}
             className="bg-transparent text-[10px] text-primary outline-none w-16 placeholder-muted"
           />
           {search && (
@@ -171,7 +174,7 @@ export default function DebugConsole() {
       >
         {visible.length === 0 ? (
           <p className="text-muted/40 italic text-center py-5">
-            {entries.length === 0 ? "Aucun log cette session" : "Aucun résultat"}
+            {entries.length === 0 ? t("Aucun log cette session") : t("Aucun résultat")}
           </p>
         ) : (
           visible.map((e) => (
@@ -188,7 +191,7 @@ export default function DebugConsole() {
               <span className="text-muted/70 shrink-0 w-[52px] truncate select-none">{e.source}</span>
               <span className="text-secondary/80 min-w-0 break-all">{e.msg}</span>
               {e.loopFlag && (
-                <span className="shrink-0 text-amber-400 text-[9px] font-bold ml-auto" title="Même message répété ≥5× en 2s">
+                <span className="shrink-0 text-amber-400 text-[9px] font-bold ml-auto" title={t("Même message répété ≥5× en 2 s")}>
                   ⟳
                 </span>
               )}

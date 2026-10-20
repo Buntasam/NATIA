@@ -6,6 +6,7 @@ import D20Roller from "./D20Roller";
 import ResetConfirmDialog from "./ResetConfirmDialog";
 import RecoveryUnlock from "./RecoveryUnlock";
 import { LockPostIt, POSTIT_COLORS, arePostItsHidden, loadPostIts, newPostIt, savePostIts, setPostItsHidden } from "../lib/lockPostIts";
+import { trError, useT } from "../i18n";
 
 const PIN_DOTS = 8;
 // Ancien compteur côté navigateur, contournable : le blocage est désormais géré en Rust.
@@ -34,6 +35,7 @@ const POSTIT_MIN_H = 80;
 // ─── LockScreen ──────────────────────────────────────────────────────────────
 
 export default function LockScreen() {
+  const t = useT();
   const { unlock, passwordType } = useStore();
   const [value, setValue] = useState("");
   const [error, setError] = useState("");
@@ -69,7 +71,7 @@ export default function LockScreen() {
     return () => clearInterval(t);
   }, [locked]);
 
-  const shownError = locked ? `Trop de tentatives — réessayez dans ${formatWait(lockedFor)}` : error;
+  const shownError = locked ? t("Trop de tentatives — réessayez dans {d}", { d: formatWait(lockedFor) }) : error;
 
   const handleReset = () => {
     setShowResetDialog(true);
@@ -95,12 +97,12 @@ export default function LockScreen() {
         const s = await refreshStatus();
         const left = s?.attempts_before_lock ?? 0;
         setError(s && s.locked_for_secs === 0 && left > 0 && left <= 3
-          ? `Mot de passe incorrect — ${left} essai(s) avant blocage`
-          : "Mot de passe incorrect");
+          ? t("Mot de passe incorrect — {n} essai(s) avant blocage", { n: left })
+          : t("Mot de passe incorrect"));
         setValue("");
       }
     } catch (e: unknown) {
-      setError(String(e));
+      setError(trError(e));
       setValue("");
       await refreshStatus();
     } finally {
@@ -148,7 +150,7 @@ export default function LockScreen() {
       onClick={() => setRecovering(true)}
       className="mt-4 text-xs text-muted hover:text-accent underline-offset-2 hover:underline transition-colors"
     >
-      Mot de passe oublié ou nouveau PC ?
+      {t("Mot de passe oublié ou nouveau PC ?")}
     </button>
   );
 
@@ -198,16 +200,16 @@ export default function LockScreen() {
         <button
           onClick={handleReset}
           className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-red-400/10 hover:bg-red-400/15 border border-red-400/20 hover:border-red-400/30 text-red-400 text-xs transition-colors"
-          title="Effacer toutes les données et repartir de zéro"
+          title={t("Effacer toutes les données et repartir de zéro")}
         >
           <AlertTriangle size={12} />
-          Réinitialiser l'app
+          {t("Réinitialiser l'app")}
         </button>
         {postIts.length > 0 && (
           <button
             onClick={togglePostIts}
-            aria-label={postItsHidden ? "Afficher les post-its" : "Masquer les post-its"}
-            title={postItsHidden ? `Afficher les post-its (${postIts.length})` : "Masquer les post-its"}
+            aria-label={postItsHidden ? t("Afficher les post-its") : t("Masquer les post-its")}
+            title={postItsHidden ? t("Afficher les post-its ({n})", { n: postIts.length }) : t("Masquer les post-its")}
             className="flex items-center gap-1.5 px-2 py-1.5 rounded-lg bg-white/5 hover:bg-white/10 border border-white/10 text-white/30 hover:text-white/60 text-xs transition-colors"
           >
             {postItsHidden ? <Eye size={12} /> : <EyeOff size={12} />}
@@ -217,10 +219,10 @@ export default function LockScreen() {
         <button
           onClick={addPostIt}
           className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-white/5 hover:bg-white/10 border border-white/10 text-white/30 hover:text-white/60 text-xs transition-colors"
-          title="Ajouter un post-it"
+          title={t("Ajouter un post-it")}
         >
           <Plus size={12} />
-          Post-it
+          {t("Post-it")}
         </button>
       </div>
     </>
@@ -234,7 +236,7 @@ export default function LockScreen() {
         <span className="text-accent font-bold text-3xl tracking-tight mb-2 select-none">NATIA</span>
         <div className="flex items-center gap-2 mb-10 text-muted text-sm">
           <Lock size={13} />
-          <span>Application verrouillée</span>
+          <span>{t("Application verrouillée")}</span>
         </div>
 
         {/* Un dot par chiffre saisi */}
@@ -289,7 +291,7 @@ export default function LockScreen() {
           </button>
         </div>
 
-        {loading && <p className="text-muted text-xs">Vérification…</p>}
+        {loading && <p className="text-muted text-xs">{t("Vérification…")}</p>}
         {forgotLink}
 
         {postItsLayer}
@@ -306,7 +308,7 @@ export default function LockScreen() {
       <span className="text-accent font-bold text-3xl tracking-tight mb-2 select-none">NATIA</span>
       <div className="flex items-center gap-2 mb-10 text-muted text-sm">
         <Lock size={13} />
-        <span>Application verrouillée</span>
+        <span>{t("Application verrouillée")}</span>
       </div>
 
       <div className="w-72 flex flex-col gap-3">
@@ -315,7 +317,7 @@ export default function LockScreen() {
           value={value}
           onChange={(e) => { if (!locked) { setValue(e.target.value); setError(""); } }}
           onKeyDown={(e) => { if (e.key === "Enter") handleSubmit(); }}
-          placeholder="Mot de passe"
+          placeholder={t("Mot de passe")}
           autoFocus
           disabled={locked}
           className="w-full px-4 py-3 rounded-xl bg-hover border border-border text-primary placeholder-muted outline-none focus:border-accent transition-colors text-sm disabled:opacity-50"
@@ -328,7 +330,7 @@ export default function LockScreen() {
           disabled={loading || !value || locked}
           className="w-full py-3 rounded-xl bg-accent hover:bg-accent-hover text-white text-sm font-semibold transition-colors disabled:opacity-50"
         >
-          {loading ? "Vérification…" : "Déverrouiller"}
+          {loading ? t("Vérification…") : t("Déverrouiller")}
         </button>
       </div>
       {forgotLink}
@@ -358,6 +360,7 @@ function DraggablePostIt({
   onDelete: () => void;
 }) {
   const startRef = useRef<{ mx: number; my: number; nx: number; ny: number } | null>(null);
+  const t = useT();
   const width = note.width ?? POSTIT_DEFAULT_W;
   const height = note.height ?? POSTIT_DEFAULT_H;
 
@@ -468,7 +471,7 @@ function DraggablePostIt({
       {/* Poignée de redimensionnement */}
       <div
         onMouseDown={onResizeStart}
-        title="Redimensionner"
+        title={t("Redimensionner")}
         style={{ position: "absolute", right: 0, bottom: 0, width: 14, height: 14, cursor: "nwse-resize" }}
         className="flex items-end justify-end p-0.5"
       >

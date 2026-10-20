@@ -2,17 +2,19 @@ import { useState } from "react";
 import { Trash2 as TrashIcon } from "lucide-react";
 import { useStore } from "../../store";
 import { Section } from "./SettingsWidgets";
+import { useT } from "../../i18n";
 
 export default function MemorySettings() {
   const { memoryEnabled, setMemoryEnabled, memoryGraphEnabled, setMemoryGraphEnabled, memoryNodes, clearMemoryNodes } = useStore();
   const [confirmClear, setConfirmClear] = useState(false);
+  const t = useT();
   return (
     <>
-      <Section title="Mémoire IA">
+      <Section title={t("Mémoire IA")}>
         <div className="flex items-center justify-between">
           <div>
-            <p className="text-sm text-secondary">Mémoire persistante</p>
-            <p className="text-[10px] text-muted mt-0.5">Collecte le contexte de tes projets, sujets et habitudes</p>
+            <p className="text-sm text-secondary">{t("Mémoire persistante")}</p>
+            <p className="text-[10px] text-muted mt-0.5">{t("Collecte le contexte de tes projets, sujets et habitudes")}</p>
           </div>
           <button
             role="switch"
@@ -28,8 +30,8 @@ export default function MemorySettings() {
           <>
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm text-secondary">Graphe neuronal</p>
-                <p className="text-[10px] text-muted mt-0.5">Visualise la mémoire sous forme de réseau de nœuds</p>
+                <p className="text-sm text-secondary">{t("Graphe neuronal")}</p>
+                <p className="text-[10px] text-muted mt-0.5">{t("Visualise la mémoire sous forme de réseau de nœuds")}</p>
               </div>
               <button
                 role="switch"
@@ -43,8 +45,8 @@ export default function MemorySettings() {
 
             <div className="flex items-center justify-between px-3 py-2 rounded-lg bg-hover border border-border">
               <div className="flex flex-col gap-0.5">
-                <p className="text-xs text-secondary font-medium">Nœuds manuels</p>
-                <p className="text-[10px] text-muted">{memoryNodes.length} enregistré{memoryNodes.length !== 1 ? "s" : ""}</p>
+                <p className="text-xs text-secondary font-medium">{t("Nœuds manuels")}</p>
+                <p className="text-[10px] text-muted">{memoryNodes.length === 1 ? t("{n} enregistré", { n: 1 }) : t("{n} enregistrés", { n: memoryNodes.length })}</p>
               </div>
               {memoryNodes.length > 0 && (
                 <button
@@ -59,7 +61,7 @@ export default function MemorySettings() {
                   }`}
                 >
                   <TrashIcon size={10} />
-                  {confirmClear ? "Confirmer la suppression" : "Vider"}
+                  {confirmClear ? t("Confirmer la suppression") : t("Vider")}
                 </button>
               )}
             </div>

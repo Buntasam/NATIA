@@ -1,5 +1,6 @@
 import React, { useState, useRef, useCallback, useEffect, useId } from "react";
 import { GripVertical } from "lucide-react";
+import { useT } from "../i18n";
 
 const POS_KEY   = "natia_dice_pos";
 const ENABLED_KEY = "natia_dice_enabled";
@@ -24,8 +25,8 @@ function savedPos() {
 //   → produces 9 triangular side-faces + 1 central face = 10 faces total
 //
 function D20Face({
-  value, rolling, landed, result, uid,
-}: { value: number; rolling: boolean; landed: boolean; result: number | null; uid: string }) {
+  value, rolling, result, uid,
+}: { value: number; rolling: boolean; result: number | null; uid: string }) {
   const isCrit = !rolling && result === 20;
   const isFail = !rolling && result === 1;
 
@@ -140,6 +141,7 @@ export default function D20Roller() {
 
 function D20RollerInner() {
   const uid = useId().replace(/:/g, "");
+  const t = useT();
   const defaultPos = { x: Math.max(window.innerWidth - 176 - 20, 20), y: Math.max(window.innerHeight - 260 - 80, 20) };
   const [pos, setPos]         = useState(() => savedPos() ?? defaultPos);
   const [rolling, setRolling] = useState(false);
@@ -219,7 +221,7 @@ function D20RollerInner() {
         className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-t-xl bg-panel border border-border border-b-0 cursor-grab active:cursor-grabbing"
       >
         <GripVertical size={12} className="text-muted shrink-0" />
-        <span className="text-[10px] font-semibold text-muted uppercase tracking-wider flex-1">Dé à 20 faces</span>
+        <span className="text-[10px] font-semibold text-muted uppercase tracking-wider flex-1">{t("Dé à 20 faces")}</span>
       </div>
 
       {/* ── Panel body ── */}
@@ -229,23 +231,23 @@ function D20RollerInner() {
         <div
           onClick={roll}
           className={`w-32 h-32 cursor-pointer ${rolling ? "d20-rolling" : landed ? "d20-land" : "hover:scale-[1.03] transition-transform duration-150"}`}
-          title={rolling ? "Lancer en cours…" : "Cliquer pour lancer"}
+          title={rolling ? t("Lancer en cours…") : t("Cliquer pour lancer")}
         >
-          <D20Face value={display} rolling={rolling} landed={landed} result={result} uid={uid} />
+          <D20Face value={display} rolling={rolling} result={result} uid={uid} />
         </div>
 
         {/* Result label */}
         <div className="h-[18px] flex items-center justify-center">
           {rolling ? (
-            <span className="text-[10px] text-muted animate-pulse">Lancer en cours…</span>
+            <span className="text-[10px] text-muted animate-pulse">{t("Lancer en cours…")}</span>
           ) : result !== null ? (
             <span key={result} className={`text-[11px] font-semibold d20-fade-in ${
               isCrit ? "text-amber-400" : isFail ? "text-red-400" : "text-secondary"
             }`}>
-              {isCrit ? "✦ Coup critique !" : isFail ? "✕ Échec critique" : `Résultat : ${result}`}
+              {isCrit ? t("✦ Coup critique !") : isFail ? t("✕ Échec critique") : t("Résultat : {n}", { n: result })}
             </span>
           ) : (
-            <span className="text-[10px] text-muted">Cliquer pour lancer</span>
+            <span className="text-[10px] text-muted">{t("Cliquer pour lancer")}</span>
           )}
         </div>
 
@@ -255,13 +257,13 @@ function D20RollerInner() {
           disabled={rolling}
           className="w-full py-1.5 rounded-lg text-[11px] font-semibold transition-colors disabled:opacity-40 bg-accent/15 hover:bg-accent/25 border border-accent/30 text-accent"
         >
-          {rolling ? "Lancer…" : "Lancer le dé"}
+          {rolling ? t("Lancer…") : t("Lancer le dé")}
         </button>
 
         {/* History */}
         {history.length > 0 && (
           <div className="w-full">
-            <p className="text-[9px] text-muted uppercase tracking-wider mb-1">Historique</p>
+            <p className="text-[9px] text-muted uppercase tracking-wider mb-1">{t("Historique")}</p>
             <div className="flex gap-1 flex-wrap">
               {history.map((n, i) => (
                 <span key={i} className={`text-[10px] font-mono px-1.5 py-0.5 rounded border ${

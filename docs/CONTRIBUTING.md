@@ -46,6 +46,7 @@ Le frontend se recharge à chaud (Vite, port 1420). Tauri recompile automatiquem
 ```bash
 cd NATIA/fablenote
 npx tsc --noEmit                                     # types TypeScript
+npm run i18n:check                                   # textes sans traduction anglaise
 npm run build                                        # compilation du frontend
 cd src-tauri && cargo test --no-default-features --lib   # tests Rust
 ```
@@ -82,7 +83,10 @@ Le détail est dans [ARCHITECTURE.md](ARCHITECTURE.md). En bref :
 - Les actions sur les notes, dossiers et paramètres passent par le store Zustand.
 - Un paramètre enregistré par le bouton « Sauvegarder » se modifie via `form` / `set`, passés par `Settings.tsx` aux composants de `src/components/settings/`.
 - Les liens externes passent par `openUrl` (plugin `opener`) ; toute nouvelle URL doit être ajoutée dans `src-tauri/capabilities/default.json`.
-- Une nouvelle fonctionnalité visible s'accompagne d'une mise à jour du manuel (`src/components/settings/manualContent.ts`).
+- Une nouvelle fonctionnalité visible s'accompagne d'une mise à jour du manuel, en français et en anglais (`src/components/settings/manualContent.ts` et `manualContent.en.ts`).
+- Tout texte affiché passe par `t("…")` (composant, avec `const t = useT()`) ou `tr("…")` (hors composant), et sa traduction est ajoutée dans `src/i18n/en.ts`. Les variables s'écrivent `t("{n} notes", { n })`. Vérifier avec `npm run i18n:check` avant de proposer une modification.
+- Un prompt IA par défaut ou un préréglage ajouté doit avoir sa version anglaise dans `src/i18n/prompts.ts`.
+- Pas de `window.confirm`, `window.prompt` ni `alert` : Tauri ne les affiche pas. Pas de lien `<a download>` non plus : passer par la boîte « Enregistrer sous » (`save` du plugin dialog) puis une commande Rust.
 
 ### Rust (backend)
 

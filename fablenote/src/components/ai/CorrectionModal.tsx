@@ -1,5 +1,6 @@
 import { CheckCheck } from "lucide-react";
 import * as Diff from "diff";
+import { useT } from "../../i18n";
 
 interface Props {
   title: string;
@@ -15,6 +16,7 @@ interface Props {
 export function CorrectionModal({ title, subtitle, applyLabel, original, proposed, html, onApply, onCancel }: Props) {
   const diffParts = Diff.diffWordsWithSpace(original, proposed);
   const hasChanges = diffParts.some((p) => p.added || p.removed);
+  const t = useT();
 
   return (
     <div className="fixed inset-0 z-[200] flex items-center justify-center bg-black/70 backdrop-blur-sm">
@@ -27,7 +29,7 @@ export function CorrectionModal({ title, subtitle, applyLabel, original, propose
           <div>
             <h2 className="text-sm font-semibold text-primary">{title}</h2>
             <p className="text-xs text-muted mt-0.5">
-              {hasChanges ? subtitle : "Aucune modification détectée dans le texte"}
+              {hasChanges ? subtitle : t("Aucune modification détectée dans le texte")}
             </p>
           </div>
         </div>
@@ -54,15 +56,15 @@ export function CorrectionModal({ title, subtitle, applyLabel, original, propose
         <div className="px-5 py-4 border-t border-border flex items-center justify-between shrink-0">
           <p className="text-xs text-muted">
             {hasChanges
-              ? `${diffParts.filter((p) => p.added).length} ajout(s) · ${diffParts.filter((p) => p.removed).length} suppression(s)`
-              : "Le texte est identique"}
+              ? t("{a} ajout(s) · {r} suppression(s)", { a: diffParts.filter((p) => p.added).length, r: diffParts.filter((p) => p.removed).length })
+              : t("Le texte est identique")}
           </p>
           <div className="flex gap-3">
             <button
               onClick={onCancel}
               className="px-4 py-2 rounded-lg bg-hover hover:bg-active text-secondary hover:text-primary text-sm transition-colors"
             >
-              Annuler
+              {t("Annuler")}
             </button>
             <button
               onClick={() => onApply(html)}

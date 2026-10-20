@@ -10,6 +10,7 @@ mod db;
 mod notes;
 mod settings;
 mod system_lock;
+mod tray;
 
 // ─── App state ────────────────────────────────────────────────────────────────
 
@@ -206,6 +207,13 @@ pub fn require_unlocked(state: &AppState) -> Result<(), String> {
 
 pub fn run() {
     tauri::Builder::default()
+        // En premier : un deuxième lancement remet la fenêtre existante au premier plan
+        // au lieu d'ouvrir une autre instance sur la même base.
+        .plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| tray::show_main_window(app)))
+        .plugin(tauri_plugin_autostart::init(
+            tauri_plugin_autostart::MacosLauncher::LaunchAgent,
+            Some(vec![tray::MINIMIZED_ARG]),
+        ))
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_notification::init())
         .plugin(tauri_plugin_opener::init())
@@ -228,6 +236,7 @@ pub fn run() {
                 search_cache: Mutex::new(Default::default()),
             });
             system_lock::spawn(app.handle().clone());
+            tray::setup(app.handle())?;
 
             Ok(())
         })
@@ -256,6 +265,11 @@ pub fn run() {
             notes::inspect_import,
             notes::import_zip,
             notes::export_note_to_path,
+            notes::write_export_file,
+            tray::get_autostart,
+            tray::set_autostart,
+            tray::hide_main_window,
+            tray::set_tray_language,
             notes::search_notes,
             notes::get_global_stats,
             notes::get_all_reminders,

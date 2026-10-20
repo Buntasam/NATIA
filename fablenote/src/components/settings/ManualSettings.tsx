@@ -1,7 +1,9 @@
 import React, { useState } from "react";
 import { openUrl } from "@tauri-apps/plugin-opener";
 import { AlertTriangle, ChevronRight, ExternalLink, Lightbulb, Search, X } from "lucide-react";
-import { MANUAL, ManualBlock, ManualTopic } from "./manualContent";
+import { MANUAL as MANUAL_FR, ManualBlock, ManualTopic } from "./manualContent";
+import { MANUAL_EN } from "./manualContent.en";
+import { useLang, useT } from "../../i18n";
 
 const normalize = (s: string) => s.toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "");
 
@@ -104,6 +106,9 @@ function Topic({ topic, open, onToggle }: { topic: ManualTopic; open: boolean; o
 }
 
 export default function ManualSettings() {
+  const t = useT();
+  // Mêmes identifiants de chapitres dans les deux langues : le chapitre ouvert est conservé.
+  const MANUAL = useLang((s) => s.lang) === "en" ? MANUAL_EN : MANUAL_FR;
   const [query, setQuery] = useState("");
   const [chapter, setChapter] = useState(MANUAL[0].id);
   const [openTopics, setOpenTopics] = useState<Set<string>>(() => new Set([`${MANUAL[0].id}/0`]));
@@ -130,12 +135,12 @@ export default function ManualSettings() {
         <input
           value={query}
           onChange={(e) => setQuery(e.target.value)}
-          placeholder="Chercher dans le manuel (ollama, clé API, export…)"
-          aria-label="Chercher dans le manuel"
+          placeholder={t("Chercher dans le manuel (ollama, clé API, export…)")}
+          aria-label={t("Chercher dans le manuel")}
           className="bg-transparent text-xs text-primary placeholder-muted outline-none w-full"
         />
         {query && (
-          <button onClick={() => setQuery("")} aria-label="Effacer" className="text-muted hover:text-primary transition-colors shrink-0">
+          <button onClick={() => setQuery("")} aria-label={t("Effacer")} className="text-muted hover:text-primary transition-colors shrink-0">
             <X size={11} />
           </button>
         )}
@@ -143,7 +148,7 @@ export default function ManualSettings() {
 
       {searching ? (
         <div className="flex flex-col gap-2">
-          {results.length === 0 && <p className="text-xs text-muted text-center py-4">Aucun résultat</p>}
+          {results.length === 0 && <p className="text-xs text-muted text-center py-4">{t("Aucun résultat")}</p>}
           {results.map(({ c, t, key }) => (
             <div key={key} className="flex flex-col gap-1">
               <p className="text-[10px] text-muted uppercase tracking-wider">{c.title}</p>

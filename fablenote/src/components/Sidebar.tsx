@@ -13,7 +13,6 @@ import {
   MoreHorizontal,
   Network,
   StickyNote,
-  NotebookPen,
   Pin,
   PinOff,
   Search,
@@ -38,6 +37,7 @@ import Tip from "./Tooltip";
 import { useStore } from "../store";
 import { lockSafely } from "../lib/lockSafely";
 import { NoteMetadata } from "../types";
+import { locale, msg, useT } from "../i18n";
 
 // ─── Module-level drag state (dataTransfer is unreliable in WebView2) ────────
 
@@ -96,24 +96,29 @@ function buildTree(
 function formatDate(iso: string) {
   const d = new Date(iso);
   const diff = Date.now() - d.getTime();
-  if (diff < 86_400_000) return d.toLocaleTimeString("fr", { hour: "2-digit", minute: "2-digit" });
-  if (diff < 604_800_000) return d.toLocaleDateString("fr", { weekday: "short" });
-  return d.toLocaleDateString("fr", { day: "2-digit", month: "short" });
+  if (diff < 86_400_000) return d.toLocaleTimeString(locale(), { hour: "2-digit", minute: "2-digit" });
+  if (diff < 604_800_000) return d.toLocaleDateString(locale(), { weekday: "short" });
+  return d.toLocaleDateString(locale(), { day: "2-digit", month: "short" });
 }
 
 // ─── Color palette ────────────────────────────────────────────────────────────
 
 const COLORS = [
-  { label: "Rouge",  value: "#ef4444" },
-  { label: "Orange", value: "#f97316" },
-  { label: "Jaune",  value: "#eab308" },
-  { label: "Vert",   value: "#22c55e" },
-  { label: "Cyan",   value: "#06b6d4" },
-  { label: "Bleu",   value: "#3b82f6" },
-  { label: "Violet", value: "#8b5cf6" },
-  { label: "Rose",   value: "#ec4899" },
-  { label: "Gris",   value: "#6b7280" },
+  { label: msg("Rouge"),  value: "#ef4444" },
+  { label: msg("Orange"), value: "#f97316" },
+  { label: msg("Jaune"),  value: "#eab308" },
+  { label: msg("Vert"),   value: "#22c55e" },
+  { label: msg("Cyan"),   value: "#06b6d4" },
+  { label: msg("Bleu"),   value: "#3b82f6" },
+  { label: msg("Violet"), value: "#8b5cf6" },
+  { label: msg("Rose"),   value: "#ec4899" },
+  { label: msg("Gris"),   value: "#6b7280" },
 ];
+
+const THEME_NAMES: Record<string, string> = {
+  light: msg("Clair"), dark: msg("Sombre"), midnight: msg("Minuit"), ink: msg("Encre"), foret: msg("Forêt"),
+  brume: msg("Brume"), sakura: "Sakura", crepuscule: msg("Crépuscule"), ocean: msg("Océan"),
+};
 
 // ─── Context menu ─────────────────────────────────────────────────────────────
 
@@ -147,16 +152,15 @@ export default function Sidebar() {
     setItemColor,
     deleteItemColor,
     hasPassword,
-    settings,
     pinnedNoteIds,
     togglePinNote,
-    memoryGraphEnabled,
     memoryEnabled,
     sidebarWidth,
     setSidebarWidth,
     setSplitNote,
   } = useStore();
 
+  const t = useT();
   const [showTreeMap, setShowTreeMap] = useState(false);
   const [showCalendar, setShowCalendar] = useState(false);
   const [showPostIts, setShowPostIts] = useState(false);
@@ -344,19 +348,19 @@ export default function Sidebar() {
         <div className="px-4 py-3 flex items-center gap-2 border-b border-border">
           <span className="text-accent font-bold text-lg tracking-tight select-none">NATIA</span>
           <div className="ml-auto flex items-center gap-0.5">
-            <Tip label="Arborescence">
+            <Tip label={t("Arborescence")}>
               <button
                 onClick={() => setShowTreeMap(true)}
-                aria-label="Arborescence"
+                aria-label={t("Arborescence")}
                 className="p-1 rounded text-muted hover:text-primary hover:bg-hover transition-colors"
               >
                 <Network size={14} />
               </button>
             </Tip>
-            <Tip label={memoryEnabled ? "Mémoire IA" : "Mémoire IA (désactivée)"} shortcut={memoryEnabled ? "Ctrl+G" : undefined}>
+            <Tip label={memoryEnabled ? t("Mémoire IA") : t("Mémoire IA (désactivée)")} shortcut={memoryEnabled ? "Ctrl+G" : undefined}>
               <button
                 onClick={toggleGraph}
-                aria-label="Mémoire IA"
+                aria-label={t("Mémoire IA")}
                 className={`p-1 rounded transition-colors ${
                   memoryEnabled ? "text-muted hover:text-primary hover:bg-hover" : "text-muted/40 hover:text-muted hover:bg-hover"
                 }`}
@@ -367,19 +371,19 @@ export default function Sidebar() {
                 </svg>
               </button>
             </Tip>
-            <Tip label="Vue calendrier">
+            <Tip label={t("Vue calendrier")}>
               <button
                 onClick={() => setShowCalendar(true)}
-                aria-label="Vue calendrier"
+                aria-label={t("Vue calendrier")}
                 className="p-1 rounded text-muted hover:text-primary hover:bg-hover transition-colors"
               >
                 <CalendarDays size={14} />
               </button>
             </Tip>
-            <Tip label="Post-its">
+            <Tip label={t("Post-its")}>
               <button
                 onClick={() => setShowPostIts(true)}
-                aria-label="Post-its"
+                aria-label={t("Post-its")}
                 className="p-1 rounded text-muted hover:text-primary hover:bg-hover transition-colors"
               >
                 <StickyNote size={14} />
@@ -393,17 +397,17 @@ export default function Sidebar() {
             <Search size={14} className="text-muted shrink-0" />
             <input
               type="text"
-              placeholder="Rechercher… (#tag)"
+              placeholder={t("Rechercher… (#tag)")}
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               data-global-search
-              aria-label="Recherche globale"
+              aria-label={t("Recherche globale")}
               className="bg-transparent text-sm text-primary placeholder-muted outline-none w-full"
             />
             {searchQuery && (
               <button
                 onClick={() => setSearchQuery("")}
-                aria-label="Effacer la recherche"
+                aria-label={t("Effacer la recherche")}
                 className="text-muted hover:text-primary transition-colors shrink-0"
               >
                 <X size={12} />
@@ -418,12 +422,12 @@ export default function Sidebar() {
             className="flex-1 flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm text-secondary hover:text-primary hover:bg-hover transition-colors"
           >
             <FilePlus size={14} />
-            Nouvelle note
+            {t("Nouvelle note")}
           </button>
-          <Tip label="Nouveau dossier">
+          <Tip label={t("Nouveau dossier")}>
             <button
               onClick={() => { setCreatingIn(""); setNewFolderName(""); }}
-              aria-label="Nouveau dossier"
+              aria-label={t("Nouveau dossier")}
               className="px-2 py-1.5 rounded-lg text-secondary hover:text-primary hover:bg-hover transition-colors"
             >
               <FolderPlus size={14} />
@@ -441,7 +445,7 @@ export default function Sidebar() {
             >
               <ChevronRight size={11} className={`transition-transform ${tagsOpen ? "rotate-90" : ""}`} />
               <Tag size={11} />
-              <span className="text-[11px] uppercase tracking-wider">Tags</span>
+              <span className="text-[11px] uppercase tracking-wider">{t("Tags")}</span>
               <span className="text-[11px] opacity-60">({tagCounts.length})</span>
             </button>
             {tagsOpen && (
@@ -497,7 +501,7 @@ export default function Sidebar() {
             }}
           >
             {isLoading && (
-              <p className="text-muted text-xs text-center py-4">Chargement…</p>
+              <p className="text-muted text-xs text-center py-4">{t("Chargement…")}</p>
             )}
             {/* Résultats par tag (#tag) */}
             {tagQuery !== null && (
@@ -505,11 +509,11 @@ export default function Sidebar() {
                 <div className="flex items-center gap-1.5 px-2 py-1">
                   <Tag size={10} className="text-accent" />
                   <span className="text-[11px] text-muted uppercase tracking-wider">
-                    Tag « {tagQuery || "…"} » · {tagResults.length}
+                    {t("Tag « {tag} » · {n}", { tag: tagQuery || "…", n: tagResults.length })}
                   </span>
                 </div>
                 {tagResults.length === 0 && (
-                  <p className="text-xs text-muted text-center py-3">Aucune note avec ce tag</p>
+                  <p className="text-xs text-muted text-center py-3">{t("Aucune note avec ce tag")}</p>
                 )}
                 {tagResults.map((note) => (
                   <NoteItem
@@ -526,9 +530,9 @@ export default function Sidebar() {
             {/* Full-text search results */}
             {searchQuery.trim() && tagQuery === null && (
               <div className="pb-1">
-                {ftLoading && <p className="text-xs text-muted text-center py-3">Recherche…</p>}
+                {ftLoading && <p className="text-xs text-muted text-center py-3">{t("Recherche…")}</p>}
                 {!ftLoading && ftResults.length === 0 && (
-                  <p className="text-xs text-muted text-center py-3">Aucun résultat</p>
+                  <p className="text-xs text-muted text-center py-3">{t("Aucun résultat")}</p>
                 )}
                 {!ftLoading && ftResults.map((r) => (
                   <button
@@ -538,7 +542,7 @@ export default function Sidebar() {
                       activeNote?.id === r.id ? "bg-active" : "hover:bg-hover"
                     }`}
                   >
-                    <p className="text-sm font-medium text-primary truncate">{r.title || "Sans titre"}</p>
+                    <p className="text-sm font-medium text-primary truncate">{r.title || t("Sans titre")}</p>
                     {r.snippet && (
                       <p className="text-xs text-muted mt-0.5 line-clamp-2 leading-snug">{r.snippet}</p>
                     )}
@@ -552,8 +556,8 @@ export default function Sidebar() {
 
             {!searchQuery.trim() && !isLoading && notes.length === 0 && folders.length === 0 && (
               <div className="text-center py-8 px-4">
-                <p className="text-muted text-sm">Aucune note</p>
-                <p className="text-muted text-xs mt-1">Crée ta première note</p>
+                <p className="text-muted text-sm">{t("Aucune note")}</p>
+                <p className="text-muted text-xs mt-1">{t("Crée ta première note")}</p>
               </div>
             )}
 
@@ -565,7 +569,7 @@ export default function Sidebar() {
                 <div className="mb-1">
                   <div className="flex items-center gap-1 px-2 py-1">
                     <Pin size={9} className="text-muted" />
-                    <span className="text-[11px] text-muted uppercase tracking-wider">Épinglées</span>
+                    <span className="text-[11px] text-muted uppercase tracking-wider">{t("Épinglées")}</span>
                   </div>
                   {pinned.map((note) => (
                     <NoteItem
@@ -614,7 +618,7 @@ export default function Sidebar() {
             ))}
             {!searchQuery.trim() && rootDragOver && (
               <p className="text-xs text-accent text-center py-1 select-none">
-                Déposer ici → racine
+                {t("Déposer ici → racine")}
               </p>
             )}
             {!searchQuery.trim() && rootNotes.map((note) => (
@@ -632,14 +636,14 @@ export default function Sidebar() {
         {lastMove && (
           <div className="mx-2 mb-1 flex items-center gap-2 px-3 py-2 rounded-lg bg-hover border border-border text-xs text-secondary">
             <span className="flex-1 truncate">
-              {lastMove.type === "note" ? "Note déplacée" : "Dossier déplacé"}
+              {lastMove.type === "note" ? t("Note déplacée") : t("Dossier déplacé")}
             </span>
             <button
               onClick={handleUndo}
               className="flex items-center gap-1 text-accent hover:text-accent/80 transition-colors shrink-0 font-medium"
             >
               <Undo2 size={12} />
-              Annuler
+              {t("Annuler")}
             </button>
           </div>
         )}
@@ -651,33 +655,33 @@ export default function Sidebar() {
             className="flex-1 flex items-center gap-2 px-2 py-1.5 rounded text-muted hover:text-primary hover:bg-hover transition-colors text-sm"
           >
             <Settings size={15} />
-            Paramètres
+            {t("Paramètres")}
           </button>
-          <Tip label="Corbeille" side="top">
+          <Tip label={t("Corbeille")} side="top">
             <button
               onClick={toggleTrash}
-              aria-label="Corbeille"
+              aria-label={t("Corbeille")}
               className="p-1.5 rounded text-muted hover:text-primary hover:bg-hover transition-colors"
             >
               <Trash2 size={15} />
             </button>
           </Tip>
           {hasPassword && (
-            <Tip label="Verrouiller l'application" side="top">
+            <Tip label={t("Verrouiller l'application")} side="top">
               <button
                 onClick={() => { lockSafely(); }}
-                aria-label="Verrouiller l'application"
+                aria-label={t("Verrouiller l'application")}
                 className="p-1.5 rounded text-muted hover:text-primary hover:bg-hover transition-colors"
               >
                 <Lock size={15} />
               </button>
             </Tip>
           )}
-          <Tip label={`Thème : ${theme}`} side="top">
+          <Tip label={t("Thème : {name}", { name: t(THEME_NAMES[theme] ?? theme) })} side="top">
             <button
               onClick={toggleTheme}
               className="p-1.5 rounded text-muted hover:text-primary hover:bg-hover transition-colors"
-              aria-label="Basculer le thème"
+              aria-label={t("Basculer le thème")}
             >
               {isDark ? <Sun size={15} /> : <Moon size={15} />}
             </button>
@@ -711,28 +715,28 @@ export default function Sidebar() {
                   onClick={() => { togglePinNote(menu.note.id); closeMenu(); }}
                 >
                   {pinnedNoteIds.includes(menu.note.id)
-                    ? <><PinOff size={13} />Désépingler</>
-                    : <><Pin size={13} />Épingler</>}
+                    ? <><PinOff size={13} />{t("Désépingler")}</>
+                    : <><Pin size={13} />{t("Épingler")}</>}
                 </button>
                 <button
                   className="w-full flex items-center gap-2 px-3 py-2 text-sm text-secondary hover:text-primary hover:bg-hover transition-colors"
                   onClick={() => { setSplitNote(menu.note.id); closeMenu(); }}
                 >
                   <Columns2 size={13} />
-                  Ouvrir côte à côte
+                  {t("Ouvrir côte à côte")}
                 </button>
                 <div className="border-t border-border my-1" />
 
                 {/* Color picker */}
                 <div className="px-3 py-2">
-                  <p className="text-xs text-muted mb-2">Couleur</p>
+                  <p className="text-xs text-muted mb-2">{t("Couleur")}</p>
                   <div className="flex gap-1.5 flex-wrap">
                     {COLORS.map((c) => {
                       const current = itemColors[`note:${menu.note.id}`];
                       return (
                         <button
                           key={c.value}
-                          title={c.label}
+                          title={t(c.label)}
                           className="w-5 h-5 rounded-full transition-transform hover:scale-110"
                           style={{
                             backgroundColor: c.value,
@@ -745,7 +749,7 @@ export default function Sidebar() {
                     })}
                     {itemColors[`note:${menu.note.id}`] && (
                       <button
-                        title="Sans couleur"
+                        title={t("Sans couleur")}
                         className="w-5 h-5 rounded-full border border-border flex items-center justify-center text-muted hover:text-primary text-xs transition-colors"
                         onClick={() => { deleteItemColor(`note:${menu.note.id}`); closeMenu(); }}
                       >
@@ -759,7 +763,7 @@ export default function Sidebar() {
                 <div className="relative group">
                   <button className="w-full flex items-center gap-2 px-3 py-2 text-sm text-secondary hover:text-primary hover:bg-hover transition-colors">
                     <MoveRight size={13} />
-                    Déplacer vers…
+                    {t("Déplacer vers…")}
                     <ChevronRight size={11} className="ml-auto" />
                   </button>
                   <div className="absolute left-full top-0 ml-1 bg-panel border border-border rounded-lg shadow-xl py-1 min-w-40 hidden group-hover:block z-50">
@@ -767,7 +771,7 @@ export default function Sidebar() {
                       className="w-full flex items-center gap-2 px-3 py-2 text-sm text-secondary hover:text-primary hover:bg-hover transition-colors"
                       onClick={() => { moveNote(menu.note.id, null); closeMenu(); }}
                     >
-                      — Racine
+                      — {t("Racine")}
                     </button>
                     {allFolderPaths.map((fp) => (
                       <button
@@ -787,7 +791,7 @@ export default function Sidebar() {
                   onClick={async () => {
                     const filePath = await save({
                       defaultPath: `${menu.note.title}.html`,
-                      filters: [{ name: "Page HTML", extensions: ["html"] }],
+                      filters: [{ name: t("Page HTML"), extensions: ["html"] }],
                     });
                     closeMenu();
                     if (!filePath) return;
@@ -799,7 +803,7 @@ export default function Sidebar() {
                   }}
                 >
                   <Download size={13} />
-                  Exporter (.html)
+                  {t("Exporter (.html)")}
                 </button>
                 <div className="border-t border-border my-1" />
                 <button
@@ -807,7 +811,7 @@ export default function Sidebar() {
                   onClick={() => { deleteNote(menu.note.id); closeMenu(); }}
                 >
                   <Trash2 size={13} />
-                  Supprimer
+                  {t("Supprimer")}
                 </button>
               </>
             )}
@@ -819,14 +823,14 @@ export default function Sidebar() {
 
                 {/* Color picker */}
                 <div className="px-3 py-2">
-                  <p className="text-xs text-muted mb-2">Couleur</p>
+                  <p className="text-xs text-muted mb-2">{t("Couleur")}</p>
                   <div className="flex gap-1.5 flex-wrap">
                     {COLORS.map((c) => {
                       const current = itemColors[`folder:${menu.path}`];
                       return (
                         <button
                           key={c.value}
-                          title={c.label}
+                          title={t(c.label)}
                           className="w-5 h-5 rounded-full transition-transform hover:scale-110"
                           style={{
                             backgroundColor: c.value,
@@ -839,7 +843,7 @@ export default function Sidebar() {
                     })}
                     {itemColors[`folder:${menu.path}`] && (
                       <button
-                        title="Sans couleur"
+                        title={t("Sans couleur")}
                         className="w-5 h-5 rounded-full border border-border flex items-center justify-center text-muted hover:text-primary text-xs transition-colors"
                         onClick={() => { deleteItemColor(`folder:${menu.path}`); closeMenu(); }}
                       >
@@ -860,7 +864,7 @@ export default function Sidebar() {
                   }}
                 >
                   <FolderPlus size={13} />
-                  Nouveau sous-dossier
+                  {t("Nouveau sous-dossier")}
                 </button>
                 <button
                   className="w-full flex items-center gap-2 px-3 py-2 text-sm text-secondary hover:text-primary hover:bg-hover transition-colors"
@@ -871,7 +875,7 @@ export default function Sidebar() {
                   }}
                 >
                   <Pencil size={13} />
-                  Renommer
+                  {t("Renommer")}
                 </button>
                 <div className="border-t border-border my-1" />
                 <button
@@ -879,7 +883,7 @@ export default function Sidebar() {
                   onClick={() => { deleteFolder(menu.path); closeMenu(); }}
                 >
                   <Trash2 size={13} />
-                  Supprimer le dossier
+                  {t("Supprimer le dossier")}
                 </button>
               </>
             )}
@@ -1094,6 +1098,7 @@ function NoteItem({
   onSelect: () => void;
   onMenu: (e: React.MouseEvent) => void;
 }) {
+  const t = useT();
   return (
     <div
       draggable
@@ -1122,6 +1127,7 @@ function NoteItem({
           <button
             className="opacity-0 group-hover:opacity-100 p-0.5 rounded text-muted hover:text-primary transition-all"
             onClick={(e) => { e.stopPropagation(); onMenu(e); }}
+            aria-label={t("Plus d'actions")}
           >
             <MoreHorizontal size={11} />
           </button>
@@ -1137,7 +1143,7 @@ function NoteItem({
                 useStore.getState().setSearchQuery(`#${tag}`);
               }}
               className="text-xs px-1.5 py-0.5 bg-hover rounded text-muted hover:text-accent transition-colors"
-              aria-label={`Filtrer par le tag ${tag}`}
+              aria-label={t("Filtrer par le tag {tag}", { tag })}
             >
               {tag}
             </button>
@@ -1155,7 +1161,9 @@ import React from "react";
 const NewFolderInput = React.forwardRef<
   HTMLInputElement,
   { value: string; onChange: (v: string) => void; onConfirm: () => void; onCancel: () => void }
->(({ value, onChange, onConfirm, onCancel }, ref) => (
+>(({ value, onChange, onConfirm, onCancel }, ref) => {
+  const t = useT();
+  return (
   <div className="flex items-center gap-1">
     <Folder size={13} className="text-accent shrink-0" />
     <input
@@ -1166,10 +1174,11 @@ const NewFolderInput = React.forwardRef<
         if (e.key === "Enter") onConfirm();
         if (e.key === "Escape") onCancel();
       }}
-      placeholder="Nom du dossier"
+      placeholder={t("Nom du dossier")}
       className="flex-1 bg-hover rounded px-2 py-0.5 text-sm text-primary outline-none border border-accent/50"
     />
   </div>
-));
+  );
+});
 
 type Note = NoteMetadata & { content: string };

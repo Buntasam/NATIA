@@ -1,6 +1,8 @@
 // Estimation simple de la solidité d'un mot de passe ou d'un PIN.
 // Ce n'est qu'un indicateur : il ne bloque rien au-delà des règles minimales.
 
+import { msg } from "../i18n";
+
 export interface Strength {
   score: 0 | 1 | 2 | 3 | 4;
   label: string;
@@ -13,7 +15,7 @@ const COMMON = [
   "iloveyou", "jetaime", "princesse", "nicolas", "camille", "abc123",
 ];
 
-const LABELS = ["Très faible", "Faible", "Moyen", "Bon", "Excellent"];
+const LABELS = [msg("Très faible"), msg("Faible"), msg("Moyen"), msg("Bon"), msg("Excellent")];
 
 function isSequence(s: string): boolean {
   if (s.length < 3) return false;
@@ -31,16 +33,16 @@ export function passwordStrength(pw: string, type: "pin" | "alpha"): Strength {
   if (!pw) return result(0, "");
 
   if (type === "pin") {
-    if (/^(\d)\1+$/.test(pw) || isSequence(pw)) return result(0, "Évitez les chiffres répétés ou qui se suivent.");
-    if (/^(19|20)\d{2}$/.test(pw)) return result(0, "Une année se devine facilement.");
-    if (pw.length < 6) return result(1, "Un PIN de 6 à 8 chiffres est plus sûr.");
+    if (/^(\d)\1+$/.test(pw) || isSequence(pw)) return result(0, msg("Évitez les chiffres répétés ou qui se suivent."));
+    if (/^(19|20)\d{2}$/.test(pw)) return result(0, msg("Une année se devine facilement."));
+    if (pw.length < 6) return result(1, msg("Un PIN de 6 à 8 chiffres est plus sûr."));
     // Même à 8 chiffres, un PIN ne dépasse pas « Moyen ».
-    return result(2, "Un mot de passe reste plus sûr qu'un PIN.");
+    return result(2, msg("Un mot de passe reste plus sûr qu'un PIN."));
   }
 
   const lower = pw.toLowerCase();
-  if (COMMON.some((w) => lower.includes(w))) return result(0, "Mot de passe trop courant.");
-  if (/^(.)\1+$/.test(pw) || isSequence(lower)) return result(0, "Évitez les caractères répétés ou qui se suivent.");
+  if (COMMON.some((w) => lower.includes(w))) return result(0, msg("Mot de passe trop courant."));
+  if (/^(.)\1+$/.test(pw) || isSequence(lower)) return result(0, msg("Évitez les caractères répétés ou qui se suivent."));
 
   let pool = 0;
   if (/[a-z]/.test(pw)) pool += 26;
@@ -53,8 +55,8 @@ export function passwordStrength(pw: string, type: "pin" | "alpha"): Strength {
   const bits = effectiveLen * Math.log2(Math.max(pool, 10));
 
   const hint =
-    pw.length < 12 ? "Visez au moins 12 caractères, ou une phrase de plusieurs mots."
-    : pool < 40 ? "Mélangez lettres, chiffres ou symboles."
+    pw.length < 12 ? msg("Visez au moins 12 caractères, ou une phrase de plusieurs mots.")
+    : pool < 40 ? msg("Mélangez lettres, chiffres ou symboles.")
     : "";
   if (bits < 36) return result(1, hint);
   if (bits < 55) return result(2, hint);

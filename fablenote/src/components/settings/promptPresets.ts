@@ -1,14 +1,15 @@
 import { Settings as SettingsType } from "../../types";
+import { msg } from "../../i18n";
 
 export const PROMPT_FIELDS: { key: keyof SettingsType; label: string; rows: number }[] = [
-  { key: "global_shadow_prompt", label: "Prompt global (injecté dans chaque requête)", rows: 3 },
-  { key: "correct_prompt",       label: "Correction orthographique",                   rows: 3 },
-  { key: "summary_prompt",       label: "Résumé",                                      rows: 2 },
-  { key: "rename_prompt",        label: "Renommage automatique",                       rows: 2 },
-  { key: "sort_prompt",          label: "Tri des notes (instructions JSON)",            rows: 3 },
-  { key: "formalize_prompt",     label: "Formalisation (email professionnel)",          rows: 3 },
-  { key: "translate_prompt",     label: "Traduction (instructions de style)",           rows: 2 },
-  { key: "continue_prompt",      label: "Continuation de texte",                       rows: 2 },
+  { key: "global_shadow_prompt", label: msg("Prompt global (injecté dans chaque requête)"), rows: 3 },
+  { key: "correct_prompt",       label: msg("Correction orthographique"),                   rows: 3 },
+  { key: "summary_prompt",       label: msg("Résumé"),                                      rows: 2 },
+  { key: "rename_prompt",        label: msg("Renommage automatique"),                       rows: 2 },
+  { key: "sort_prompt",          label: msg("Tri des notes (instructions JSON)"),            rows: 3 },
+  { key: "formalize_prompt",     label: msg("Formalisation (email professionnel)"),          rows: 3 },
+  { key: "translate_prompt",     label: msg("Traduction (instructions de style)"),           rows: 2 },
+  { key: "continue_prompt",      label: msg("Continuation de texte"),                       rows: 2 },
 ];
 
 export const TEMP_PRESET_MAP: Record<string, (t: number) => string> = {

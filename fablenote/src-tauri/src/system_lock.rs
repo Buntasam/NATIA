@@ -34,7 +34,7 @@ pub fn spawn(app: AppHandle) {
     });
 }
 
-fn request_lock(app: &AppHandle) {
+pub(crate) fn request_lock(app: &AppHandle) {
     let state = app.state::<AppState>();
     let unlocked = state.enc_key.lock().map(|k| k.is_some()).unwrap_or(false);
     if !unlocked { return; }

@@ -1,6 +1,8 @@
 import { invoke } from "@tauri-apps/api/core";
 import { create } from "zustand";
 import { Note, NoteMetadata, Settings, TrashItem, Version } from "../types";
+import { tr, useLang } from "../i18n";
+import { localizePrompts } from "../i18n/prompts";
 
 export type MemoryNodeType = "projet" | "utilisateur" | "contexte" | "sujet";
 
@@ -174,6 +176,9 @@ export const DEFAULT_SETTINGS: Settings = {
 
 /** Titre donné à une note qui vient d'être créée. */
 export const NEW_NOTE_TITLE = "Nouvelle note";
+
+/** Titre par défaut, dans n'importe quelle langue de l'interface. */
+export const isNewNoteTitle = (title: string) => title === NEW_NOTE_TITLE || title === tr(NEW_NOTE_TITLE);
 
 const MEMORY_KEY = "memory_nodes";
 
@@ -419,7 +424,7 @@ export const useStore = create<AppStore>((set, get) => ({
 
   createNote: async () => {
     const note = await invoke<Note>("create_note", {
-      title: NEW_NOTE_TITLE,
+      title: tr(NEW_NOTE_TITLE),
       content: "",
       tags: [],
       folder: null,
@@ -546,13 +551,15 @@ export const useStore = create<AppStore>((set, get) => ({
   loadSettings: async () => {
     try {
       const settings = await invoke<Settings>("get_settings");
-      set({ settings });
+      set({ settings: localizePrompts(settings, useLang.getState().lang) });
     } catch {
-      set({ settings: DEFAULT_SETTINGS });
+      set({ settings: localizePrompts(DEFAULT_SETTINGS, useLang.getState().lang) });
     }
   },
 
-  saveSettings: async (settings) => {
+  saveSettings: async (raw) => {
+    // Les prompts par défaut suivent la langue de l'interface (voir i18n/prompts.ts).
+    const settings = localizePrompts(raw, useLang.getState().lang);
     await invoke("update_settings", { settings });
     set({ settings });
   },
@@ -615,3 +622,10 @@ export const useStore = create<AppStore>((set, get) => ({
   setActiveNoteContent: (content) =>
     set((s) => (s.activeNote ? { activeNote: { ...s.activeNote, content } } : {})),
 }));
+
+// Langue changée : les prompts par défaut suivent (enregistrés au prochain « Sauvegarder »).
+useLang.subscribe(({ lang }) => {
+  const { settings } = useStore.getState();
+  const next = localizePrompts(settings, lang);
+  if (next !== settings) useStore.setState({ settings: next });
+});

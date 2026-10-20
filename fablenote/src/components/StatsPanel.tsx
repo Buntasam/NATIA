@@ -2,23 +2,29 @@ import React, { useMemo, useEffect, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { BarChart2, FileText, Folder, GitBranch, Hash, Trash2 } from "lucide-react";
 import { useStore } from "../store";
+import { locale, tr, useLang, useT } from "../i18n";
 
 interface RustStats { trash_count: number; version_count: number; }
 
-const MONTHS_FR = ["jan", "fév", "mar", "avr", "mai", "jun", "jul", "aoû", "sep", "oct", "nov", "déc"];
+/** Mois abrégé dans la langue de l'interface (« janv. », « Jan »). */
+const shortMonth = (month: number) => new Date(2024, month, 1).toLocaleDateString(locale(), { month: "short" });
+
+const notesCount = (n: number) => (n === 1 ? tr("{n} note", { n }) : tr("{n} notes", { n }));
 
 function relativeDate(iso: string): string {
   if (!iso) return "—";
   const days = Math.floor((Date.now() - new Date(iso).getTime()) / 86400000);
-  if (days === 0) return "Aujourd'hui";
-  if (days === 1) return "Hier";
-  if (days < 7) return `Il y a ${days} j`;
-  if (days < 30) return `Il y a ${Math.floor(days / 7)} sem.`;
-  return `Il y a ${Math.floor(days / 30)} mois`;
+  if (days === 0) return tr("Aujourd'hui");
+  if (days === 1) return tr("Hier");
+  if (days < 7) return tr("Il y a {n} j", { n: days });
+  if (days < 30) return tr("Il y a {n} sem.", { n: Math.floor(days / 7) });
+  return tr("Il y a {n} mois", { n: Math.floor(days / 30) });
 }
 
 export default function StatsPanel() {
   const { notes, folders } = useStore();
+  const t = useT();
+  const lang = useLang((s) => s.lang);
   const [rust, setRust] = useState<RustStats>({ trash_count: 0, version_count: 0 });
 
   useEffect(() => {
@@ -38,7 +44,7 @@ export default function StatsPanel() {
       d.setDate(d.getDate() - i);
       const key = d.toISOString().slice(0, 10);
       const count = notes.filter(n => n.created_at.slice(0, 10) === key).length;
-      activity30.push({ label: `${d.getDate()} ${MONTHS_FR[d.getMonth()]}`, count });
+      activity30.push({ label: `${d.getDate()} ${shortMonth(d.getMonth())}`, count });
     }
     const createdThisMonth = activity30.reduce((s, d) => s + d.count, 0);
 
@@ -47,13 +53,13 @@ export default function StatsPanel() {
     for (let i = 11; i >= 0; i--) {
       const d = new Date(today.getFullYear(), today.getMonth() - i, 1);
       const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
-      monthly.push({ label: MONTHS_FR[d.getMonth()], key, count: notes.filter(n => n.created_at.slice(0, 7) === key).length });
+      monthly.push({ label: shortMonth(d.getMonth()), key, count: notes.filter(n => n.created_at.slice(0, 7) === key).length });
     }
 
     // By folder (top 6)
     const folderMap: Record<string, number> = {};
     for (const note of notes) {
-      const k = note.folder ?? "Sans dossier";
+      const k = note.folder ?? tr("Sans dossier");
       folderMap[k] = (folderMap[k] ?? 0) + 1;
     }
     const topFolders = Object.entries(folderMap).sort((a, b) => b[1] - a[1]).slice(0, 6);
@@ -64,14 +70,14 @@ export default function StatsPanel() {
     const topTags = Object.entries(tagFreq).sort((a, b) => b[1] - a[1]).slice(0, 22);
 
     return { uniqueTags, lastActivity, activity30, createdThisMonth, monthly, topFolders, topTags };
-  }, [notes]);
+  }, [notes, lang]);
 
   if (notes.length === 0) {
     return (
       <div className="flex flex-col items-center justify-center py-16 gap-3 text-center">
         <BarChart2 size={32} className="text-muted/40" />
-        <p className="text-sm text-muted">Aucune note pour le moment</p>
-        <p className="text-[11px] text-muted/60">Les statistiques apparaîtront ici une fois vos premières notes créées.</p>
+        <p className="text-sm text-muted">{t("Aucune note pour le moment")}</p>
+        <p className="text-[11px] text-muted/60">{t("Les statistiques apparaîtront ici une fois vos premières notes créées.")}</p>
       </div>
     );
   }
@@ -100,22 +106,22 @@ export default function StatsPanel() {
 
       {/* ── KPI cards ─────────────────────────────────────────────────────── */}
       <div className="grid grid-cols-2 gap-2.5">
-        <StatCard icon={<FileText size={13} className="text-accent" />}       value={notes.length}         label="Notes actives" />
-        <StatCard icon={<Folder size={13} className="text-blue-400" />}       value={folders.length}       label="Dossiers" />
-        <StatCard icon={<Hash size={13} className="text-purple-400" />}       value={s.uniqueTags}         label="Tags uniques" />
-        <StatCard icon={<GitBranch size={13} className="text-green-400" />}   value={rust.version_count}   label="Versions" />
+        <StatCard icon={<FileText size={13} className="text-accent" />}       value={notes.length}         label={t("Notes actives")} />
+        <StatCard icon={<Folder size={13} className="text-blue-400" />}       value={folders.length}       label={t("Dossiers")} />
+        <StatCard icon={<Hash size={13} className="text-purple-400" />}       value={s.uniqueTags}         label={t("Tags uniques")} />
+        <StatCard icon={<GitBranch size={13} className="text-green-400" />}   value={rust.version_count}   label={t("Versions")} />
       </div>
 
       {/* ── Dernière activité ─────────────────────────────────────────────── */}
       <div className="flex items-center justify-between px-3 py-2 rounded-lg bg-hover border border-border">
-        <span className="text-[11px] text-muted">Dernière modification</span>
+        <span className="text-[11px] text-muted">{t("Dernière modification")}</span>
         <span className="text-[11px] text-secondary font-medium">{relativeDate(s.lastActivity)}</span>
       </div>
 
       {/* ── Bar chart — activité 30 jours ─────────────────────────────────── */}
       <div className="flex flex-col gap-1.5">
         <div className="flex items-center justify-between">
-          <p className="text-[10px] text-muted uppercase tracking-wider">Activité — 30 derniers jours</p>
+          <p className="text-[10px] text-muted uppercase tracking-wider">{t("Activité — 30 derniers jours")}</p>
           <p className="text-[10px] text-muted">{s.createdThisMonth} créée{s.createdThisMonth !== 1 ? "s" : ""}</p>
         </div>
         <div className="rounded-lg border border-border bg-hover px-3 pt-3 pb-2">
@@ -125,21 +131,21 @@ export default function StatsPanel() {
               return (
                 <rect key={i} x={i * (BW / 30) + 0.5} y={BH - h} width={bw} height={h} rx={1.5}
                   className="fill-accent/50 hover:fill-accent transition-colors cursor-default">
-                  <title>{d.label} : {d.count} note{d.count !== 1 ? "s" : ""}</title>
+                  <title>{d.label} : {notesCount(d.count)}</title>
                 </rect>
               );
             })}
           </svg>
           <div className="flex justify-between mt-0.5">
-            <span className="text-[9px] text-muted">il y a 30 j</span>
-            <span className="text-[9px] text-muted">aujourd'hui</span>
+            <span className="text-[9px] text-muted">{t("il y a 30 j")}</span>
+            <span className="text-[9px] text-muted">{t("aujourd'hui")}</span>
           </div>
         </div>
       </div>
 
       {/* ── Line chart — création mensuelle ───────────────────────────────── */}
       <div className="flex flex-col gap-1.5">
-        <p className="text-[10px] text-muted uppercase tracking-wider">Création mensuelle — 12 mois</p>
+        <p className="text-[10px] text-muted uppercase tracking-wider">{t("Création mensuelle — 12 mois")}</p>
         <div className="rounded-lg border border-border bg-hover px-3 pt-3 pb-2">
           <svg viewBox={`0 0 ${LW} ${LH}`} className="w-full overflow-visible" preserveAspectRatio="none">
             {/* subtle grid */}
@@ -155,7 +161,7 @@ export default function StatsPanel() {
             {/* dots */}
             {pts.map(([x, y], i) => (
               <circle key={i} cx={x} cy={y} r={2.5} className="fill-accent stroke-panel" strokeWidth={1.5}>
-                <title>{s.monthly[i].label} {s.monthly[i].key.slice(0, 4)} : {s.monthly[i].count} note{s.monthly[i].count !== 1 ? "s" : ""}</title>
+                <title>{s.monthly[i].label} {s.monthly[i].key.slice(0, 4)} : {notesCount(s.monthly[i].count)}</title>
               </circle>
             ))}
           </svg>
@@ -170,7 +176,7 @@ export default function StatsPanel() {
       {/* ── Répartition par dossier ────────────────────────────────────────── */}
       {s.topFolders.length > 0 && (
         <div className="flex flex-col gap-1.5">
-          <p className="text-[10px] text-muted uppercase tracking-wider">Répartition par dossier</p>
+          <p className="text-[10px] text-muted uppercase tracking-wider">{t("Répartition par dossier")}</p>
           <div className="flex flex-col gap-1.5">
             {s.topFolders.map(([name, count]) => (
               <div key={name} className="flex items-center gap-2">
@@ -191,14 +197,14 @@ export default function StatsPanel() {
           <Trash2 size={13} className="text-red-400/60 shrink-0" />
           <div>
             <p className="text-sm font-semibold text-primary leading-none">{rust.trash_count}</p>
-            <p className="text-[10px] text-muted mt-0.5">En corbeille</p>
+            <p className="text-[10px] text-muted mt-0.5">{t("En corbeille")}</p>
           </div>
         </div>
         <div className="flex items-center gap-2.5 px-3 py-2.5 rounded-lg bg-hover border border-border">
           <GitBranch size={13} className="text-green-400/60 shrink-0" />
           <div>
             <p className="text-sm font-semibold text-primary leading-none">{rust.version_count}</p>
-            <p className="text-[10px] text-muted mt-0.5">Versions sauvegardées</p>
+            <p className="text-[10px] text-muted mt-0.5">{t("Versions sauvegardées")}</p>
           </div>
         </div>
       </div>
@@ -206,7 +212,7 @@ export default function StatsPanel() {
       {/* ── Nuage de tags ─────────────────────────────────────────────────── */}
       {s.topTags.length > 0 && (
         <div className="flex flex-col gap-1.5">
-          <p className="text-[10px] text-muted uppercase tracking-wider">Tags les plus utilisés</p>
+          <p className="text-[10px] text-muted uppercase tracking-wider">{t("Tags les plus utilisés")}</p>
           <div className="flex flex-wrap gap-1.5 pb-1">
             {s.topTags.map(([tag, count]) => {
               const r = count / maxTag;
@@ -217,7 +223,7 @@ export default function StatsPanel() {
                 ? "bg-accent/10 border-accent/20 text-secondary"
                 : "bg-hover border-border text-muted";
               return (
-                <span key={tag} title={`${count} note${count !== 1 ? "s" : ""}`}
+                <span key={tag} title={notesCount(count)}
                   className={`rounded-full border font-medium transition-colors ${sz} ${col}`}>
                   #{tag}
                 </span>

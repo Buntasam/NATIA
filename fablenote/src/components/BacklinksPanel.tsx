@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { Link2, X } from "lucide-react";
 import { useStore } from "../store";
+import { useT } from "../i18n";
 
 interface SearchResult {
   id: string;
@@ -19,6 +20,7 @@ export default function BacklinksPanel({ onClose }: Props) {
   const { activeNote, selectNote, notes } = useStore();
   const [backlinks, setBacklinks] = useState<SearchResult[]>([]);
   const [loading, setLoading] = useState(false);
+  const t = useT();
 
   useEffect(() => {
     if (!activeNote) return;
@@ -51,10 +53,11 @@ export default function BacklinksPanel({ onClose }: Props) {
       <div className="flex items-center justify-between px-4 py-3 border-b border-border shrink-0">
         <div className="flex items-center gap-2">
           <Link2 size={15} className="text-accent" />
-          <span className="text-sm font-semibold">Liens</span>
+          <span className="text-sm font-semibold">{t("Liens")}</span>
         </div>
         <button
           onClick={onClose}
+          aria-label={t("Fermer")}
           className="p-1 rounded text-muted hover:text-primary hover:bg-hover transition-colors"
         >
           <X size={14} />
@@ -66,7 +69,7 @@ export default function BacklinksPanel({ onClose }: Props) {
         {outLinks.length > 0 && (
           <section>
             <p className="text-xs font-semibold text-muted uppercase tracking-wider mb-2">
-              Liens sortants ({outLinks.length})
+              {t("Liens sortants ({n})", { n: outLinks.length })}
             </p>
             <div className="space-y-1">
               {outLinks.map((title) => {
@@ -82,7 +85,7 @@ export default function BacklinksPanel({ onClose }: Props) {
                     }`}
                   >
                     [[{title}]]
-                    {!note && <span className="ml-2 text-xs text-muted">(introuvable)</span>}
+                    {!note && <span className="ml-2 text-xs text-muted">{t("(introuvable)")}</span>}
                   </button>
                 );
               })}
@@ -93,11 +96,11 @@ export default function BacklinksPanel({ onClose }: Props) {
         {/* Backlinks */}
         <section>
           <p className="text-xs font-semibold text-muted uppercase tracking-wider mb-2">
-            Backlinks ({loading ? "…" : backlinks.length})
+            {t("Backlinks ({n})", { n: loading ? "…" : backlinks.length })}
           </p>
-          {loading && <p className="text-xs text-muted px-3">Recherche…</p>}
+          {loading && <p className="text-xs text-muted px-3">{t("Recherche…")}</p>}
           {!loading && backlinks.length === 0 && (
-            <p className="text-xs text-muted px-3">Aucune note ne mentionne cette note</p>
+            <p className="text-xs text-muted px-3">{t("Aucune note ne mentionne cette note")}</p>
           )}
           <div className="space-y-1">
             {backlinks.map((n) => (
@@ -106,7 +109,7 @@ export default function BacklinksPanel({ onClose }: Props) {
                 onClick={() => selectNote(n.id)}
                 className="w-full text-left px-3 py-2 rounded-lg hover:bg-hover transition-colors"
               >
-                <p className="text-sm text-primary truncate">{n.title || "Sans titre"}</p>
+                <p className="text-sm text-primary truncate">{n.title || t("Sans titre")}</p>
                 {n.snippet && (
                   <p className="text-xs text-muted mt-0.5 line-clamp-2 leading-snug">{n.snippet}</p>
                 )}
@@ -117,7 +120,7 @@ export default function BacklinksPanel({ onClose }: Props) {
 
         {outLinks.length === 0 && !loading && backlinks.length === 0 && (
           <p className="text-xs text-muted text-center py-4">
-            Écris [[Titre d'une note]] pour créer un lien
+            {t("Écris [[Titre d'une note]] pour créer un lien")}
           </p>
         )}
       </div>

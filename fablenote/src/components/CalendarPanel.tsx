@@ -2,12 +2,20 @@ import { useEffect, useState } from "react";
 import { Bell, ChevronLeft, ChevronRight, X } from "lucide-react";
 import { invoke } from "@tauri-apps/api/core";
 import { useStore } from "../store";
+import { useLocale, useT } from "../i18n";
 
-const DAYS_FR = ["Lun", "Mar", "Mer", "Jeu", "Ven", "Sam", "Dim"];
-const MONTHS_FR = [
-  "Janvier", "Février", "Mars", "Avril", "Mai", "Juin",
-  "Juillet", "Août", "Septembre", "Octobre", "Novembre", "Décembre",
-];
+const capitalize = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
+
+/** Jours de la semaine (lundi en premier) dans la langue de l'interface. */
+function weekdayNames(loc: string): string[] {
+  // 1er janvier 2024 = lundi
+  return Array.from({ length: 7 }, (_, i) =>
+    capitalize(new Date(2024, 0, 1 + i).toLocaleDateString(loc, { weekday: "short" }).replace(".", "")));
+}
+
+function monthName(loc: string, year: number, month: number): string {
+  return capitalize(new Date(year, month, 1).toLocaleDateString(loc, { month: "long" }));
+}
 
 function sameDay(a: Date, b: Date) {
   return a.getFullYear() === b.getFullYear() &&
@@ -29,6 +37,8 @@ interface Props {
 
 export default function CalendarPanel({ onClose }: Props) {
   const { notes, selectNote, activeNote, createNote, updateNote } = useStore();
+  const t = useT();
+  const loc = useLocale();
   const today = new Date();
   const [view, setView] = useState(new Date(today.getFullYear(), today.getMonth(), 1));
   const [selected, setSelected] = useState<Date | null>(today);
@@ -75,8 +85,8 @@ export default function CalendarPanel({ onClose }: Props) {
 
   const handleAddReminder = async (date: Date) => {
     const iso = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}T09:00`;
-    const title = `Rappel du ${date.toLocaleDateString("fr", { day: "numeric", month: "long" })}`;
-    const html = `<div data-type="reminder" data-due="${iso}" data-done="false">Rappel</div>`;
+    const title = t("Rappel du {date}", { date: date.toLocaleDateString(loc, { day: "numeric", month: "long" }) });
+    const html = `<div data-type="reminder" data-due="${iso}" data-done="false">${t("Rappel")}</div>`;
     try {
       const note = await createNote();
       await updateNote(note.id, title, html, [], null);
@@ -97,15 +107,17 @@ export default function CalendarPanel({ onClose }: Props) {
           <div className="flex items-center gap-3">
             <button
               onClick={() => setView(new Date(year, month - 1, 1))}
+              aria-label={t("Mois précédent")}
               className="p-1 rounded text-muted hover:text-primary hover:bg-hover transition-colors"
             >
               <ChevronLeft size={16} />
             </button>
             <span className="font-semibold text-primary min-w-32 text-center">
-              {MONTHS_FR[month]} {year}
+              {monthName(loc, year, month)} {year}
             </span>
             <button
               onClick={() => setView(new Date(year, month + 1, 1))}
+              aria-label={t("Mois suivant")}
               className="p-1 rounded text-muted hover:text-primary hover:bg-hover transition-colors"
             >
               <ChevronRight size={16} />
@@ -116,9 +128,9 @@ export default function CalendarPanel({ onClose }: Props) {
               onClick={() => { setView(new Date(today.getFullYear(), today.getMonth(), 1)); setSelected(today); }}
               className="text-xs px-2 py-1 rounded bg-hover text-secondary hover:text-primary transition-colors"
             >
-              Aujourd'hui
+              {t("Aujourd'hui")}
             </button>
-            <button onClick={onClose} className="p-1 rounded text-muted hover:text-primary hover:bg-hover transition-colors">
+            <button onClick={onClose} aria-label={t("Fermer")} className="p-1 rounded text-muted hover:text-primary hover:bg-hover transition-colors">
               <X size={16} />
             </button>
           </div>
@@ -127,7 +139,7 @@ export default function CalendarPanel({ onClose }: Props) {
         {/* Grid */}
         <div className="px-4 pt-3 shrink-0">
           <div className="grid grid-cols-7 mb-1">
-            {DAYS_FR.map((d) => (
+            {weekdayNames(loc).map((d) => (
               <div key={d} className="text-center text-xs font-medium text-muted py-1">{d}</div>
             ))}
           </div>
@@ -177,25 +189,25 @@ export default function CalendarPanel({ onClose }: Props) {
             <>
               <div className="flex items-center justify-between mb-2">
                 <p className="text-xs font-semibold text-muted uppercase tracking-wider">
-                  {selected.toLocaleDateString("fr", { weekday: "long", day: "numeric", month: "long" })}
+                  {selected.toLocaleDateString(loc, { weekday: "long", day: "numeric", month: "long" })}
                 </p>
                 <button
                   onClick={() => handleAddReminder(selected)}
-                  title="Créer un rappel ce jour"
+                  title={t("Créer un rappel ce jour")}
                   className="flex items-center gap-1 text-[10px] px-2 py-1 rounded bg-hover text-muted hover:text-primary hover:bg-accent/10 hover:text-accent transition-colors"
                 >
                   <Bell size={10} />
-                  + Rappel
+                  {t("+ Rappel")}
                 </button>
               </div>
 
               {/* Reminders */}
               {selectedReminders.length > 0 && (
                 <div className="mb-2 space-y-1">
-                  <p className="text-[10px] text-orange-400 uppercase tracking-wider font-medium mb-1">Rappels</p>
+                  <p className="text-[10px] text-orange-400 uppercase tracking-wider font-medium mb-1">{t("Rappels")}</p>
                   {selectedReminders.map((r, i) => {
-                    const t = new Date(r.due_date);
-                    const time = t.toLocaleTimeString("fr", { hour: "2-digit", minute: "2-digit" });
+                    const due = new Date(r.due_date);
+                    const time = due.toLocaleTimeString(loc, { hour: "2-digit", minute: "2-digit" });
                     return (
                       <button
                         key={i}
@@ -215,11 +227,11 @@ export default function CalendarPanel({ onClose }: Props) {
 
               {/* Notes */}
               {selectedNotes.length === 0 && selectedReminders.length === 0 ? (
-                <p className="text-xs text-muted py-2">Aucune note ni rappel ce jour</p>
+                <p className="text-xs text-muted py-2">{t("Aucune note ni rappel ce jour")}</p>
               ) : selectedNotes.length > 0 && (
                 <>
                   {selectedReminders.length > 0 && (
-                    <p className="text-[10px] text-muted uppercase tracking-wider font-medium mb-1">Notes modifiées</p>
+                    <p className="text-[10px] text-muted uppercase tracking-wider font-medium mb-1">{t("Notes modifiées")}</p>
                   )}
                   <div className="space-y-1">
                     {selectedNotes.map((n) => (
@@ -230,7 +242,7 @@ export default function CalendarPanel({ onClose }: Props) {
                           activeNote?.id === n.id ? "bg-active" : "hover:bg-hover"
                         }`}
                       >
-                        <p className="text-sm text-primary truncate">{n.title || "Sans titre"}</p>
+                        <p className="text-sm text-primary truncate">{n.title || t("Sans titre")}</p>
                         {n.folder && (
                           <p className="text-xs text-muted truncate">📁 {n.folder}</p>
                         )}
@@ -246,10 +258,10 @@ export default function CalendarPanel({ onClose }: Props) {
         {/* Legend */}
         <div className="px-4 py-2 border-t border-border flex items-center gap-3 shrink-0">
           <span className="flex items-center gap-1 text-[10px] text-muted">
-            <span className="w-2 h-2 rounded-full bg-accent inline-block" /> Notes
+            <span className="w-2 h-2 rounded-full bg-accent inline-block" /> {t("Notes")}
           </span>
           <span className="flex items-center gap-1 text-[10px] text-muted">
-            <span className="w-2 h-2 rounded-full bg-orange-400 inline-block" /> Rappels
+            <span className="w-2 h-2 rounded-full bg-orange-400 inline-block" /> {t("Rappels")}
           </span>
         </div>
       </div>

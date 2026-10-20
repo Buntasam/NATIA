@@ -58,7 +58,7 @@ L'installeur n'est pas signé : Windows SmartScreen affiche « Windows a protég
 - **Quick open** — `Ctrl+P` pour ouvrir une note par son nom
 
 ### Historique
-- **Versions** — chaque enregistrement crée une version (200 par note) ; comparaison et restauration
+- **Versions** — enregistrements automatiques regroupés par tranches de 5 minutes, 200 versions par note ; comparaison et restauration
 
 ### Sécurité et données
 - **Chiffrement AES-256-GCM** — notes, titres, tags, dossiers, versions, paramètres, clés API et mémoire IA
@@ -73,7 +73,10 @@ L'installeur n'est pas signé : Windows SmartScreen affiche « Windows a protég
 ### Divers
 - **Post-its de l'écran de verrouillage**, redimensionnables et masquables (non chiffrés)
 - **Enregistreur vocal** avec transcription par l'IA
+- **Français ou anglais** — interface, manuel et prompts IA par défaut (Paramètres → Apparence → Langue)
 - **Manuel intégré** (Paramètres → Manuel) — installer Ollama, une clé API ou Claude Code CLI, et utiliser l'app pas à pas
+- **Icône près de l'horloge** — fermer la fenêtre garde NATIA active pour les rappels ; lancement avec Windows en option
+- **Export d'une note** en Markdown, texte, HTML ou PDF
 - **Statistiques**, **thèmes**, **dé à 20 faces**
 - **Mises à jour automatiques**
 
@@ -109,7 +112,7 @@ L'installeur n'est pas signé : Windows SmartScreen affiche « Windows a protég
 | Chiffrement | aes-gcm (AES-256-GCM), argon2 (Argon2id), keyring (coffre Windows), zip (export AES-256) |
 | Base de données | SQLite |
 | IA | Ollama · Claude API · OpenAI · Gemini · Mistral · Claude CLI |
-| Plugins Tauri | notification, dialog, opener, updater |
+| Plugins Tauri | notification, dialog, opener, updater, single-instance, autostart |
 | Build | Vite 5, GitHub Actions |
 
 ---

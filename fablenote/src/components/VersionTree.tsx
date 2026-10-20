@@ -5,6 +5,7 @@ import DOMPurify from "dompurify";
 import { useStore } from "../store";
 import { Version } from "../types";
 import * as Diff from "diff";
+import { msg, tr, useLocale, useT } from "../i18n";
 
 const VERSION_LIMIT_OPTIONS: Array<{ label: string; value: number | null }> = [
   { label: "10", value: 10 },
@@ -14,6 +15,20 @@ const VERSION_LIMIT_OPTIONS: Array<{ label: string; value: number | null }> = [
   { label: "100", value: 100 },
   { label: "∞", value: null },
 ];
+
+// Libellés écrits par le backend (en français) : traduits à l'affichage.
+const VERSION_MESSAGES: [RegExp, string][] = [
+  [/^Modifier : (.*)$/s, "Modifier : {0}"],
+  [/^Restauré \((.*)\)$/, "Restauré ({0})"],
+];
+
+function trVersionMessage(message: string): string {
+  for (const [re, key] of VERSION_MESSAGES) {
+    const m = message.match(re);
+    if (m) return tr(key, { 0: m[1] });
+  }
+  return tr(message);
+}
 
 export default function VersionTree() {
   const {
@@ -28,11 +43,15 @@ export default function VersionTree() {
   const [versionContent, setVersionContent] = useState<string>("");
   const [showDiff, setShowDiff] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
+  // confirm() ne s'affiche pas dans Tauri : confirmation par un second clic.
+  const [confirmRestore, setConfirmRestore] = useState(false);
+  const t = useT();
+  const loc = useLocale();
 
   const formatDate = (dateStr: string) => {
     try {
       const d = new Date(dateStr);
-      return d.toLocaleString("fr", {
+      return d.toLocaleString(loc, {
         day: "2-digit",
         month: "short",
         hour: "2-digit",
@@ -46,6 +65,7 @@ export default function VersionTree() {
   const selectVersion = async (version: Version) => {
     if (!activeNote) return;
     setSelectedVersion(version);
+    setConfirmRestore(false);
     setIsLoading(true);
     try {
       const content = await invoke<string>("get_version_content", {
@@ -72,7 +92,12 @@ export default function VersionTree() {
 
   const handleRestore = async () => {
     if (!activeNote || !selectedVersion) return;
-    if (!confirm(`Restaurer la version "${selectedVersion.message}" ?`)) return;
+    if (!confirmRestore) {
+      setConfirmRestore(true);
+      setTimeout(() => setConfirmRestore(false), 4000);
+      return;
+    }
+    setConfirmRestore(false);
     await restoreVersion(activeNote.id, selectedVersion.hash);
     setSelectedVersion(null);
     setVersionContent("");
@@ -95,13 +120,14 @@ export default function VersionTree() {
       <div className="flex items-center justify-between px-4 py-3 border-b border-border shrink-0">
         <div className="flex items-center gap-2">
           <GitBranch size={14} className="text-accent" />
-          <span className="text-sm font-medium text-primary">Versions</span>
+          <span className="text-sm font-medium text-primary">{t("Versions")}</span>
           {versions.length > 0 && (
             <span className="text-xs text-muted">({versions.length})</span>
           )}
         </div>
         <button
           onClick={toggleVersionPanel}
+          aria-label={t("Fermer")}
           className="text-muted hover:text-primary transition-colors"
         >
           <X size={15} />
@@ -114,8 +140,8 @@ export default function VersionTree() {
           {versions.length === 0 && (
             <div className="py-8 text-center">
               <Clock size={24} className="text-muted mx-auto mb-2" />
-              <p className="text-xs text-muted">Aucune version</p>
-              <p className="text-xs text-muted mt-1">Les versions s'accumulent automatiquement</p>
+              <p className="text-xs text-muted">{t("Aucune version")}</p>
+              <p className="text-xs text-muted mt-1">{t("Les versions s'accumulent automatiquement")}</p>
             </div>
           )}
 
@@ -147,7 +173,7 @@ export default function VersionTree() {
 
               {/* Content */}
               <div className="flex-1 min-w-0 pb-2">
-                <p className="text-xs font-medium text-primary truncate">{v.message}</p>
+                <p className="text-xs font-medium text-primary truncate">{trVersionMessage(v.message)}</p>
                 <p className="text-xs text-muted mt-0.5">{formatDate(v.date)}</p>
                 <p className="text-xs text-muted font-mono">{v.short_hash}</p>
               </div>
@@ -168,7 +194,7 @@ export default function VersionTree() {
                     : "bg-hover text-secondary hover:text-primary"
                 }`}
               >
-                Diff
+                {t("Différences")}
               </button>
               <button
                 onClick={() => setShowDiff(false)}
@@ -178,22 +204,22 @@ export default function VersionTree() {
                     : "bg-hover text-secondary hover:text-primary"
                 }`}
               >
-                Aperçu
+                {t("Aperçu")}
               </button>
               <div className="flex-1" />
               <button
                 onClick={handleRestore}
-                className="flex items-center gap-1.5 text-xs px-2.5 py-1 rounded-lg bg-accent hover:bg-accent-hover text-white transition-colors"
+                className={`flex items-center gap-1.5 text-xs px-2.5 py-1 rounded-lg text-white transition-colors ${confirmRestore ? "bg-red-500 hover:bg-red-600" : "bg-accent hover:bg-accent-hover"}`}
               >
                 <RotateCcw size={11} />
-                Restaurer
+                {confirmRestore ? t("Confirmer la restauration") : t("Restaurer")}
               </button>
             </div>
 
             {/* Content area */}
             <div className="flex-1 overflow-y-auto px-3 py-3">
               {isLoading ? (
-                <p className="text-xs text-muted text-center py-4">Chargement…</p>
+                <p className="text-xs text-muted text-center py-4">{t("Chargement…")}</p>
               ) : showDiff ? (
                 <div className="text-xs leading-relaxed font-mono">
                   {diffParts.map((part, i) => (
@@ -228,7 +254,7 @@ export default function VersionTree() {
         {/* Version limit */}
         <div>
           <p className="text-[10px] font-semibold text-muted uppercase tracking-wider mb-1.5">
-            Versions conservées / note
+            {t("Versions conservées / note")}
           </p>
           <div className="flex gap-1 flex-wrap">
             {VERSION_LIMIT_OPTIONS.map(({ label, value }) => (
@@ -247,7 +273,7 @@ export default function VersionTree() {
           </div>
           {versionLimit !== null && versions.length > versionLimit && (
             <p className="text-[10px] text-muted mt-1">
-              {versions.length - versionLimit} version(s) masquée(s)
+              {t("{n} version(s) masquée(s)", { n: versions.length - versionLimit })}
             </p>
           )}
         </div>
@@ -255,13 +281,13 @@ export default function VersionTree() {
         {/* Save mode */}
         <div>
           <p className="text-[10px] font-semibold text-muted uppercase tracking-wider mb-1.5">
-            Mode de sauvegarde
+            {t("Mode de sauvegarde")}
           </p>
           <div className="flex flex-col gap-0.5">
             {([
-              { val: "balanced", label: "Équilibré", desc: "toutes les 5s + Ctrl+S" },
-              { val: "auto",     label: "Automatique", desc: "toutes les 1.5s" },
-              { val: "manual",   label: "Manuel uniquement", desc: "Ctrl+S ou bouton" },
+              { val: "balanced", label: msg("Équilibré"), desc: msg("toutes les 5 s + Ctrl+S") },
+              { val: "auto",     label: msg("Automatique"), desc: msg("toutes les 1,5 s") },
+              { val: "manual",   label: msg("Manuel uniquement"), desc: msg("Ctrl+S ou bouton") },
             ] as const).map(({ val, label, desc }) => (
               <button
                 key={val}
@@ -276,8 +302,8 @@ export default function VersionTree() {
                   saveMode === val ? "bg-accent border-accent" : "border-border"
                 }`} />
                 <div className="min-w-0">
-                  <span className="text-xs font-medium block leading-tight">{label}</span>
-                  <span className={`text-[10px] leading-tight ${saveMode === val ? "text-accent/70" : "text-muted"}`}>{desc}</span>
+                  <span className="text-xs font-medium block leading-tight">{t(label)}</span>
+                  <span className={`text-[10px] leading-tight ${saveMode === val ? "text-accent/70" : "text-muted"}`}>{t(desc)}</span>
                 </div>
               </button>
             ))}

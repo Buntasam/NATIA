@@ -2,6 +2,7 @@ import { useState, useRef } from "react";
 import { Node, mergeAttributes } from "@tiptap/core";
 import { NodeViewWrapper, NodeViewContent, ReactNodeViewRenderer } from "@tiptap/react";
 import { GripVertical, Pin, PinOff } from "lucide-react";
+import { useT } from "../i18n";
 
 const POSTIT_COLORS = [
   "#fef08a",
@@ -26,6 +27,7 @@ function PostItView({
   const attrY    = (node.attrs.y as number) || 0;
 
   const [localPos, setLocalPos] = useState<{ x: number; y: number } | null>(null);
+  const t = useT();
   const dragStart = useRef<{ px: number; py: number; nx: number; ny: number } | null>(null);
 
   const posX = localPos ? localPos.x : attrX;
@@ -94,7 +96,7 @@ function PostItView({
               onPointerDown={handleDragStart}
               onPointerMove={handleDragMove}
               onPointerUp={handleDragEnd}
-              title="Déplacer"
+              title={t("Déplacer")}
             >
               <GripVertical size={13} />
             </div>
@@ -122,7 +124,7 @@ function PostItView({
           <button
             onClick={toggleFloat}
             className="postit-float-btn"
-            title={floating ? "Ancrer dans le texte" : "Mode flottant"}
+            title={floating ? t("Ancrer dans le texte") : t("Mode flottant")}
           >
             {floating ? <Pin size={12} /> : <PinOff size={12} />}
           </button>

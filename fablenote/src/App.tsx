@@ -3,12 +3,14 @@ import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { isPermissionGranted, sendNotification } from "@tauri-apps/plugin-notification";
 import { lockSafely } from "./lib/lockSafely";
+import { isCloseToTray } from "./lib/windowPrefs";
 import { checkForUpdate, isAutoUpdateEnabled } from "./lib/updater";
 import { useStore } from "./store";
 import Layout from "./components/Layout";
 import Disclaimer from "./components/Disclaimer";
 import LockScreen from "./components/LockScreen";
 import CloseOverlay, { waitForCloseConfirm, callSaveNow } from "./components/CloseOverlay";
+import { tr } from "./i18n";
 
 export default function App() {
   const { loadNotes, loadSettings, loadFolders, loadColors, loadMemoryNodes, theme, setTheme, isDark, checkSecurity, isLocked, hasPassword } = useStore();
@@ -49,7 +51,7 @@ export default function App() {
     checkForUpdate()
       .then(async (u) => {
         if (!u || !(await isPermissionGranted())) return;
-        sendNotification({ title: `NATIA ${u.version} est disponible`, body: "Paramètres → Application → Mises à jour" });
+        sendNotification({ title: tr("NATIA {v} est disponible", { v: u.version }), body: tr("Paramètres → Application → Mises à jour") });
       })
       .catch(() => {});
   }, []);
@@ -60,45 +62,53 @@ export default function App() {
     return () => { unlisten.then((fn) => fn()); };
   }, []);
 
-  // Close handler always active regardless of lock state
+  // Fermeture : cache la fenêtre (zone de notification) ou quitte après avoir enregistré.
+  // Actif que l'app soit verrouillée ou non.
   useEffect(() => {
-    let unlisten: (() => void) | undefined;
+    let quitting = false;
 
+    const quit = async () => {
+      if (quitting) return;
+      quitting = true;
+      const { setIsConfirmingClose, setIsClosingApp, setCloseOverlayDone, isLocked: locked } = useStore.getState();
+      setIsConfirmingClose(true);
+      const confirmed = await waitForCloseConfirm();
+      setIsConfirmingClose(false);
+      if (!confirmed) { quitting = false; return; }
+
+      setIsClosingApp(true);
+      if (!locked) {
+        // Vide le délai d'enregistrement de TipTap puis attend la fin de l'enregistrement.
+        callSaveNow();
+        await new Promise<void>((resolve) => {
+          setTimeout(() => {
+            if (!useStore.getState().isSaving) { resolve(); return; }
+            const check = setInterval(() => {
+              if (!useStore.getState().isSaving) { clearInterval(check); resolve(); }
+            }, 50);
+            setTimeout(() => { clearInterval(check); resolve(); }, 5000);
+          }, 100);
+        });
+      }
+      setCloseOverlayDone(true);
+      await new Promise<void>((r) => setTimeout(r, locked ? 400 : 1200));
+      invoke("exit_app");
+    };
+
+    const unlisteners: Promise<() => void>[] = [listen("tray-quit", () => { quit(); })];
     import("@tauri-apps/api/window").then(({ getCurrentWindow }) => {
-      const win = getCurrentWindow();
-      win.onCloseRequested(async (event) => {
+      unlisteners.push(getCurrentWindow().onCloseRequested(async (event) => {
         event.preventDefault();
-
-        const { setIsConfirmingClose, setIsClosingApp, setCloseOverlayDone, isLocked: locked } = useStore.getState();
-        setIsConfirmingClose(true);
-        const confirmed = await waitForCloseConfirm();
-        setIsConfirmingClose(false);
-
-        if (!confirmed) return;
-
-        setIsClosingApp(true);
-
-        if (!locked) {
-          // Flush the TipTap debounce then wait for save to finish
+        if (isCloseToTray()) {
           callSaveNow();
-          await new Promise<void>((resolve) => {
-            setTimeout(() => {
-              if (!useStore.getState().isSaving) { resolve(); return; }
-              const check = setInterval(() => {
-                if (!useStore.getState().isSaving) { clearInterval(check); resolve(); }
-              }, 50);
-              setTimeout(() => { clearInterval(check); resolve(); }, 5000);
-            }, 100);
-          });
+          invoke("hide_main_window").catch(() => {});
+          return;
         }
-
-        setCloseOverlayDone(true);
-        await new Promise<void>((r) => setTimeout(r, locked ? 400 : 1200));
-        invoke("exit_app");
-      }).then((fn) => { unlisten = fn; });
+        quit();
+      }));
     });
 
-    return () => { unlisten?.(); };
+    return () => { unlisteners.forEach((u) => u.then((fn) => fn())); };
   }, []);
 
   return (

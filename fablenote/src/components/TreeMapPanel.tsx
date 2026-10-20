@@ -1,6 +1,7 @@
 import { X, Folder, FileText, Network } from "lucide-react";
 import { useStore } from "../store";
 import { NoteMetadata } from "../types";
+import { useT } from "../i18n";
 
 const INDENT = 20;
 
@@ -197,6 +198,7 @@ function FolderRows({
 export default function TreeMapPanel({ onClose }: { onClose: () => void }) {
   const { notes, folders, itemColors, selectNote } = useStore();
   const { root, rootNotes } = buildTree(notes, folders);
+  const t = useT();
 
   const handleNote = async (id: string) => {
     await selectNote(id);
@@ -215,14 +217,15 @@ export default function TreeMapPanel({ onClose }: { onClose: () => void }) {
         {/* Header */}
         <div className="px-5 py-3.5 border-b border-border flex items-center gap-3 shrink-0">
           <Network size={15} className="text-accent" />
-          <span className="text-sm font-semibold text-primary">Arborescence</span>
+          <span className="text-sm font-semibold text-primary">{t("Arborescence")}</span>
           <span className="text-xs text-muted">
-            {notes.length} note{notes.length !== 1 ? "s" : ""} ·{" "}
-            {folders.length} dossier{folders.length !== 1 ? "s" : ""}
+            {notes.length === 1 ? t("{n} note", { n: 1 }) : t("{n} notes", { n: notes.length })} ·{" "}
+            {folders.length === 1 ? t("{n} dossier", { n: 1 }) : t("{n} dossiers", { n: folders.length })}
           </span>
           <div className="flex-1" />
           <button
             onClick={onClose}
+            aria-label={t("Fermer")}
             className="p-1.5 rounded text-muted hover:text-primary hover:bg-hover transition-colors"
           >
             <X size={15} />
@@ -232,7 +235,7 @@ export default function TreeMapPanel({ onClose }: { onClose: () => void }) {
         {/* Tree */}
         <div className="flex-1 overflow-y-auto p-4">
           {notes.length === 0 && folders.length === 0 ? (
-            <p className="text-muted text-sm text-center py-8">Aucune note</p>
+            <p className="text-muted text-sm text-center py-8">{t("Aucune note")}</p>
           ) : (
             <>
               {root.children.map((folder, i) => (

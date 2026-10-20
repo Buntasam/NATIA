@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { getVersion } from "@tauri-apps/api/app";
@@ -34,6 +34,7 @@ import { OpButton } from "./ai/OpButton";
 import { TraceRow } from "./ai/TraceRow";
 import { aiChat, aiStream, activeModel } from "../lib/aiInvoke";
 import { buildMemoryContext } from "../lib/memoryContext";
+import { locale, msg, tr, trError, useT } from "../i18n";
 import { useStore } from "../store";
 import Tip from "./Tooltip";
 import DebugConsole from "./DebugConsole";
@@ -113,12 +114,27 @@ function defaultModelForProvider(provider: string): string {
 
 // Niveaux de longueur des réponses — jauge signal compacte
 const INTENSITY: { key: "eco" | "low" | "medium" | "high" | "max"; label: string; color: string; desc: string }[] = [
-  { key: "eco",    label: "Éco",      color: "#22c55e", desc: "Ultra-court — 1 à 2 phrases" },
-  { key: "low",    label: "Concis",   color: "#2dd4bf", desc: "Court — 3 à 5 phrases" },
-  { key: "medium", label: "Normal",   color: "#d97757", desc: "Longueur standard" },
-  { key: "high",   label: "Détaillé", color: "#fb923c", desc: "Développé avec contexte" },
-  { key: "max",    label: "Complet",  color: "#f87171", desc: "Exhaustif et structuré" },
+  { key: "eco",    label: msg("Éco"),      color: "#22c55e", desc: msg("Ultra-court — 1 à 2 phrases") },
+  { key: "low",    label: msg("Concis"),   color: "#2dd4bf", desc: msg("Court — 3 à 5 phrases") },
+  { key: "medium", label: msg("Normal"),   color: "#d97757", desc: msg("Longueur standard") },
+  { key: "high",   label: msg("Détaillé"), color: "#fb923c", desc: msg("Développé avec contexte") },
+  { key: "max",    label: msg("Complet"),  color: "#f87171", desc: msg("Exhaustif et structuré") },
 ];
+
+// Langues proposées pour « Traduire » (noms français = identifiants, traduits à l'affichage).
+const TRANSLATE_LANGS = [
+  msg("français"), msg("anglais"), msg("espagnol"), msg("allemand"), msg("italien"),
+  msg("portugais"), msg("japonais"), msg("chinois"), msg("arabe"), msg("russe"),
+];
+
+const capitalize = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
+
+/** Libellé affiché d'une opération (identifiants internes en français). */
+const OP_LABELS: Record<string, string> = {
+  Résumer: msg("Résumer"), Corriger: msg("Corriger"), Renommer: msg("Renommer"), Trier: msg("Trier"),
+  Formaliser: msg("Formaliser"), Traduire: msg("Traduire"), Continuer: msg("Continuer"),
+  "Appliquer tri": msg("Appliquer tri"), "Chat debug": msg("Chat debug"),
+};
 
 function detectProvider(key: string): string {
   if (key.startsWith("sk-ant-")) return "Anthropic";
@@ -132,11 +148,14 @@ function detectProvider(key: string): string {
 export default function AiPanel({ onOpenConv }: { onOpenConv: () => void }) {
   const { activeNote, settings, saveSettings, folders, toggleAiPanel, updateNote, renameNote, moveNote, createFolder, loadNotes, loadFolders, memoryEnabled, memoryNodes } = useStore();
   const memoryActive = memoryEnabled && memoryNodes.length > 0;
+  const t = useT();
+  const opLabel = (op: string) => t(OP_LABELS[op] ?? op);
 
   const [activeTab, setActiveTab] = useState<Tab>("ops");
   const [models, setModels] = useState<string[]>([]);
   const [selectedModel, setSelectedModel] = useState(settings.default_model);
   const [shadowPrompt, setShadowPrompt] = useState(settings.global_shadow_prompt);
+  useEffect(() => { setShadowPrompt(settings.global_shadow_prompt); }, [settings.global_shadow_prompt]);
   const [localProvider, setLocalProvider] = useState(settings.ai_provider);
   // Connection-based routing
   const [apiConnections, setApiConnections] = useState<ApiKey[]>([]);
@@ -163,7 +182,7 @@ export default function AiPanel({ onOpenConv }: { onOpenConv: () => void }) {
   }, [settings.debug_mode]);
 
   const logError = (op: string, msg: string) => {
-    const time = new Date().toLocaleTimeString("fr-FR");
+    const time = new Date().toLocaleTimeString(locale());
     setErrorLog((prev) => [{ time, op, msg }, ...prev].slice(0, 100));
     addAiLog(`✗ ${op}`, msg);
   };
@@ -173,7 +192,7 @@ export default function AiPanel({ onOpenConv }: { onOpenConv: () => void }) {
   const activeConnectionInfo = apiConnections.find((c) => c.id === activeConnectionId);
   // Les connexions par clé API visent toujours un service en ligne ; seul Ollama reste local.
   const onlineService = isConnectionActive
-    ? activeConnectionInfo?.provider || activeConnectionInfo?.name || "un service en ligne"
+    ? activeConnectionInfo?.provider || activeConnectionInfo?.name || t("un service en ligne")
     : onlineProviderLabel(localProvider);
 
   useEffect(() => {
@@ -215,15 +234,6 @@ export default function AiPanel({ onOpenConv }: { onOpenConv: () => void }) {
     return aiStream(effectiveSettings, sys, msg, trimmedHistory, selectedModel);
   };
 
-  const activeConnectionLabel = (): string => {
-    if (isConnectionActive) {
-      const c = apiConnections.find(c => c.id === activeConnectionId);
-      return c ? `${c.name} (${c.provider})` : "Connexion";
-    }
-    if (localProvider === "ollama") return `Ollama · ${selectedModel}`;
-    if (localProvider === "claude_cli") return "Claude CLI";
-    return localProvider;
-  };
   const [showShadow, setShowShadow] = useState(false);
   const [response, setResponse] = useState("");
   const [isRunning, setIsRunning] = useState(false);
@@ -269,20 +279,20 @@ export default function AiPanel({ onOpenConv }: { onOpenConv: () => void }) {
       setResponseOp("summarize");
     } catch (e: unknown) {
       stopTimer();
-      const msg = e instanceof Error ? e.message : String(e);
+      const msg = e instanceof Error ? e.message : trError(e);
       setLastTrace({ ...traceBase, error: msg, elapsed: Math.round((Date.now() - startTimeRef.current) / 100) / 10, status: "error" });
-      setError(`Erreur : ${msg}`);
+      setError(t("Erreur : {e}", { e: msg }));
       logError("Résumer", msg);
     } finally { setIsRunning(false); setActiveOp(null); }
   };
 
   const insertSummary = async () => {
     if (!activeNote || !response) return;
-    const summaryHtml = `<blockquote><p><strong>Résumé :</strong> ${response.trim()}</p></blockquote>`;
+    const summaryHtml = `<blockquote><p><strong>${t("Résumé :")}</strong> ${response.trim()}</p></blockquote>`;
     const newContent = summaryHtml + (activeNote.content || "");
     await updateNote(activeNote.id, activeNote.title, newContent, activeNote.tags, activeNote.folder, "Résumé IA");
     setResponse(""); setResponseOp(null);
-    setAppliedMsg("✓ Résumé inséré en début de note");
+    setAppliedMsg(t("✓ Résumé inséré en début de note"));
     setTimeout(() => setAppliedMsg(""), 2500);
   };
 
@@ -302,7 +312,7 @@ export default function AiPanel({ onOpenConv }: { onOpenConv: () => void }) {
       setQuickResponse(result);
       setQuickInput("");
     } catch (e: unknown) {
-      setQuickResponse(`Erreur : ${e instanceof Error ? e.message : String(e)}`);
+      setQuickResponse(t("Erreur : {e}", { e: e instanceof Error ? e.message : trError(e) }));
     } finally {
       setQuickLoading(false);
     }
@@ -450,17 +460,17 @@ export default function AiPanel({ onOpenConv }: { onOpenConv: () => void }) {
 
       if (onSuccess) {
         await onSuccess(result);
-        setAppliedMsg("✓ Appliqué");
+        setAppliedMsg(t("✓ Appliqué"));
         setTimeout(() => setAppliedMsg(""), 2500);
       } else {
         setResponse(result);
       }
     } catch (e: unknown) {
       stopTimer();
-      const msg = e instanceof Error ? e.message : String(e);
+      const msg = e instanceof Error ? e.message : trError(e);
       const elapsed = Math.round((Date.now() - startTimeRef.current) / 100) / 10;
       setLastTrace({ ...traceBase, error: msg, elapsed, status: "error" });
-      setError(`Erreur : ${msg}`);
+      setError(t("Erreur : {e}", { e: msg }));
       logError(opLabel, msg);
     } finally {
       setIsRunning(false);
@@ -515,10 +525,10 @@ export default function AiPanel({ onOpenConv }: { onOpenConv: () => void }) {
       setPendingCorrection({ original: plainText, proposed: result, html });
     } catch (e: unknown) {
       stopTimer();
-      const msg = e instanceof Error ? e.message : String(e);
+      const msg = e instanceof Error ? e.message : trError(e);
       const elapsed = Math.round((Date.now() - startTimeRef.current) / 100) / 10;
       setLastTrace({ ...traceBase, error: msg, elapsed, status: "error" });
-      setError(`Erreur : ${msg}`);
+      setError(t("Erreur : {e}", { e: msg }));
       logError("Corriger", msg);
     } finally {
       setIsRunning(false);
@@ -536,14 +546,14 @@ export default function AiPanel({ onOpenConv }: { onOpenConv: () => void }) {
   const extractJson = (raw: string): string => {
     let s = raw.replace(/```(?:json)?/gi, "").replace(/```/g, "").trim();
     const start = s.indexOf("[");
-    if (start === -1) throw new Error("Pas de tableau JSON trouvé. Réponse reçue : " + s.slice(0, 300));
+    if (start === -1) throw new Error(tr("Pas de tableau JSON trouvé. Réponse reçue : {r}", { r: s.slice(0, 300) }));
     let depth = 0;
     let end = -1;
     for (let i = start; i < s.length; i++) {
       if (s[i] === "[") depth++;
       else if (s[i] === "]") { depth--; if (depth === 0) { end = i; break; } }
     }
-    if (end === -1) throw new Error("Tableau JSON non fermé");
+    if (end === -1) throw new Error(tr("Tableau JSON non fermé"));
     return s.slice(start, end + 1);
   };
 
@@ -573,11 +583,11 @@ export default function AiPanel({ onOpenConv }: { onOpenConv: () => void }) {
       await loadNotes();
       await loadFolders();
       setSortProposals([]);
-      setAppliedMsg(`✓ ${toApply.length} note(s) déplacée(s)`);
+      setAppliedMsg(t("✓ {n} note(s) déplacée(s)", { n: toApply.length }));
       setTimeout(() => setAppliedMsg(""), 3000);
     } catch (e: unknown) {
-      const msg = e instanceof Error ? e.message : String(e);
-      setError(`Erreur : ${msg}`);
+      const msg = e instanceof Error ? e.message : trError(e);
+      setError(t("Erreur : {e}", { e: msg }));
       logError("Appliquer tri", msg);
     } finally {
       setIsRunning(false);
@@ -617,29 +627,31 @@ export default function AiPanel({ onOpenConv }: { onOpenConv: () => void }) {
 
     const folderList = folders.length > 0
       ? folders.map((f, i) => `  ${i + 1}. "${f}"`).join("\n")
-      : "  (aucun dossier existant)";
+      : `  ${tr("(aucun dossier existant)")}`;
 
     const notesList = fullNotes
       .map((n, i) => {
         const snippet = stripHtml(n.content ?? "").slice(0, 250);
-        let block = `NOTE ${i + 1}\nid: ${n.id}\ntitre: "${n.title}"`;
-        if (snippet) block += `\ncontenu: ${snippet}`;
+        let block = `NOTE ${i + 1}\nid: ${n.id}\n${tr("titre")}: "${n.title}"`;
+        if (snippet) block += `\n${tr("contenu")}: ${snippet}`;
         return block;
       })
       .join("\n\n");
 
-    const sortSystem = `Tu es un assistant de classement de notes scolaires ou personnelles. Tu dois associer chaque note au dossier thématique le plus approprié, en te basant sur le titre et le contenu. Ne te trompe pas : une note sur les mathématiques va dans le dossier mathématiques, une note sur l'histoire va dans le dossier histoire, etc. Réponds uniquement en JSON valide, sans aucun autre texte.`;
+    const sortSystem = tr("Tu es un assistant de classement de notes scolaires ou personnelles. Tu dois associer chaque note au dossier thématique le plus approprié, en te basant sur le titre et le contenu. Ne te trompe pas : une note sur les mathématiques va dans le dossier mathématiques, une note sur l'histoire va dans le dossier histoire, etc. Réponds uniquement en JSON valide, sans aucun autre texte.");
 
-    const instruction = `DOSSIERS DISPONIBLES (utilise exactement ces noms si le sujet correspond) :
-${folderList}
-
-NOTES À CLASSER :
-${notesList}
-
-CONSIGNE : Pour chaque note, identifie le sujet principal (maths, histoire, physique, etc.) et choisis le dossier correspondant dans la liste ci-dessus. Si aucun dossier ne correspond, propose un nom court et descriptif. Ne mets jamais une note dans un mauvais dossier : une note sur les maths va dans le dossier maths, pas ailleurs.
-
-Réponds UNIQUEMENT avec ce JSON (rien d'autre, pas de texte, pas de \`\`\`) :
-[{"id":"ID_EXACT_DE_LA_NOTE","folder":"NomDuDossier"},...]`;
+    const instruction = [
+      tr("DOSSIERS DISPONIBLES (utilise exactement ces noms si le sujet correspond) :"),
+      folderList,
+      "",
+      tr("NOTES À CLASSER :"),
+      notesList,
+      "",
+      tr("CONSIGNE : Pour chaque note, identifie le sujet principal (maths, histoire, physique, etc.) et choisis le dossier correspondant dans la liste ci-dessus. Si aucun dossier ne correspond, propose un nom court et descriptif. Ne mets jamais une note dans un mauvais dossier : une note sur les maths va dans le dossier maths, pas ailleurs."),
+      "",
+      tr("Réponds UNIQUEMENT avec ce JSON (rien d'autre, pas de texte, pas de ```) :"),
+      `[{"id":"${tr("ID_EXACT_DE_LA_NOTE")}","folder":"${tr("NomDuDossier")}"},...]`,
+    ].join("\n");
 
     const fullMessage = instruction;
     const truncatedUser = fullMessage.length > 1500 ? fullMessage.substring(0, 1500) + "…" : fullMessage;
@@ -680,21 +692,21 @@ Réponds UNIQUEMENT avec ce JSON (rien d'autre, pas de texte, pas de \`\`\`) :
           }
         }
         if (proposals.length === 0) {
-          setAppliedMsg("✓ Toutes les notes sont déjà bien placées");
+          setAppliedMsg(t("✓ Toutes les notes sont déjà bien placées"));
           setTimeout(() => setAppliedMsg(""), 3000);
         } else {
           setSortProposals(proposals);
         }
       } catch (parseErr: unknown) {
         const detail = parseErr instanceof Error ? parseErr.message : String(parseErr);
-        setError(`L'IA n'a pas retourné du JSON valide — ${detail}`);
+        setError(t("L'IA n'a pas retourné du JSON valide — {d}", { d: detail }));
       }
     } catch (e: unknown) {
       stopTimer();
-      const msg = e instanceof Error ? e.message : String(e);
+      const msg = e instanceof Error ? e.message : trError(e);
       const elapsed = Math.round((Date.now() - startTimeRef.current) / 100) / 10;
       setLastTrace({ ...traceBase, error: msg, elapsed, status: "error" });
-      setError(`Erreur : ${msg}`);
+      setError(t("Erreur : {e}", { e: msg }));
       logError("Trier", msg);
     } finally {
       setIsRunning(false);
@@ -722,9 +734,9 @@ Réponds UNIQUEMENT avec ce JSON (rien d'autre, pas de texte, pas de \`\`\`) :
       setPendingFormalize({ original: plainText, proposed: result, html });
     } catch (e: unknown) {
       stopTimer();
-      const msg = e instanceof Error ? e.message : String(e);
+      const msg = e instanceof Error ? e.message : trError(e);
       setLastTrace({ ...traceBase, error: msg, elapsed: Math.round((Date.now() - startTimeRef.current) / 100) / 10, status: "error" });
-      setError(`Erreur : ${msg}`);
+      setError(t("Erreur : {e}", { e: msg }));
       logError("Formaliser", msg);
     } finally { setIsRunning(false); setActiveOp(null); }
   };
@@ -734,8 +746,10 @@ Réponds UNIQUEMENT avec ce JSON (rien d'autre, pas de texte, pas de \`\`\`) :
     setError(""); setResponse(""); setAppliedMsg(""); setResponseOp(null);
     setIsRunning(true); setActiveOp("Traduire");
     const plainText = getPlainText();
-    const fromPart = translateFrom !== "auto" ? `du ${translateFrom} ` : "";
-    const fullMessage = `Traduis le texte suivant ${fromPart}en ${translateLang}. ${settings.translate_prompt}\n\n${plainText}`;
+    const instructionLine = translateFrom !== "auto"
+      ? tr("Traduis le texte suivant du {from} en {to}.", { from: tr(translateFrom), to: tr(translateLang) })
+      : tr("Traduis le texte suivant en {to}.", { to: tr(translateLang) });
+    const fullMessage = `${instructionLine} ${settings.translate_prompt}\n\n${plainText}`;
     const traceBase: TraceEntry = {
       operation: "Traduire", model: activeModel(effectiveSettings, selectedModel), system: shadowPrompt,
       user: fullMessage.slice(0, 600), response: "", elapsed: 0, status: "running", error: "",
@@ -750,9 +764,9 @@ Réponds UNIQUEMENT avec ce JSON (rien d'autre, pas de texte, pas de \`\`\`) :
       setResponseOp("translate");
     } catch (e: unknown) {
       stopTimer();
-      const msg = e instanceof Error ? e.message : String(e);
+      const msg = e instanceof Error ? e.message : trError(e);
       setLastTrace({ ...traceBase, error: msg, elapsed: Math.round((Date.now() - startTimeRef.current) / 100) / 10, status: "error" });
-      setError(`Erreur : ${msg}`);
+      setError(t("Erreur : {e}", { e: msg }));
       logError("Traduire", msg);
     } finally { setIsRunning(false); setActiveOp(null); }
   };
@@ -777,9 +791,9 @@ Réponds UNIQUEMENT avec ce JSON (rien d'autre, pas de texte, pas de \`\`\`) :
       setResponseOp("continue");
     } catch (e: unknown) {
       stopTimer();
-      const msg = e instanceof Error ? e.message : String(e);
+      const msg = e instanceof Error ? e.message : trError(e);
       setLastTrace({ ...traceBase, error: msg, elapsed: Math.round((Date.now() - startTimeRef.current) / 100) / 10, status: "error" });
-      setError(`Erreur : ${msg}`);
+      setError(t("Erreur : {e}", { e: msg }));
       logError("Continuer", msg);
     } finally { setIsRunning(false); setActiveOp(null); }
   };
@@ -790,7 +804,7 @@ Réponds UNIQUEMENT avec ce JSON (rien d'autre, pas de texte, pas de \`\`\`) :
     const newContent = activeNote.content + added;
     await updateNote(activeNote.id, activeNote.title, newContent, activeNote.tags, activeNote.folder, "Continuation IA");
     setResponse(""); setResponseOp(null);
-    setAppliedMsg("✓ Texte inséré à la fin");
+    setAppliedMsg(t("✓ Texte inséré à la fin"));
     setTimeout(() => setAppliedMsg(""), 2500);
   };
 
@@ -813,7 +827,7 @@ Réponds UNIQUEMENT avec ce JSON (rien d'autre, pas de texte, pas de \`\`\`) :
       setPullModel("");
       setShowPullInput(false);
     } catch (e: unknown) {
-      setPullError(e instanceof Error ? e.message : String(e));
+      setPullError(e instanceof Error ? e.message : trError(e));
     } finally {
       setIsPulling(false);
       setPullProgress(null);
@@ -848,8 +862,8 @@ Réponds UNIQUEMENT avec ce JSON (rien d'autre, pas de texte, pas de \`\`\`) :
     try {
       await doStream(shadowPrompt, msg, []);
     } catch (e: unknown) {
-      const errMsg = e instanceof Error ? e.message : String(e);
-      setTraceResponse(`Erreur : ${errMsg}`);
+      const errMsg = e instanceof Error ? e.message : trError(e);
+      setTraceResponse(t("Erreur : {e}", { e: errMsg }));
       setIsTracing(false);
       logError("Chat debug", errMsg);
     }
@@ -859,17 +873,17 @@ Réponds UNIQUEMENT avec ce JSON (rien d'autre, pas de texte, pas de \`\`\`) :
     <>
     {pendingCorrection && (
       <CorrectionModal
-        title="Correction proposée par l'IA"
-        subtitle="Modifications surlignées — vert : ajouts · rouge barré : suppressions"
+        title={t("Correction proposée par l'IA")}
+        subtitle={t("Modifications surlignées — vert : ajouts · rouge barré : suppressions")}
         original={pendingCorrection.original}
         proposed={pendingCorrection.proposed}
         html={pendingCorrection.html}
-        applyLabel="Appliquer la correction"
+        applyLabel={t("Appliquer la correction")}
         onApply={async (html) => {
           if (!activeNote) return;
           await updateNote(activeNote.id, activeNote.title, html, activeNote.tags, activeNote.folder, "Correction IA");
           setPendingCorrection(null);
-          setAppliedMsg("✓ Correction appliquée");
+          setAppliedMsg(t("✓ Correction appliquée"));
           setTimeout(() => setAppliedMsg(""), 2500);
         }}
         onCancel={() => setPendingCorrection(null)}
@@ -877,17 +891,17 @@ Réponds UNIQUEMENT avec ce JSON (rien d'autre, pas de texte, pas de \`\`\`) :
     )}
     {pendingFormalize && (
       <CorrectionModal
-        title="Email formalisé par l'IA"
-        subtitle="Aperçu de la version formelle — cliquez Appliquer pour remplacer la note"
+        title={t("Email formalisé par l'IA")}
+        subtitle={t("Aperçu de la version formelle — cliquez sur « Remplacer la note » pour l'appliquer")}
         original={pendingFormalize.original}
         proposed={pendingFormalize.proposed}
         html={pendingFormalize.html}
-        applyLabel="Remplacer la note"
+        applyLabel={t("Remplacer la note")}
         onApply={async (html) => {
           if (!activeNote) return;
           await updateNote(activeNote.id, activeNote.title, html, activeNote.tags, activeNote.folder, "Formalisation IA");
           setPendingFormalize(null);
-          setAppliedMsg("✓ Note formalisée");
+          setAppliedMsg(t("✓ Note formalisée"));
           setTimeout(() => setAppliedMsg(""), 2500);
         }}
         onCancel={() => setPendingFormalize(null)}
@@ -922,7 +936,7 @@ Réponds UNIQUEMENT avec ce JSON (rien d'autre, pas de texte, pas de \`\`\`) :
                     : "text-muted hover:text-primary"
                 }`}
               >
-                Opérations
+                {t("Opérations")}
               </button>
               {settings.debug_mode && (
                 <button
@@ -934,12 +948,12 @@ Réponds UNIQUEMENT avec ce JSON (rien d'autre, pas de texte, pas de \`\`\`) :
                   }`}
                 >
                   <Bug size={10} />
-                  Debug
+                  {t("Débogage")}
                 </button>
               )}
             </div>
           </div>
-          <button onClick={toggleAiPanel} className="text-muted hover:text-primary transition-colors p-1">
+          <button onClick={toggleAiPanel} aria-label={t("Fermer")} className="text-muted hover:text-primary transition-colors p-1">
             <X size={15} />
           </button>
         </div>
@@ -950,8 +964,8 @@ Réponds UNIQUEMENT avec ce JSON (rien d'autre, pas de texte, pas de \`\`\`) :
             ? activeConn?.color ?? "#888888"
             : localProvider === "claude_cli" ? "#f97316" : "#a1a1aa";
           const currentName = isConnectionActive
-            ? activeConn?.name ?? "Connexion"
-            : localProvider === "claude_cli" ? "Claude CLI" : "Local";
+            ? activeConn?.name ?? t("Connexion")
+            : localProvider === "claude_cli" ? "Claude CLI" : t("Local");
           const currentSub = isConnectionActive
             ? activeConn?.model || activeConn?.provider || ""
             : localProvider === "claude_cli" ? "claude" : selectedModel;
@@ -967,7 +981,7 @@ Réponds UNIQUEMENT avec ce JSON (rien d'autre, pas de texte, pas de \`\`\`) :
               <div className="relative flex-1 min-w-0">
                 <button
                   onClick={() => setProviderMenuOpen((o) => !o)}
-                  aria-label="Choisir le fournisseur IA"
+                  aria-label={t("Choisir le fournisseur IA")}
                   aria-expanded={providerMenuOpen}
                   className={`w-full flex items-center gap-2 px-2.5 py-1.5 rounded-lg border transition-colors ${
                     providerMenuOpen ? "bg-hover border-accent/40" : "bg-hover border-border hover:border-accent/30"
@@ -991,8 +1005,8 @@ Réponds UNIQUEMENT avec ce JSON (rien d'autre, pas de texte, pas de \`\`\`) :
                       >
                         <span className="w-2 h-2 rounded-full shrink-0 bg-zinc-400" />
                         <span className="flex-1 min-w-0">
-                          <span className="block text-xs font-medium text-primary">Local</span>
-                          <span className="block text-[10px] text-muted truncate">Ollama · {selectedModel || "aucun modèle"}</span>
+                          <span className="block text-xs font-medium text-primary">{t("Local")}</span>
+                          <span className="block text-[10px] text-muted truncate">Ollama · {selectedModel || t("aucun modèle")}</span>
                         </span>
                         {!isConnectionActive && localProvider === "ollama" && <CheckCheck size={12} className="text-accent shrink-0" />}
                       </button>
@@ -1003,7 +1017,7 @@ Réponds UNIQUEMENT avec ce JSON (rien d'autre, pas de texte, pas de \`\`\`) :
                         <span className="w-2 h-2 rounded-full shrink-0 bg-orange-500" />
                         <span className="flex-1 min-w-0">
                           <span className="block text-xs font-medium text-primary">Claude CLI</span>
-                          <span className="block text-[10px] text-muted truncate">binaire local · crédits Claude</span>
+                          <span className="block text-[10px] text-muted truncate">{t("commande locale · abonnement Claude")}</span>
                         </span>
                         {!isConnectionActive && localProvider === "claude_cli" && <CheckCheck size={12} className="text-accent shrink-0" />}
                       </button>
@@ -1028,7 +1042,7 @@ Réponds UNIQUEMENT avec ce JSON (rien d'autre, pas de texte, pas de \`\`\`) :
                         className="w-full flex items-center gap-2 px-3 py-2 text-left hover:bg-hover transition-colors text-accent"
                       >
                         <Plus size={12} className="shrink-0" />
-                        <span className="text-xs font-medium">Ajouter une clé API</span>
+                        <span className="text-xs font-medium">{t("Ajouter une clé API")}</span>
                       </button>
                     </div>
                   </>
@@ -1036,17 +1050,17 @@ Réponds UNIQUEMENT avec ce JSON (rien d'autre, pas de texte, pas de \`\`\`) :
               </div>
 
               {/* Jauge de longueur des réponses (signal 5 barres) */}
-              <div className="flex flex-col items-center gap-0.5 shrink-0" role="radiogroup" aria-label="Longueur des réponses IA">
+              <div className="flex flex-col items-center gap-0.5 shrink-0" role="radiogroup" aria-label={t("Longueur des réponses IA")}>
                 <div className="flex items-end gap-[3px] h-[18px]">
                   {INTENSITY.map((lvl, i) => {
                     const lit = i <= intensityIdx;
                     return (
-                      <Tip key={lvl.key} label={`${lvl.label} — ${lvl.desc}`} side="bottom">
+                      <Tip key={lvl.key} label={`${t(lvl.label)} — ${t(lvl.desc)}`} side="bottom">
                         <button
                           onClick={() => saveSettings({ ...settings, prompt_intensity: lvl.key })}
                           role="radio"
                           aria-checked={intensityActive.key === lvl.key}
-                          aria-label={`${lvl.label} — ${lvl.desc}`}
+                          aria-label={`${t(lvl.label)} — ${t(lvl.desc)}`}
                           className="rounded-[2px] transition-all hover:opacity-80"
                           style={{
                             width: 7,
@@ -1059,7 +1073,7 @@ Réponds UNIQUEMENT avec ce JSON (rien d'autre, pas de texte, pas de \`\`\`) :
                   })}
                 </div>
                 <span className="text-[10px] leading-none font-medium" style={{ color: intensityActive.color }}>
-                  {intensityActive.label}
+                  {t(intensityActive.label)}
                 </span>
               </div>
             </div>
@@ -1083,7 +1097,7 @@ Réponds UNIQUEMENT avec ce JSON (rien d'autre, pas de texte, pas de \`\`\`) :
                     ...(detected && !f.name ? { name: detected } : {}),
                   }));
                 }}
-                placeholder="Colle ta clé API (sk-ant-..., sk-..., AIza...)"
+                placeholder={t("Colle ta clé API (sk-ant-..., sk-..., AIza...)")}
                 className="w-full bg-hover border border-border rounded-lg px-2.5 py-1.5 text-xs text-primary outline-none focus:border-accent/50 placeholder-muted font-mono"
               />
               {addKeyForm.provider && (
@@ -1094,7 +1108,7 @@ Réponds UNIQUEMENT avec ce JSON (rien d'autre, pas de texte, pas de \`\`\`) :
               <input
                 value={addKeyForm.name}
                 onChange={(e) => setAddKeyForm((f) => ({ ...f, name: e.target.value }))}
-                placeholder="Nom de la connexion"
+                placeholder={t("Nom de la connexion")}
                 className="flex-1 bg-hover border border-border rounded-lg px-2.5 py-1.5 text-xs text-primary outline-none focus:border-accent/50 placeholder-muted"
               />
               <div className="flex gap-1 items-center">
@@ -1135,9 +1149,9 @@ Réponds UNIQUEMENT avec ce JSON (rien d'autre, pas de texte, pas de \`\`\`) :
                 className="flex items-center gap-1 px-3 py-1.5 rounded-lg bg-accent hover:bg-accent-hover disabled:opacity-40 text-white text-xs transition-colors"
               >
                 {addKeySaving ? <Loader2 size={11} className="animate-spin" /> : <Plus size={11} />}
-                Ajouter
+                {t("Ajouter")}
               </button>
-              <button onClick={() => setShowAddKey(false)} className="px-3 py-1.5 rounded-lg bg-hover text-muted text-xs transition-colors">Annuler</button>
+              <button onClick={() => setShowAddKey(false)} className="px-3 py-1.5 rounded-lg bg-hover text-muted text-xs transition-colors">{t("Annuler")}</button>
             </div>
           </div>
         )}
@@ -1160,15 +1174,15 @@ Réponds UNIQUEMENT avec ce JSON (rien d'autre, pas de texte, pas de \`\`\`) :
                     try {
                       await invoke<string>("connection_chat", {
                         connectionId: conn.id,
-                        system: "Tu es un assistant de test.",
-                        message: "Réponds juste \"OK\" sans rien d'autre.",
+                        system: tr("Tu es un assistant de test."),
+                        message: tr("Réponds juste « OK » sans rien d'autre."),
                         temperature: 0.0,
                       });
                       setConnTestStatus("ok");
-                      setConnTestMsg("Connexion opérationnelle");
+                      setConnTestMsg(t("Connexion opérationnelle"));
                     } catch (e) {
                       setConnTestStatus("error");
-                      setConnTestMsg(String(e));
+                      setConnTestMsg(trError(e));
                     }
                   };
                   const providerLabel: Record<string, string> = {
@@ -1183,13 +1197,13 @@ Réponds UNIQUEMENT avec ce JSON (rien d'autre, pas de texte, pas de \`\`\`) :
                             {providerLabel[conn.provider] ?? conn.provider}
                           </span>
                           <span className="text-sm font-medium truncate" style={{ color: conn.color }}>{conn.name}</span>
-                          <span className="text-[11px] text-secondary truncate">{conn.model || "modèle par défaut"}</span>
+                          <span className="text-[11px] text-secondary truncate">{conn.model || t("modèle par défaut")}</span>
                         </div>
                         <button
                           onClick={testConn}
                           disabled={connTestStatus === "testing"}
                           className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-panel border border-border text-xs text-secondary hover:text-primary hover:border-accent/40 disabled:opacity-50 transition-colors shrink-0"
-                          aria-label="Tester la connexion"
+                          aria-label={t("Tester la connexion")}
                         >
                           {connTestStatus === "testing"
                             ? <Loader2 size={11} className="animate-spin text-accent" />
@@ -1198,7 +1212,7 @@ Réponds UNIQUEMENT avec ce JSON (rien d'autre, pas de texte, pas de \`\`\`) :
                             : connTestStatus === "error"
                             ? <AlertTriangle size={11} className="text-red-400" />
                             : <Zap size={11} />}
-                          {connTestStatus === "testing" ? "Test…" : "Tester"}
+                          {connTestStatus === "testing" ? t("Test…") : t("Tester")}
                         </button>
                       </div>
                       {connTestStatus !== "idle" && (
@@ -1209,7 +1223,7 @@ Réponds UNIQUEMENT avec ce JSON (rien d'autre, pas de texte, pas de \`\`\`) :
                             ? "text-red-400 bg-red-400/10 border-red-400/20"
                             : "text-muted bg-hover border-border"
                         }`}>
-                          {connTestMsg || "Test en cours…"}
+                          {connTestMsg || t("Test en cours…")}
                         </div>
                       )}
                     </div>
@@ -1218,19 +1232,19 @@ Réponds UNIQUEMENT avec ce JSON (rien d'autre, pas de texte, pas de \`\`\`) :
               ) : localProvider === "ollama" ? (
                 <>
                   <div className="flex items-center justify-between mb-1">
-                    <label className="text-xs text-muted">Modèle Ollama</label>
+                    <label className="text-xs text-muted">{t("Modèle Ollama")}</label>
                     <div className="flex items-center gap-1">
                       <button
                         onClick={refreshModels}
                         disabled={isRefreshing}
-                        title="Rafraîchir la liste"
+                        title={t("Rafraîchir la liste")}
                         className="p-0.5 rounded text-muted hover:text-primary transition-colors disabled:opacity-40"
                       >
                         <RefreshCw size={11} className={isRefreshing ? "animate-spin" : ""} />
                       </button>
                       <button
                         onClick={() => { setShowPullInput((s) => !s); setPullError(""); }}
-                        title="Télécharger un modèle"
+                        title={t("Télécharger un modèle")}
                         className={`p-0.5 rounded transition-colors ${showPullInput ? "text-accent" : "text-muted hover:text-primary"}`}
                       >
                         <Plus size={12} />
@@ -1244,7 +1258,7 @@ Réponds UNIQUEMENT avec ce JSON (rien d'autre, pas de texte, pas de \`\`\`) :
                       className="w-full bg-hover border border-border rounded-lg px-3 py-1.5 text-sm text-primary outline-none appearance-none cursor-pointer"
                     >
                       {models.length === 0 && (
-                        <option value={selectedModel}>{selectedModel || "Aucun modèle"}</option>
+                        <option value={selectedModel}>{selectedModel || t("Aucun modèle")}</option>
                       )}
                       {models.map((m) => (
                         <option key={m} value={m}>{m}</option>
@@ -1260,7 +1274,7 @@ Réponds UNIQUEMENT avec ce JSON (rien d'autre, pas de texte, pas de \`\`\`) :
                           value={pullModel}
                           onChange={(e) => setPullModel(e.target.value)}
                           onKeyDown={(e) => { if (e.key === "Enter") startPull(); if (e.key === "Escape") setShowPullInput(false); }}
-                          placeholder="ex : llama3.2:3b"
+                          placeholder={t("ex : llama3.2:3b")}
                           disabled={isPulling}
                           className="flex-1 bg-hover border border-border rounded-lg px-2.5 py-1.5 text-xs text-primary outline-none focus:border-accent/50 transition-colors placeholder-muted"
                         />
@@ -1270,7 +1284,7 @@ Réponds UNIQUEMENT avec ce JSON (rien d'autre, pas de texte, pas de \`\`\`) :
                           className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-accent hover:bg-accent-hover disabled:opacity-50 text-white text-xs transition-colors shrink-0"
                         >
                           {isPulling ? <Loader2 size={11} className="animate-spin" /> : <Download size={11} />}
-                          {isPulling ? "…" : "Télécharger"}
+                          {isPulling ? "…" : t("Télécharger")}
                         </button>
                       </div>
                       {isPulling && pullProgress && (
@@ -1312,7 +1326,7 @@ Réponds UNIQUEMENT avec ce JSON (rien d'autre, pas de texte, pas de \`\`\`) :
                 className="flex items-center gap-1.5 text-xs text-muted hover:text-primary transition-colors w-full"
               >
                 {showShadow ? "▲" : "▼"}
-                <span className="ml-0.5">Prompt système</span>
+                <span className="ml-0.5">{t("Prompt système")}</span>
               </button>
               {showShadow && (
                 <textarea
@@ -1328,9 +1342,9 @@ Réponds UNIQUEMENT avec ce JSON (rien d'autre, pas de texte, pas de \`\`\`) :
             <div className="flex flex-col gap-1.5">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-1.5">
-                  <p className="text-xs text-muted uppercase tracking-wider">Message rapide</p>
+                  <p className="text-xs text-muted uppercase tracking-wider">{t("Message rapide")}</p>
                   {memoryActive && (
-                    <span title={`${memoryNodes.length} nœud${memoryNodes.length !== 1 ? "s" : ""} de mémoire pris en compte`}>
+                    <span title={memoryNodes.length === 1 ? t("{n} nœud de mémoire pris en compte", { n: 1 }) : t("{n} nœuds de mémoire pris en compte", { n: memoryNodes.length })}>
                       <Brain size={10} className="text-accent/70" />
                     </span>
                   )}
@@ -1338,10 +1352,10 @@ Réponds UNIQUEMENT avec ce JSON (rien d'autre, pas de texte, pas de \`\`\`) :
                 <button
                   onClick={onOpenConv}
                   className="flex items-center gap-1 text-xs text-accent hover:text-accent/80 transition-colors"
-                  title="Ouvrir une conversation complète"
+                  title={t("Ouvrir une conversation complète")}
                 >
                   <MessagesSquare size={11} />
-                  Conversation
+                  {t("Conversation")}
                 </button>
               </div>
               <div className="flex gap-1.5">
@@ -1349,7 +1363,7 @@ Réponds UNIQUEMENT avec ce JSON (rien d'autre, pas de texte, pas de \`\`\`) :
                   value={quickInput}
                   onChange={(e) => setQuickInput(e.target.value)}
                   onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); runQuick(); } }}
-                  placeholder="Pose une question…"
+                  placeholder={t("Pose une question…")}
                   disabled={quickLoading}
                   className="flex-1 bg-hover border border-border rounded-lg px-2.5 py-1.5 text-xs text-primary outline-none focus:border-accent/50 transition-colors placeholder-muted disabled:opacity-50"
                 />
@@ -1368,7 +1382,7 @@ Réponds UNIQUEMENT avec ce JSON (rien d'autre, pas de texte, pas de \`\`\`) :
                     onClick={() => setQuickResponse("")}
                     className="block mt-1.5 text-[10px] text-muted hover:text-primary transition-colors"
                   >
-                    Fermer
+                    {t("Fermer")}
                   </button>
                 </div>
               )}
@@ -1376,52 +1390,52 @@ Réponds UNIQUEMENT avec ce JSON (rien d'autre, pas de texte, pas de \`\`\`) :
 
             {/* Operations */}
             <div className="flex flex-col gap-1.5">
-              <p className="text-xs text-muted uppercase tracking-wider">Opérations</p>
+              <p className="text-xs text-muted uppercase tracking-wider">{t("Opérations")}</p>
               <OpButton
                 icon={<CheckCheck size={14} />}
-                label="Corriger"
-                description="Applique directement dans l'éditeur"
+                label={t("Corriger")}
+                description={t("Propose les corrections avant de les appliquer")}
                 active={activeOp === "Corriger"}
                 loading={isRunning && activeOp === "Corriger"}
                 onClick={handleCorrect}
               />
               <OpButton
                 icon={<FileText size={14} />}
-                label="Résumer"
-                description="Résumé · insérable en début de note"
+                label={t("Résumer")}
+                description={t("Résumé · insérable en début de note")}
                 active={activeOp === "Résumer"}
                 loading={isRunning && activeOp === "Résumer"}
                 onClick={handleSummarize}
               />
               <OpButton
                 icon={<Tag size={14} />}
-                label="Renommer"
-                description="Applique le titre automatiquement"
+                label={t("Renommer")}
+                description={t("Applique le titre automatiquement")}
                 active={activeOp === "Renommer"}
                 loading={isRunning && activeOp === "Renommer"}
                 onClick={handleRename}
               />
               <OpButton
                 icon={<Sparkles size={14} />}
-                label="Trier toutes les notes"
-                description="En développement · Organisation par IA"
+                label={t("Trier toutes les notes")}
+                description={t("En développement · Organisation par IA")}
                 active={activeOp === "Trier"}
                 loading={isRunning && activeOp === "Trier"}
                 onClick={handleSort}
-                badge="bêta"
+                badge={t("bêta")}
               />
               <OpButton
                 icon={<Mail size={14} />}
-                label="Formaliser"
-                description="Reformule en email professionnel"
+                label={t("Formaliser")}
+                description={t("Reformule en email professionnel")}
                 active={activeOp === "Formaliser"}
                 loading={isRunning && activeOp === "Formaliser"}
                 onClick={handleFormalize}
               />
               <OpButton
                 icon={<PenLine size={14} />}
-                label="Continuer"
-                description="L'IA prolonge le texte de la note"
+                label={t("Continuer")}
+                description={t("L'IA prolonge le texte de la note")}
                 active={activeOp === "Continuer"}
                 loading={isRunning && activeOp === "Continuer"}
                 onClick={handleContinue}
@@ -1434,9 +1448,9 @@ Réponds UNIQUEMENT avec ce JSON (rien d'autre, pas de texte, pas de \`\`\`) :
                       onChange={(e) => setTranslateFrom(e.target.value)}
                       className="w-full bg-hover border border-border rounded-lg px-2 py-1.5 text-[11px] text-secondary outline-none appearance-none cursor-pointer"
                     >
-                      <option value="auto">Détecte auto.</option>
-                      {["français","anglais","espagnol","allemand","italien","portugais","japonais","chinois","arabe","russe"].map((l) => (
-                        <option key={l} value={l}>{l.charAt(0).toUpperCase() + l.slice(1)}</option>
+                      <option value="auto">{t("Détection auto.")}</option>
+                      {TRANSLATE_LANGS.map((l) => (
+                        <option key={l} value={l}>{capitalize(t(l))}</option>
                       ))}
                     </select>
                     <ChevronDown size={10} className="absolute right-1.5 top-1/2 -translate-y-1/2 text-muted pointer-events-none" />
@@ -1448,8 +1462,8 @@ Réponds UNIQUEMENT avec ce JSON (rien d'autre, pas de texte, pas de \`\`\`) :
                       onChange={(e) => setTranslateLang(e.target.value)}
                       className="w-full bg-hover border border-border rounded-lg px-2 py-1.5 text-[11px] text-secondary outline-none appearance-none cursor-pointer"
                     >
-                      {["français","anglais","espagnol","allemand","italien","portugais","japonais","chinois","arabe","russe"].map((l) => (
-                        <option key={l} value={l}>{l.charAt(0).toUpperCase() + l.slice(1)}</option>
+                      {TRANSLATE_LANGS.map((l) => (
+                        <option key={l} value={l}>{capitalize(t(l))}</option>
                       ))}
                     </select>
                     <ChevronDown size={10} className="absolute right-1.5 top-1/2 -translate-y-1/2 text-muted pointer-events-none" />
@@ -1457,8 +1471,8 @@ Réponds UNIQUEMENT avec ce JSON (rien d'autre, pas de texte, pas de \`\`\`) :
                 </div>
                 <OpButton
                   icon={<Languages size={14} />}
-                  label="Traduire"
-                  description={`${translateFrom === "auto" ? "Auto" : translateFrom.charAt(0).toUpperCase() + translateFrom.slice(1)} → ${translateLang.charAt(0).toUpperCase() + translateLang.slice(1)}`}
+                  label={t("Traduire")}
+                  description={`${translateFrom === "auto" ? t("Auto") : capitalize(t(translateFrom))} → ${capitalize(t(translateLang))}`}
                   active={activeOp === "Traduire"}
                   loading={isRunning && activeOp === "Traduire"}
                   onClick={handleTranslate}
@@ -1477,17 +1491,17 @@ Réponds UNIQUEMENT avec ce JSON (rien d'autre, pas de texte, pas de \`\`\`) :
             {sortProposals.length > 0 && (
               <div className="flex flex-col gap-2">
                 <div className="flex items-center justify-between">
-                  <p className="text-xs text-muted">{sortProposals.length} déplacement(s) proposé(s)</p>
+                  <p className="text-xs text-muted">{t("{n} déplacement(s) proposé(s)", { n: sortProposals.length })}</p>
                   <div className="flex items-center gap-1.5">
                     <button
                       onClick={() => setSortProposals((p) => p.map((x) => ({ ...x, accepted: true })))}
                       className="text-[10px] text-accent hover:underline"
-                    >Tout accepter</button>
+                    >{t("Tout accepter")}</button>
                     <span className="text-muted text-[10px]">/</span>
                     <button
                       onClick={() => setSortProposals((p) => p.map((x) => ({ ...x, accepted: false })))}
                       className="text-[10px] text-muted hover:text-primary hover:underline"
-                    >Tout refuser</button>
+                    >{t("Tout refuser")}</button>
                   </div>
                 </div>
                 <div className="flex flex-col gap-1 max-h-52 overflow-y-auto">
@@ -1507,7 +1521,7 @@ Réponds UNIQUEMENT avec ce JSON (rien d'autre, pas de texte, pas de \`\`\`) :
                       <span className="flex-1 min-w-0">
                         <span className="font-medium text-primary block truncate">{p.title}</span>
                         <span className="text-muted text-[10px]">
-                          {p.currentFolder ?? "Racine"} → <span className="text-accent">{p.suggestedFolder ?? "Racine"}</span>
+                          {p.currentFolder ?? t("Racine")} → <span className="text-accent">{p.suggestedFolder ?? t("Racine")}</span>
                         </span>
                       </span>
                     </button>
@@ -1519,7 +1533,7 @@ Réponds UNIQUEMENT avec ce JSON (rien d'autre, pas de texte, pas de \`\`\`) :
                     disabled={isRunning || sortProposals.every((p) => !p.accepted)}
                     className="flex-1 text-xs py-1.5 rounded-lg bg-accent hover:bg-accent-hover disabled:opacity-40 text-white transition-colors"
                   >
-                    Appliquer ({sortProposals.filter((p) => p.accepted).length}/{sortProposals.length})
+                    {t("Appliquer ({a}/{n})", { a: sortProposals.filter((p) => p.accepted).length, n: sortProposals.length })}
                   </button>
                   <button
                     onClick={() => setSortProposals([])}
@@ -1533,11 +1547,11 @@ Réponds UNIQUEMENT avec ce JSON (rien d'autre, pas de texte, pas de \`\`\`) :
             {(response || error) && (
               <div className="flex flex-col gap-2">
                 <div className="flex items-center justify-between">
-                  <p className="text-xs text-muted">Réponse</p>
+                  <p className="text-xs text-muted">{t("Réponse")}</p>
                   {isRunning && (
                     <span className="flex items-center gap-1 text-xs text-accent">
                       <Loader2 size={10} className="animate-spin" />
-                      en cours…
+                      {t("en cours…")}
                     </span>
                   )}
                 </div>
@@ -1559,7 +1573,7 @@ Réponds UNIQUEMENT avec ce JSON (rien d'autre, pas de texte, pas de \`\`\`) :
                         onClick={insertContinuation}
                         className="flex-1 text-xs py-1.5 rounded-lg bg-accent hover:bg-accent-hover text-white transition-colors"
                       >
-                        Insérer à la fin
+                        {t("Insérer à la fin")}
                       </button>
                     )}
                     {responseOp === "summarize" && (
@@ -1567,14 +1581,14 @@ Réponds UNIQUEMENT avec ce JSON (rien d'autre, pas de texte, pas de \`\`\`) :
                         onClick={insertSummary}
                         className="flex-1 text-xs py-1.5 rounded-lg bg-accent hover:bg-accent-hover text-white transition-colors"
                       >
-                        Insérer en début de note
+                        {t("Insérer en début de note")}
                       </button>
                     )}
                     <button
                       onClick={() => { setResponse(""); setError(""); setResponseOp(null); }}
                       className={`text-xs py-1.5 rounded-lg bg-hover hover:bg-active text-muted hover:text-primary transition-colors ${(responseOp === "continue" || responseOp === "summarize") ? "px-4" : "w-full"}`}
                     >
-                      Fermer
+                      {t("Fermer")}
                     </button>
                   </div>
                 )}
@@ -1590,24 +1604,24 @@ Réponds UNIQUEMENT avec ce JSON (rien d'autre, pas de texte, pas de \`\`\`) :
             <div className="bg-panel rounded-lg p-3 flex flex-col gap-1.5 border border-amber-500/20">
               <div className="flex items-center gap-1.5 mb-0.5">
                 <Bug size={11} className="text-amber-400" />
-                <span className="text-xs font-medium text-amber-400">Info session</span>
+                <span className="text-xs font-medium text-amber-400">{t("Info session")}</span>
               </div>
-              <TraceRow label="version" value={appVersion || "…"} />
-              <TraceRow label="uptime" value={(() => {
+              <TraceRow label={t("version")} value={appVersion || "…"} />
+              <TraceRow label={t("durée")} value={(() => {
                 const s = Math.floor((Date.now() - sessionStartRef.current) / 1000);
                 if (s < 60) return `${s}s`;
                 if (s < 3600) return `${Math.floor(s/60)}m ${s%60}s`;
                 return `${Math.floor(s/3600)}h ${Math.floor((s%3600)/60)}m`;
               })()} />
-              <TraceRow label="provider" value={isConnectionActive
-                ? (apiConnections.find(c => c.id === activeConnectionId)?.name ?? "connexion")
+              <TraceRow label={t("fournisseur")} value={isConnectionActive
+                ? (apiConnections.find(c => c.id === activeConnectionId)?.name ?? t("connexion"))
                 : localProvider} />
-              <TraceRow label="modèle" value={isConnectionActive
+              <TraceRow label={t("modèle")} value={isConnectionActive
                 ? (apiConnections.find(c => c.id === activeConnectionId)?.model || "auto")
                 : activeModel(effectiveSettings, selectedModel)} />
-              <TraceRow label="température" value={String(settings.temperature)} />
-              <TraceRow label="contexte" value={settings.context_messages === 0 ? "illimité" : `${settings.context_messages} msgs`} />
-              <TraceRow label="erreurs session" value={String(errorLog.length)} dim={errorLog.length === 0} />
+              <TraceRow label={t("température")} value={String(settings.temperature)} />
+              <TraceRow label={t("contexte")} value={settings.context_messages === 0 ? t("illimité") : t("{n} messages", { n: settings.context_messages })} />
+              <TraceRow label={t("erreurs de la session")} value={String(errorLog.length)} dim={errorLog.length === 0} />
             </div>
 
             {/* Debug console — logs temps réel */}
@@ -1617,7 +1631,7 @@ Réponds UNIQUEMENT avec ce JSON (rien d'autre, pas de texte, pas de \`\`\`) :
             <div className="bg-panel rounded-lg p-3 flex flex-col gap-1.5 border border-border">
               <div className="flex items-center gap-1.5 mb-0.5">
                 <Activity size={11} className="text-accent" />
-                <span className="text-xs font-medium text-secondary">Connexion</span>
+                <span className="text-xs font-medium text-secondary">{t("Connexion")}</span>
                 {localProvider === "ollama" && (
                   <button
                     onClick={refreshModels}
@@ -1628,24 +1642,24 @@ Réponds UNIQUEMENT avec ce JSON (rien d'autre, pas de texte, pas de \`\`\`) :
                   </button>
                 )}
               </div>
-              <TraceRow label="fournisseur" value={
-                localProvider === "ollama" ? "Ollama (local)"
+              <TraceRow label={t("fournisseur")} value={
+                localProvider === "ollama" ? t("Ollama (local)")
                 : localProvider === "claude" ? "Claude API"
                 : localProvider === "claude_cli" ? "Claude Code CLI"
                 : localProvider === "openai" ? "OpenAI"
                 : localProvider === "gemini" ? "Google Gemini"
                 : "Mistral"
               } />
-              <TraceRow label="modèle" value={activeModel(effectiveSettings, selectedModel)} />
+              <TraceRow label={t("modèle")} value={activeModel(effectiveSettings, selectedModel)} />
               {localProvider === "ollama" && (
                 <TraceRow
-                  label="modèles"
+                  label={t("modèles")}
                   value={
                     isRefreshing
-                      ? "rafraîchissement…"
+                      ? t("rafraîchissement…")
                       : models.length > 0
-                      ? `${models.length} disponible(s) : ${models.slice(0, 3).join(", ")}${models.length > 3 ? "…" : ""}`
-                      : "aucun — ollama serve ?"
+                      ? `${t("{n} disponible(s) :", { n: models.length })} ${models.slice(0, 3).join(", ")}${models.length > 3 ? "…" : ""}`
+                      : t("aucun — Ollama est-il lancé ?")
                   }
                   dim={models.length === 0 && !isRefreshing}
                 />
@@ -1657,13 +1671,13 @@ Réponds UNIQUEMENT avec ce JSON (rien d'autre, pas de texte, pas de \`\`\`) :
 
             {/* Direct streaming chat */}
             <div className="flex flex-col gap-1.5">
-              <p className="text-xs text-muted">Chat direct — streaming</p>
+              <p className="text-xs text-muted">{t("Chat direct — streaming")}</p>
               <div className="flex gap-1.5">
                 <input
                   value={traceInput}
                   onChange={(e) => setTraceInput(e.target.value)}
                   onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); runTrace(); } }}
-                  placeholder="Message à l'IA…"
+                  placeholder={t("Message à l'IA…")}
                   disabled={isTracing}
                   className="flex-1 bg-hover border border-border rounded-lg px-2.5 py-1.5 text-xs text-primary outline-none focus:border-accent/50 placeholder-muted"
                 />
@@ -1690,7 +1704,7 @@ Réponds UNIQUEMENT avec ce JSON (rien d'autre, pas de texte, pas de \`\`\`) :
             {lastTrace && (
               <div className="flex flex-col gap-1.5">
                 <div className="flex items-center gap-2">
-                  <p className="text-xs text-muted">Opération en cours</p>
+                  <p className="text-xs text-muted">{t("Dernière opération")}</p>
                   {lastTrace.status === "running" && (
                     <Loader2 size={10} className="text-accent animate-spin" />
                   )}
@@ -1698,7 +1712,7 @@ Réponds UNIQUEMENT avec ce JSON (rien d'autre, pas de texte, pas de \`\`\`) :
                     <span className="text-[10px] text-accent">✓ {lastTrace.elapsed}s</span>
                   )}
                   {lastTrace.status === "error" && (
-                    <span className="text-[10px] text-red-400">✗ erreur</span>
+                    <span className="text-[10px] text-red-400">✗ {t("erreur")}</span>
                   )}
                   <span className="text-[9px] text-muted/60 ml-auto">
                     ~{Math.round((lastTrace.system.length + lastTrace.user.length) / 4)} tokens
@@ -1707,29 +1721,29 @@ Réponds UNIQUEMENT avec ce JSON (rien d'autre, pas de texte, pas de \`\`\`) :
                 <div className="bg-panel border border-border rounded-lg p-3 font-mono text-[10px] flex flex-col gap-2 leading-relaxed">
                   <div className="flex gap-2 items-center">
                     <span className="text-muted w-12 shrink-0">op</span>
-                    <span className="text-accent font-semibold">{lastTrace.operation}</span>
+                    <span className="text-accent font-semibold">{opLabel(lastTrace.operation)}</span>
                   </div>
                   <div className="flex gap-2 items-center">
-                    <span className="text-muted w-12 shrink-0">modèle</span>
+                    <span className="text-muted w-12 shrink-0">{t("modèle")}</span>
                     <span className="text-secondary">{lastTrace.model}</span>
                   </div>
                   {lastTrace.elapsed > 0 && (
                     <div className="flex gap-2 items-center">
-                      <span className="text-muted w-12 shrink-0">temps</span>
+                      <span className="text-muted w-12 shrink-0">{t("temps")}</span>
                       <span className="text-accent">{lastTrace.elapsed}s</span>
                     </div>
                   )}
                   <div className="border-t border-border/40 pt-2">
-                    <p className="text-muted mb-1">// prompt système</p>
+                    <p className="text-muted mb-1">// {t("prompt système")}</p>
                     <p className="text-secondary/70 line-clamp-2 break-words">{lastTrace.system}</p>
                   </div>
                   <div>
-                    <p className="text-muted mb-1">// message envoyé</p>
+                    <p className="text-muted mb-1">// {t("message envoyé")}</p>
                     <p className="text-secondary/70 line-clamp-3 break-words">{lastTrace.user}</p>
                   </div>
                   {lastTrace.response && (
                     <div>
-                      <p className="text-muted mb-1">// réponse</p>
+                      <p className="text-muted mb-1">// {t("réponse")}</p>
                       <p className="text-secondary/80 line-clamp-4 break-words">{lastTrace.response}</p>
                     </div>
                   )}
@@ -1743,7 +1757,7 @@ Réponds UNIQUEMENT avec ce JSON (rien d'autre, pas de texte, pas de \`\`\`) :
             {!lastTrace && traceHistory.length === 0 && (
               <div className="text-center py-6">
                 <Zap size={20} className="text-muted mx-auto mb-2" />
-                <p className="text-xs text-muted">Lance une opération pour voir la trace</p>
+                <p className="text-xs text-muted">{t("Lance une opération pour voir la trace")}</p>
               </div>
             )}
 
@@ -1751,43 +1765,43 @@ Réponds UNIQUEMENT avec ce JSON (rien d'autre, pas de texte, pas de \`\`\`) :
             {traceHistory.length > 0 && (
               <div className="flex flex-col gap-1.5">
                 <div className="flex items-center justify-between">
-                  <p className="text-xs text-muted">Historique</p>
+                  <p className="text-xs text-muted">{t("Historique")}</p>
                   <button
                     onClick={() => { setTraceHistory([]); lastFinalizedRef.current = null; }}
                     className="text-[10px] text-muted hover:text-primary transition-colors"
                   >
-                    Effacer
+                    {t("Effacer")}
                   </button>
                 </div>
                 <div className="flex flex-col gap-1">
-                  {traceHistory.map((t, i) => {
-                    const tokens = Math.round((t.system.length + t.user.length) / 4);
+                  {traceHistory.map((entry, i) => {
+                    const tokens = Math.round((entry.system.length + entry.user.length) / 4);
                     return (
                       <div key={i} className="flex items-center gap-2 px-2.5 py-1.5 bg-panel rounded-lg border border-border/50 text-[10px] group">
-                        <span className={t.status === "done" ? "text-accent shrink-0" : "text-red-400 shrink-0"}>
-                          {t.status === "done" ? "✓" : "✗"}
+                        <span className={entry.status === "done" ? "text-accent shrink-0" : "text-red-400 shrink-0"}>
+                          {entry.status === "done" ? "✓" : "✗"}
                         </span>
                         <span className="text-secondary font-mono flex-1 min-w-0 truncate">
-                          {t.operation} · {t.model.split(":")[0]} · {t.elapsed}s · ~{tokens}tk
+                          {opLabel(entry.operation)} · {entry.model.split(":")[0]} · {entry.elapsed}s · ~{tokens}tk
                         </span>
                         <button
                           onClick={() => {
                             const text = [
-                              `op: ${t.operation}`,
-                              `modèle: ${t.model}`,
-                              `statut: ${t.status} (${t.elapsed}s)`,
+                              `op: ${opLabel(entry.operation)}`,
+                              `${t("modèle")}: ${entry.model}`,
+                              `${t("statut")}: ${entry.status} (${entry.elapsed}s)`,
                               `~${tokens} tokens`,
-                              t.error ? `erreur: ${t.error}` : null,
-                              `\n--- prompt système ---`,
-                              t.system,
-                              `\n--- message ---`,
-                              t.user,
-                              t.response ? `\n--- réponse ---\n${t.response}` : null,
+                              entry.error ? `${t("erreur")}: ${entry.error}` : null,
+                              `\n--- ${t("prompt système")} ---`,
+                              entry.system,
+                              `\n--- ${t("message envoyé")} ---`,
+                              entry.user,
+                              entry.response ? `\n--- ${t("réponse")} ---\n${entry.response}` : null,
                             ].filter(Boolean).join("\n");
                             navigator.clipboard.writeText(text).catch(() => {});
                           }}
                           className="text-muted hover:text-primary transition-colors opacity-0 group-hover:opacity-100 shrink-0"
-                          title="Copier la trace"
+                          title={t("Copier la trace")}
                         >
                           <Clipboard size={10} />
                         </button>

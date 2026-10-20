@@ -248,8 +248,10 @@ pub fn update_note(
         let db = state.db.lock().map_err(|e| e.to_string())?;
         let ca = db.query_row("SELECT created_at FROM notes WHERE id=?1", [&id], |r| r.get::<_, String>(0))
             .map_err(|e| e.to_string())?;
+        // Sans libellé = enregistrement automatique, regroupé avec les précédents.
+        let auto = label.is_none();
         let msg = label.unwrap_or_else(|| format!("Modifier : {}", title));
-        save_version_inner(&db, &id, &content, &msg, &now, &key)
+        save_version_inner(&db, &id, &content, &msg, &now, &key, auto)
             .map_err(|e| e.to_string())?;
         ca
     };
@@ -350,7 +352,7 @@ pub fn restore_version(note_id: String, hash: String, state: State<AppState>) ->
         db.execute("UPDATE notes SET updated_at=?1 WHERE id=?2", params![now, note_id])
             .map_err(|e| e.to_string())?;
         let short = &hash[..8.min(hash.len())];
-        save_version_inner(&db, &note_id, &plain_content, &format!("Restauré ({})", short), &now, &key)
+        save_version_inner(&db, &note_id, &plain_content, &format!("Restauré ({})", short), &now, &key, false)
             .map_err(|e| e.to_string())?;
     }
     get_note(note_id, state)
@@ -872,7 +874,7 @@ fn import_notes_in(
             ],
         ).map_err(|e| e.to_string())?;
         std::fs::write(notes_dir.join(format!("{}.html", id)), maybe_enc(key, &content)).map_err(|e| e.to_string())?;
-        save_version_inner(&tx, &id, &content, "Importé", &now, key).map_err(|e| e.to_string())?;
+        save_version_inner(&tx, &id, &content, "Importé", &now, key, false).map_err(|e| e.to_string())?;
 
         if let Some(f) = &folder {
             let mut prefix = String::new();
@@ -907,6 +909,7 @@ pub fn import_zip(path: String, password: Option<String>, state: State<AppState>
 
 #[tauri::command]
 pub fn export_note_to_path(note_id: String, path: String, state: State<AppState>) -> Result<(), String> {
+    crate::require_unlocked(&state)?;
     if !is_valid_uuid(&note_id) { return Err("ID invalide".to_string()); }
     let key = state.enc_key.lock().map_err(|e| e.to_string())?.clone();
     let db = state.db.lock().map_err(|e| e.to_string())?;
@@ -928,6 +931,22 @@ pub fn export_note_to_path(note_id: String, path: String, state: State<AppState>
     );
     std::fs::write(&path, html.as_bytes()).map_err(|e| e.to_string())?;
     Ok(())
+}
+
+/// Écrit une note exportée (Markdown, texte ou HTML) à l'emplacement choisi
+/// dans la boîte « Enregistrer sous ». Seules ces trois extensions sont acceptées.
+#[tauri::command]
+pub fn write_export_file(path: String, content: String, state: State<AppState>) -> Result<(), String> {
+    crate::require_unlocked(&state)?;
+    if !has_export_extension(&path) { return Err("Format de fichier non autorisé".to_string()); }
+    std::fs::write(&path, content).map_err(|e| e.to_string())
+}
+
+fn has_export_extension(path: &str) -> bool {
+    std::path::Path::new(path)
+        .extension()
+        .and_then(|e| e.to_str())
+        .is_some_and(|e| matches!(e.to_ascii_lowercase().as_str(), "md" | "txt" | "html"))
 }
 
 // ─── Search ───────────────────────────────────────────────────────────────────
@@ -1379,6 +1398,16 @@ mod tests {
 
     fn write_content(e: &Env, id: &str, html: &str) {
         std::fs::write(e.dir.join(format!("{}.html", id)), maybe_enc(&e.key, html)).unwrap();
+    }
+
+    #[test]
+    fn note_export_only_writes_text_formats() {
+        assert!(has_export_extension(r"C:\Notes\réunion.md"));
+        assert!(has_export_extension("a.TXT"));
+        assert!(has_export_extension("a.html"));
+        assert!(!has_export_extension("a.exe"));
+        assert!(!has_export_extension("a.md.bat"));
+        assert!(!has_export_extension("sans-extension"));
     }
 
     #[test]

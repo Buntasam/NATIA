@@ -89,6 +89,8 @@ pub(crate) fn init_db(db: &Connection) -> SqlResult<()> {
     let _ = db.execute("ALTER TABLE notes ADD COLUMN deleted_at TEXT", []);
     let _ = db.execute("ALTER TABLE folders ADD COLUMN deleted_at TEXT", []);
     let _ = db.execute("ALTER TABLE api_keys ADD COLUMN model TEXT NOT NULL DEFAULT ''", []);
+    // Début de la « session » d'une version automatique (NULL pour une version nommée).
+    let _ = db.execute("ALTER TABLE note_versions ADD COLUMN session_start TEXT", []);
     Ok(())
 }
 
@@ -151,6 +153,20 @@ pub(crate) fn upsert_color(db: &Connection, key: &Option<[u8; 32]>, item_key: &s
     Ok(())
 }
 
+/// Durée pendant laquelle les enregistrements automatiques d'une note
+/// mettent à jour la même version au lieu d'en créer une nouvelle.
+const VERSION_SESSION_SECS: i64 = 5 * 60;
+
+fn secs_between(start: &str, now: &str) -> Option<i64> {
+    let a = chrono::DateTime::parse_from_rfc3339(start).ok()?;
+    let b = chrono::DateTime::parse_from_rfc3339(now).ok()?;
+    Some((b - a).num_seconds())
+}
+
+/// `coalesce` : enregistrement automatique. Pendant 5 min, il remplace la
+/// dernière version automatique au lieu d'en ajouter une, pour que les
+/// 200 versions couvrent des jours d'historique et non quelques minutes.
+/// Les versions nommées (IA, restauration, import) ne sont jamais remplacées.
 pub(crate) fn save_version_inner(
     db: &Connection,
     note_id: &str,
@@ -158,23 +174,33 @@ pub(crate) fn save_version_inner(
     message: &str,
     now: &str,
     key: &Option<[u8; 32]>,
+    coalesce: bool,
 ) -> SqlResult<()> {
-    let last_raw: Option<String> = db.query_row(
-        "SELECT content FROM note_versions WHERE note_id=?1 ORDER BY created_at DESC LIMIT 1",
+    let last: Option<(String, String, Option<String>)> = db.query_row(
+        "SELECT id, content, session_start FROM note_versions WHERE note_id=?1 ORDER BY created_at DESC LIMIT 1",
         [note_id],
-        |r| r.get(0),
+        |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?)),
     ).ok();
-    if let Some(raw) = last_raw {
+    if let Some((last_id, raw, session_start)) = last {
         use crate::crypto::maybe_dec;
-        let last_plain = maybe_dec(key, &raw);
-        if last_plain == content_plain {
+        if maybe_dec(key, &raw) == content_plain {
+            return Ok(());
+        }
+        let same_session = session_start
+            .and_then(|s| secs_between(&s, now))
+            .is_some_and(|d| (0..VERSION_SESSION_SECS).contains(&d));
+        if coalesce && same_session {
+            db.execute(
+                "UPDATE note_versions SET content=?1, message=?2, created_at=?3 WHERE id=?4",
+                params![maybe_enc(key, content_plain), maybe_enc(key, message), now, last_id],
+            )?;
             return Ok(());
         }
     }
     let id = uuid::Uuid::new_v4().to_string();
     db.execute(
-        "INSERT INTO note_versions(id, note_id, content, message, created_at) VALUES(?1,?2,?3,?4,?5)",
-        params![id, note_id, maybe_enc(key, content_plain), maybe_enc(key, message), now],
+        "INSERT INTO note_versions(id, note_id, content, message, created_at, session_start) VALUES(?1,?2,?3,?4,?5,?6)",
+        params![id, note_id, maybe_enc(key, content_plain), maybe_enc(key, message), now, coalesce.then_some(now)],
     )?;
     db.execute(
         "DELETE FROM note_versions WHERE note_id=?1 AND id NOT IN (
@@ -187,6 +213,38 @@ pub(crate) fn save_version_inner(
 
 #[cfg(test)]
 mod tests {
+    use super::*;
+
+    fn versions(db: &Connection) -> Vec<(String, String)> {
+        let mut s = db.prepare("SELECT content, created_at FROM note_versions ORDER BY created_at").unwrap();
+        s.query_map([], |r| Ok((r.get(0)?, r.get(1)?))).unwrap().map(|r| r.unwrap()).collect()
+    }
+
+    #[test]
+    fn autosaves_are_grouped_by_five_minutes_and_named_versions_are_kept() {
+        let db = Connection::open_in_memory().unwrap();
+        init_db(&db).unwrap();
+        let t = |m: u32, s: u32| format!("2026-01-01T10:{:02}:{:02}+00:00", m, s);
+        let save = |c: &str, now: &str, auto: bool| save_version_inner(&db, "n", c, "msg", now, &None, auto).unwrap();
+
+        save("a", &t(0, 0), true);
+        save("ab", &t(0, 2), true);
+        save("abc", &t(4, 59), true);
+        assert_eq!(versions(&db), [("abc".to_string(), t(4, 59))], "même session : une seule version, la plus récente");
+
+        save("abcd", &t(5, 0), true);
+        assert_eq!(versions(&db).len(), 2, "5 min après le début de la session : nouvelle version");
+
+        save("IA", &t(5, 10), false);
+        save("IA+", &t(5, 20), true);
+        let v = versions(&db);
+        assert_eq!(v.len(), 4, "une version nommée n'est jamais remplacée");
+        assert_eq!(v[2].0, "IA");
+
+        save("IA+", &t(5, 30), true);
+        assert_eq!(versions(&db).len(), 4, "contenu identique : rien n'est ajouté");
+    }
+
     #[test]
     fn remove_legacy_git_handles_readonly_objects() {
         let dir = std::env::temp_dir().join(format!("natia-git-{}", uuid::Uuid::new_v4()));

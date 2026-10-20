@@ -1,21 +1,21 @@
 import { invoke } from "@tauri-apps/api/core";
 import { Settings } from "../types";
+import { useLang } from "../i18n";
+import { promptIn } from "../i18n/prompts";
 
 type History = { role: string; content: string }[];
 
+const INTENSITY: Record<string, string> = {
+  eco: "[CONSIGNE DE LONGUEUR : Réponds en 1 à 2 phrases maximum. Sois ultra-concis, va à l'essentiel.]",
+  low: "[CONSIGNE DE LONGUEUR : Réponds en 3 à 5 phrases maximum. Reste concis et direct.]",
+  high: "[CONSIGNE DE LONGUEUR : Développe ta réponse avec des détails pertinents et des exemples si utile. Tu peux aller jusqu'à 300 mots.]",
+  max: "[CONSIGNE DE LONGUEUR : Réponse exhaustive et structurée. Utilise des sections, des exemples, une analyse complète. Ne te limite pas dans la longueur.]",
+};
+
 function applyIntensity(system: string, intensity?: string): string {
-  switch (intensity) {
-    case "eco":
-      return system + "\n\n[CONSIGNE DE LONGUEUR : Réponds en 1 à 2 phrases maximum. Sois ultra-concis, va à l'essentiel.]";
-    case "low":
-      return system + "\n\n[CONSIGNE DE LONGUEUR : Réponds en 3 à 5 phrases maximum. Reste concis et direct.]";
-    case "high":
-      return system + "\n\n[CONSIGNE DE LONGUEUR : Développe ta réponse avec des détails pertinents et des exemples si utile. Tu peux aller jusqu'à 300 mots.]";
-    case "max":
-      return system + "\n\n[CONSIGNE DE LONGUEUR : Réponse exhaustive et structurée. Utilise des sections, des exemples, une analyse complète. Ne te limite pas dans la longueur.]";
-    default: // medium — pas de contrainte ajoutée
-      return system;
-  }
+  // medium (ou inconnu) : pas de contrainte ajoutée
+  const rule = intensity ? INTENSITY[intensity] : undefined;
+  return rule ? `${system}\n\n${promptIn(rule, useLang.getState().lang)}` : system;
 }
 
 export async function aiChat(

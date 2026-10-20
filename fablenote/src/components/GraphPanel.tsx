@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState } from "react";
 import * as d3 from "d3";
-import { Check, ChevronRight, GitBranch, List, Pencil, Plus, Search, Trash2, Brain, X } from "lucide-react";
+import { Check, GitBranch, List, Pencil, Plus, Search, Trash2, Brain, X } from "lucide-react";
 import { useStore, MemoryNode, MemoryNodeType } from "../store";
+import { msg, tr, useT } from "../i18n";
 
 // ── Constants ──────────────────────────────────────────────────────────────────
 
@@ -13,17 +14,17 @@ const TYPE_COLOR: Record<MemoryNodeType, string> = {
 };
 
 const TYPE_LABEL: Record<MemoryNodeType, string> = {
-  projet:      "Projet",
-  utilisateur: "Utilisateur",
-  contexte:    "Contexte",
-  sujet:       "Sujet",
+  projet:      msg("Projet"),
+  utilisateur: msg("Utilisateur"),
+  contexte:    msg("Contexte"),
+  sujet:       msg("Sujet"),
 };
 
 const TYPE_DESC: Record<MemoryNodeType, string> = {
-  projet:      "Dossier / projet de travail",
-  utilisateur: "Contexte utilisateur, IA active",
-  contexte:    "Information contextuelle libre",
-  sujet:       "Sujet ou tag transversal",
+  projet:      msg("Dossier / projet de travail"),
+  utilisateur: msg("Contexte utilisateur, IA active"),
+  contexte:    msg("Information contextuelle libre"),
+  sujet:       msg("Sujet ou tag transversal"),
 };
 
 // Zones de clustering par type (fraction de W/H)
@@ -74,7 +75,7 @@ function buildNodes(
         const count = notes.filter(n => n.folder?.startsWith(root)).length;
         add({
           id: folderId, label: root,
-          content: `${count} note${count !== 1 ? "s" : ""}`,
+          content: count === 1 ? tr("{n} note", { n: 1 }) : tr("{n} notes", { n: count }),
           type: "projet", strength: Math.min(1, 0.3 + count * 0.07),
           auto: true, connections: [],
         });
@@ -87,7 +88,7 @@ function buildNodes(
     for (const [tag, count] of tagCount) {
       if (count < 2) continue;
       const id = `auto:tag:${tag}`;
-      add({ id, label: tag, content: `${count} note${count !== 1 ? "s" : ""}`, type: "sujet", strength: Math.min(1, count * 0.15), auto: true, connections: [] });
+      add({ id, label: tag, content: count === 1 ? tr("{n} note", { n: 1 }) : tr("{n} notes", { n: count }), type: "sujet", strength: Math.min(1, count * 0.15), auto: true, connections: [] });
       for (const n of nodes.filter(nd => nd.type === "projet" && nd.auto)) {
         const hasTag = notes.some(nt => nt.folder?.startsWith(n.label) && (nt.tags ?? []).includes(tag));
         if (hasTag) links.push({ source: id, target: n.id });
@@ -96,7 +97,7 @@ function buildNodes(
 
     // Auto — IA provider node
     add({
-      id: "auto:ai", label: "IA active", content: aiProvider,
+      id: "auto:ai", label: tr("IA active"), content: aiProvider,
       type: "utilisateur", strength: 0.6, auto: true, connections: [],
     });
   }
@@ -123,6 +124,7 @@ type PanelTab = "graph" | "list";
 export default function GraphPanel({ onClose }: { onClose: () => void }) {
   const { notes, folders, settings, memoryEnabled, setMemoryEnabled, memoryGraphEnabled, memoryNodes, addMemoryNode, updateMemoryNode, deleteMemoryNode } = useStore();
   const svgRef = useRef<SVGSVGElement>(null);
+  const t = useT();
   const simRef = useRef<d3.Simulation<SimNode, SimLink> | null>(null);
   const tickleRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const tipRef = useRef<d3.Selection<HTMLDivElement, unknown, HTMLElement, unknown> | null>(null);
@@ -266,7 +268,7 @@ export default function GraphPanel({ onClose }: { onClose: () => void }) {
       .on("click", (ev, d) => { ev.stopPropagation(); setSelected(sel => sel?.id === d.id ? null : d); tip.style("opacity", "0"); })
       .on("mouseover", (ev, d) => {
         cores.filter(n => n.id === d.id).attr("opacity", "1").attr("r", n => (6 + n.strength * 7) * 1.2);
-        tip.html(`<span style="color:${TYPE_COLOR[d.type]};font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:0.05em">${TYPE_LABEL[d.type]}</span><br><strong>${d.label}</strong>${d.content ? `<br><span style="opacity:0.65;font-size:10px">${d.content}</span>` : ""}${d.auto ? '<br><span style="opacity:0.45;font-size:9px">auto-généré</span>' : ""}`)
+        tip.html(`<span style="color:${TYPE_COLOR[d.type]};font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:0.05em">${tr(TYPE_LABEL[d.type])}</span><br><strong>${d.label}</strong>${d.content ? `<br><span style="opacity:0.65;font-size:10px">${d.content}</span>` : ""}${d.auto ? `<br><span style="opacity:0.45;font-size:9px">${tr("auto-généré")}</span>` : ""}`)
           .style("opacity", "1").style("left", `${(ev as MouseEvent).clientX + 14}px`).style("top", `${(ev as MouseEvent).clientY - 10}px`);
       })
       .on("mousemove", ev => tip.style("left", `${(ev as MouseEvent).clientX + 14}px`).style("top", `${(ev as MouseEvent).clientY - 10}px`))
@@ -343,10 +345,10 @@ export default function GraphPanel({ onClose }: { onClose: () => void }) {
         <div className="flex items-center justify-between px-5 py-3 border-b border-border shrink-0">
           <div className="flex items-center gap-3">
             <Brain size={15} className="text-accent" />
-            <span className="font-semibold text-primary text-sm">Mémoire IA</span>
+            <span className="font-semibold text-primary text-sm">{t("Mémoire IA")}</span>
             {memoryEnabled && (
               <>
-                <span className="text-[11px] text-muted">{allData.nodes.length} nœud{allData.nodes.length !== 1 ? "s" : ""}</span>
+                <span className="text-[11px] text-muted">{allData.nodes.length === 1 ? t("{n} nœud", { n: 1 }) : t("{n} nœuds", { n: allData.nodes.length })}</span>
 
                 {/* Tabs */}
                 <div className="flex items-center gap-0.5 ml-2 bg-hover rounded-lg p-0.5">
@@ -356,7 +358,7 @@ export default function GraphPanel({ onClose }: { onClose: () => void }) {
                       className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-medium transition-colors ${tab === "graph" ? "bg-panel text-primary shadow-sm" : "text-muted hover:text-secondary"}`}
                     >
                       <GitBranch size={11} />
-                      Graphe
+                      {t("Graphe")}
                     </button>
                   )}
                   <button
@@ -364,7 +366,7 @@ export default function GraphPanel({ onClose }: { onClose: () => void }) {
                     className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-medium transition-colors ${tab === "list" ? "bg-panel text-primary shadow-sm" : "text-muted hover:text-secondary"}`}
                   >
                     <List size={11} />
-                    Nœuds
+                    {t("Nœuds")}
                   </button>
                 </div>
               </>
@@ -375,10 +377,10 @@ export default function GraphPanel({ onClose }: { onClose: () => void }) {
             {/* Legend (graph tab only) */}
             {memoryEnabled && tab === "graph" && (
               <div className="flex items-center gap-3 mr-2">
-                {(Object.entries(TYPE_COLOR) as [MemoryNodeType, string][]).map(([t, c]) => (
-                  <div key={t} className="flex items-center gap-1">
+                {(Object.entries(TYPE_COLOR) as [MemoryNodeType, string][]).map(([ty, c]) => (
+                  <div key={ty} className="flex items-center gap-1">
                     <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: c }} />
-                    <span className="text-[9px] text-muted">{TYPE_LABEL[t]}</span>
+                    <span className="text-[9px] text-muted">{t(TYPE_LABEL[ty])}</span>
                   </div>
                 ))}
               </div>
@@ -389,10 +391,10 @@ export default function GraphPanel({ onClose }: { onClose: () => void }) {
                 className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-accent/10 border border-accent/25 text-xs text-accent hover:bg-accent/20 transition-colors"
               >
                 <Plus size={12} />
-                Ajouter
+                {t("Ajouter")}
               </button>
             )}
-            <button onClick={onClose} aria-label="Fermer" className="p-1 rounded text-muted hover:text-primary hover:bg-hover transition-colors">
+            <button onClick={onClose} aria-label={t("Fermer")} className="p-1 rounded text-muted hover:text-primary hover:bg-hover transition-colors">
               <X size={16} />
             </button>
           </div>
@@ -408,9 +410,9 @@ export default function GraphPanel({ onClose }: { onClose: () => void }) {
                 <Brain size={26} className="text-accent" />
               </div>
               <div className="max-w-sm">
-                <p className="text-sm font-semibold text-primary">Mémoire IA désactivée</p>
+                <p className="text-sm font-semibold text-primary">{t("Mémoire IA désactivée")}</p>
                 <p className="text-xs text-muted mt-1.5 leading-relaxed">
-                  Ajoute des informations que tu juges importantes — un projet en cours, tes préférences, du contexte récurrent — et NATIA les rappellera automatiquement à l'IA pendant vos conversations.
+                  {t("Ajoute des informations que tu juges importantes — un projet en cours, tes préférences, du contexte récurrent — et NATIA les rappellera automatiquement à l'IA pendant vos conversations.")}
                 </p>
               </div>
               <button
@@ -418,7 +420,7 @@ export default function GraphPanel({ onClose }: { onClose: () => void }) {
                 className="flex items-center gap-1.5 px-4 py-2 rounded-lg bg-accent hover:bg-accent-hover text-white text-sm font-medium transition-colors"
               >
                 <Brain size={13} />
-                Activer la mémoire IA
+                {t("Activer la mémoire IA")}
               </button>
             </div>
           )}
@@ -443,17 +445,17 @@ export default function GraphPanel({ onClose }: { onClose: () => void }) {
                   <div className="flex items-start justify-between gap-2 mb-2">
                     <div>
                       <span className="text-[9px] font-bold uppercase tracking-wider" style={{ color: TYPE_COLOR[selected.type] }}>
-                        {TYPE_LABEL[selected.type]}{selected.auto && <span className="ml-1 opacity-50">· auto</span>}
+                        {t(TYPE_LABEL[selected.type])}{selected.auto && <span className="ml-1 opacity-50">· {t("auto")}</span>}
                       </span>
                       <p className="text-sm font-semibold text-primary mt-0.5">{selected.label}</p>
                     </div>
                     {!selected.auto && (
                       <div className="flex items-center gap-1 shrink-0">
-                        <button onClick={() => openEditForm(selected)}
+                        <button onClick={() => openEditForm(selected)} title={t("Modifier")}
                           className="p-1 rounded text-muted hover:text-accent transition-colors">
                           <Pencil size={12} />
                         </button>
-                        <button onClick={() => { deleteMemoryNode(selected.id); setSelected(null); }}
+                        <button onClick={() => { deleteMemoryNode(selected.id); setSelected(null); }} title={t("Supprimer")}
                           className="p-1 rounded text-muted hover:text-red-400 transition-colors">
                           <Trash2 size={12} />
                         </button>
@@ -481,11 +483,11 @@ export default function GraphPanel({ onClose }: { onClose: () => void }) {
                   <div className="flex flex-col items-center justify-center h-full gap-3 text-center">
                     <Brain size={28} className="text-muted/40" />
                     <div>
-                      <p className="text-sm text-muted font-medium">Aucun nœud en mémoire</p>
-                      <p className="text-xs text-muted/60 mt-1">Ajoute un nœud manuellement, ou active le graphe dans les Paramètres pour dériver des nœuds de tes dossiers et tags</p>
+                      <p className="text-sm text-muted font-medium">{t("Aucun nœud en mémoire")}</p>
+                      <p className="text-xs text-muted/60 mt-1">{t("Ajoute un nœud manuellement, ou active le graphe dans les Paramètres pour dériver des nœuds de tes dossiers et tags")}</p>
                     </div>
                     <button onClick={openCreateForm} className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-accent/10 border border-accent/25 text-xs text-accent hover:bg-accent/20 transition-colors">
-                      <Plus size={11} />Ajouter un nœud
+                      <Plus size={11} />{t("Ajouter un nœud")}
                     </button>
                   </div>
                 )}
@@ -496,12 +498,12 @@ export default function GraphPanel({ onClose }: { onClose: () => void }) {
                     <input
                       value={query}
                       onChange={(e) => setQuery(e.target.value)}
-                      placeholder="Chercher un nœud…"
-                      aria-label="Chercher un nœud de mémoire"
+                      placeholder={t("Chercher un nœud…")}
+                      aria-label={t("Chercher un nœud de mémoire")}
                       className="flex-1 bg-transparent text-xs text-primary placeholder-muted outline-none"
                     />
                     {query && (
-                      <button onClick={() => setQuery("")} aria-label="Effacer" className="text-muted hover:text-primary transition-colors shrink-0">
+                      <button onClick={() => setQuery("")} aria-label={t("Effacer")} className="text-muted hover:text-primary transition-colors shrink-0">
                         <X size={11} />
                       </button>
                     )}
@@ -509,7 +511,7 @@ export default function GraphPanel({ onClose }: { onClose: () => void }) {
                 )}
 
                 {grouped.length > 0 && filteredGrouped.length === 0 && (
-                  <p className="text-xs text-muted text-center py-6">Aucun nœud ne correspond à « {query} »</p>
+                  <p className="text-xs text-muted text-center py-6">{t("Aucun nœud ne correspond à « {q} »", { q: query })}</p>
                 )}
 
                 {filteredGrouped.map(({ type, nodes }) => (
@@ -517,9 +519,9 @@ export default function GraphPanel({ onClose }: { onClose: () => void }) {
                     <div className="flex items-center gap-2 mb-2">
                       <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: TYPE_COLOR[type] }} />
                       <span className="text-[10px] font-bold uppercase tracking-wider" style={{ color: TYPE_COLOR[type] }}>
-                        {TYPE_LABEL[type]}
+                        {t(TYPE_LABEL[type])}
                       </span>
-                      <span className="text-[10px] text-muted">— {TYPE_DESC[type]}</span>
+                      <span className="text-[10px] text-muted">— {t(TYPE_DESC[type])}</span>
                       <span className="ml-auto text-[10px] text-muted">{nodes.length}</span>
                     </div>
                     <div className="flex flex-col gap-1.5 pl-4 border-l-2" style={{ borderColor: TYPE_COLOR[type] + "30" }}>
@@ -532,7 +534,7 @@ export default function GraphPanel({ onClose }: { onClose: () => void }) {
                             <div className="flex items-center gap-2">
                               <span className="text-sm font-medium text-primary truncate">{node.label}</span>
                               {node.auto && (
-                                <span className="shrink-0 text-[9px] px-1.5 py-0.5 rounded-full bg-border/50 text-muted font-medium">auto</span>
+                                <span className="shrink-0 text-[9px] px-1.5 py-0.5 rounded-full bg-border/50 text-muted font-medium">{t("auto")}</span>
                               )}
                             </div>
                             {node.content && (
@@ -546,7 +548,7 @@ export default function GraphPanel({ onClose }: { onClose: () => void }) {
                                 <>
                                   <button onClick={() => { deleteMemoryNode(node.id); setConfirmDelete(null); }}
                                     className="text-[10px] px-2 py-1 rounded bg-red-400/15 text-red-400 border border-red-400/25 hover:bg-red-400/25 transition-colors">
-                                    Confirmer
+                                    {t("Confirmer")}
                                   </button>
                                   <button onClick={() => setConfirmDelete(null)}
                                     className="text-[10px] px-1.5 py-1 rounded text-muted hover:text-primary transition-colors">
@@ -555,11 +557,11 @@ export default function GraphPanel({ onClose }: { onClose: () => void }) {
                                 </>
                               ) : (
                                 <>
-                                  <button onClick={() => openEditForm(node)}
+                                  <button onClick={() => openEditForm(node)} title={t("Modifier")}
                                     className="p-1 rounded text-muted hover:text-accent transition-colors">
                                     <Pencil size={12} />
                                   </button>
-                                  <button onClick={() => setConfirmDelete(node.id)}
+                                  <button onClick={() => setConfirmDelete(node.id)} title={t("Supprimer")}
                                     className="p-1 rounded text-muted hover:text-red-400 transition-colors">
                                     <Trash2 size={12} />
                                   </button>
@@ -591,16 +593,15 @@ export default function GraphPanel({ onClose }: { onClose: () => void }) {
         {memoryEnabled && (
           <div className="px-5 py-2 border-t border-border shrink-0 flex items-center gap-4">
             {tab === "graph" ? (
-              <span className="text-[11px] text-muted">Scroll = zoom · Drag = déplacer · Clic = détails</span>
+              <span className="text-[11px] text-muted">{t("Molette = zoom · Glisser = déplacer · Clic = détails")}</span>
             ) : (
               <span className="text-[11px] text-muted">
-                Les nœuds <span className="text-secondary">auto</span> sont générés depuis tes dossiers, tags et fournisseur IA · les nœuds{" "}
-                <span className="text-secondary">manuels</span> les plus importants sont transmis à l'IA
+                {t("Les nœuds auto sont générés depuis tes dossiers, tags et fournisseur IA · les nœuds manuels les plus importants sont transmis à l'IA")}
               </span>
             )}
             <span className="text-[11px] text-muted ml-auto">
-              {memoryNodes.length} manuel{memoryNodes.length !== 1 ? "s" : ""} ·{" "}
-              {allData.nodes.length - memoryNodes.length} auto
+              {memoryNodes.length === 1 ? t("{n} manuel", { n: 1 }) : t("{n} manuels", { n: memoryNodes.length })} ·{" "}
+              {t("{n} auto", { n: allData.nodes.length - memoryNodes.length })}
             </span>
           </div>
         )}
@@ -627,56 +628,57 @@ function NodeForm({
   const wrapperClass = variant === "floating"
     ? "absolute top-3 right-3 bg-panel border border-border rounded-xl shadow-xl p-4 w-64 z-20 flex flex-col gap-3"
     : "w-64 border-l border-border bg-panel flex flex-col p-4 gap-3 shrink-0";
+  const t = useT();
 
   return (
     <div className={wrapperClass}>
       <div className="flex items-center justify-between">
-        <p className="text-xs font-semibold text-primary">{mode === "edit" ? "Modifier le nœud" : "Nouveau nœud"}</p>
-        <button onClick={onClose} aria-label="Fermer" className="p-0.5 rounded text-muted hover:text-primary transition-colors"><X size={13} /></button>
+        <p className="text-xs font-semibold text-primary">{mode === "edit" ? t("Modifier le nœud") : t("Nouveau nœud")}</p>
+        <button onClick={onClose} aria-label={t("Fermer")} className="p-0.5 rounded text-muted hover:text-primary transition-colors"><X size={13} /></button>
       </div>
 
       <div className="flex flex-col gap-1">
-        <label className="text-[11px] text-muted uppercase tracking-wide">Type</label>
+        <label className="text-[11px] text-muted uppercase tracking-wide">{t("Type")}</label>
         <div className="grid grid-cols-2 gap-1">
-          {(Object.entries(TYPE_LABEL) as [MemoryNodeType, string][]).map(([t, l]) => (
-            <button key={t} onClick={() => onType(t)}
-              className={`py-1.5 px-2 rounded-lg text-xs font-medium border transition-colors ${type === t ? "border-current" : "bg-hover border-border text-muted hover:text-secondary"}`}
-              style={type === t ? { backgroundColor: TYPE_COLOR[t] + "18", borderColor: TYPE_COLOR[t] + "55", color: TYPE_COLOR[t] } : {}}>
-              {l}
+          {(Object.entries(TYPE_LABEL) as [MemoryNodeType, string][]).map(([ty, l]) => (
+            <button key={ty} onClick={() => onType(ty)}
+              className={`py-1.5 px-2 rounded-lg text-xs font-medium border transition-colors ${type === ty ? "border-current" : "bg-hover border-border text-muted hover:text-secondary"}`}
+              style={type === ty ? { backgroundColor: TYPE_COLOR[ty] + "18", borderColor: TYPE_COLOR[ty] + "55", color: TYPE_COLOR[ty] } : {}}>
+              {t(l)}
             </button>
           ))}
         </div>
-        <p className="text-[11px] text-muted mt-0.5">{TYPE_DESC[type]}</p>
+        <p className="text-[11px] text-muted mt-0.5">{t(TYPE_DESC[type])}</p>
       </div>
 
       <div className="flex flex-col gap-1">
-        <label className="text-[11px] text-muted uppercase tracking-wide">Label</label>
+        <label className="text-[11px] text-muted uppercase tracking-wide">{t("Nom")}</label>
         <input value={label} onChange={e => onLabel(e.target.value)} onKeyDown={e => { if (e.key === "Enter") onSubmit(); }}
-          placeholder="Ex : Projet Alpha…"
+          placeholder={t("Ex : Projet Alpha…")}
           className="bg-hover border border-border rounded-lg px-2.5 py-1.5 text-xs text-primary outline-none focus:border-accent/50 transition-colors" />
       </div>
 
       <div className="flex flex-col gap-1">
-        <label className="text-[11px] text-muted uppercase tracking-wide">Description</label>
+        <label className="text-[11px] text-muted uppercase tracking-wide">{t("Description")}</label>
         <textarea value={content} onChange={e => onContent(e.target.value)}
-          placeholder="Informations contextuelles…" rows={3}
+          placeholder={t("Informations contextuelles…")} rows={3}
           className="bg-hover border border-border rounded-lg px-2.5 py-1.5 text-xs text-primary outline-none focus:border-accent/50 transition-colors resize-none" />
       </div>
 
       <div className="flex flex-col gap-1">
         <div className="flex items-center justify-between">
-          <label className="text-[11px] text-muted uppercase tracking-wide">Importance</label>
+          <label className="text-[11px] text-muted uppercase tracking-wide">{t("Importance")}</label>
           <span className="text-[11px] text-accent font-mono">{Math.round(strength * 10)}/10</span>
         </div>
         <input type="range" min={0.1} max={1} step={0.1} value={strength}
           onChange={e => onStrength(parseFloat(e.target.value))}
           className="w-full accent-accent" />
-        <p className="text-[10px] text-muted/70 leading-relaxed">Priorité de rappel à l'IA — les nœuds les plus importants sont transmis en premier</p>
+        <p className="text-[10px] text-muted/70 leading-relaxed">{t("Priorité de rappel à l'IA — les nœuds les plus importants sont transmis en premier")}</p>
       </div>
 
       <button onClick={onSubmit} disabled={!label.trim()}
         className="w-full py-2 rounded-lg bg-accent hover:bg-accent/90 disabled:opacity-40 text-white text-xs font-semibold transition-colors flex items-center justify-center gap-1.5">
-        {mode === "edit" ? <><Check size={11} />Enregistrer</> : <><Plus size={11} />Ajouter le nœud</>}
+        {mode === "edit" ? <><Check size={11} />{t("Enregistrer")}</> : <><Plus size={11} />{t("Ajouter le nœud")}</>}
       </button>
     </div>
   );
