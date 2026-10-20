@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { lazy, Suspense, useEffect, useRef, useState } from "react";
 import {
   CalendarDays,
   ChevronRight,
@@ -28,10 +28,11 @@ import {
 } from "lucide-react";
 import { invoke } from "@tauri-apps/api/core";
 import { save } from "@tauri-apps/plugin-dialog";
-import TreeMapPanel from "./TreeMapPanel";
-import CalendarPanel from "./CalendarPanel";
-import PostItsPanel from "./PostItsPanel";
-import GraphPanel from "./GraphPanel";
+// Chargés à l'ouverture : ces panneaux (et d3 / diff) ne pèsent plus sur le démarrage.
+const TreeMapPanel = lazy(() => import("./TreeMapPanel"));
+const CalendarPanel = lazy(() => import("./CalendarPanel"));
+const PostItsPanel = lazy(() => import("./PostItsPanel"));
+const GraphPanel = lazy(() => import("./GraphPanel"));
 import ResizeHandle from "./ResizeHandle";
 import Tip from "./Tooltip";
 import { useStore } from "../store";
@@ -685,10 +686,12 @@ export default function Sidebar() {
       </div>
 
       {/* Tree map overlay */}
-      {showTreeMap && <TreeMapPanel onClose={() => setShowTreeMap(false)} />}
-      {showCalendar && <CalendarPanel onClose={() => setShowCalendar(false)} />}
-      {showPostIts && <PostItsPanel onClose={() => setShowPostIts(false)} />}
-      {showGraph && <GraphPanel onClose={toggleGraph} />}
+      <Suspense fallback={null}>
+        {showTreeMap && <TreeMapPanel onClose={() => setShowTreeMap(false)} />}
+        {showCalendar && <CalendarPanel onClose={() => setShowCalendar(false)} />}
+        {showPostIts && <PostItsPanel onClose={() => setShowPostIts(false)} />}
+        {showGraph && <GraphPanel onClose={toggleGraph} />}
+      </Suspense>
 
       {/* Context menus */}
       {menu && (

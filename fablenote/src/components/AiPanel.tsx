@@ -27,6 +27,7 @@ import {
   X,
   Zap,
 } from "lucide-react";
+import CloudAiNotice, { onlineProviderLabel } from "./CloudAiNotice";
 import { fetchModels } from "../hooks/useOllama";
 import { CorrectionModal } from "./ai/CorrectionModal";
 import { OpButton } from "./ai/OpButton";
@@ -169,6 +170,11 @@ export default function AiPanel({ onOpenConv }: { onOpenConv: () => void }) {
 
   const effectiveSettings = { ...settings, ai_provider: localProvider };
   const isConnectionActive = activeConnectionId !== null;
+  const activeConnectionInfo = apiConnections.find((c) => c.id === activeConnectionId);
+  // Les connexions par clé API visent toujours un service en ligne ; seul Ollama reste local.
+  const onlineService = isConnectionActive
+    ? activeConnectionInfo?.provider || activeConnectionInfo?.name || "un service en ligne"
+    : onlineProviderLabel(localProvider);
 
   useEffect(() => {
     setConnTestStatus("idle");
@@ -1059,6 +1065,7 @@ Réponds UNIQUEMENT avec ce JSON (rien d'autre, pas de texte, pas de \`\`\`) :
             </div>
           );
         })()}
+        {activeTab === "ops" && <CloudAiNotice service={onlineService} className="mx-3 mb-2" />}
 
         {/* Inline add-key form */}
         {activeTab === "ops" && showAddKey && (

@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { lazy, Suspense, useEffect, useRef, useState } from "react";
 import { listen } from "@tauri-apps/api/event";
 import { invoke } from "@tauri-apps/api/core";
 import DOMPurify from "dompurify";
@@ -7,6 +7,7 @@ import {
   MessagesSquare, Search, Send, Sparkles, Tag, Terminal, X,
 } from "lucide-react";
 import { useStore } from "../store";
+import CloudAiNotice, { onlineProviderLabel } from "./CloudAiNotice";
 import { lockSafely } from "../lib/lockSafely";
 import { aiStream } from "../lib/aiInvoke";
 import { markdownToHtml } from "../lib/markdown";
@@ -15,13 +16,15 @@ import AiPanel from "./AiPanel";
 import D20Roller from "./D20Roller";
 import Editor from "./Editor";
 import ReminderDaemon from "./ReminderDaemon";
+import BackupReminder from "./BackupReminder";
 import ResizeHandle from "./ResizeHandle";
-import Settings from "./Settings";
-import ShortcutsOverlay from "./ShortcutsOverlay";
 import Sidebar from "./Sidebar";
 import SplitPane from "./SplitPane";
-import TrashPanel from "./TrashPanel";
-import VersionTree from "./VersionTree";
+// Chargés à l'ouverture : ces panneaux (et d3 / diff) ne pèsent plus sur le démarrage.
+const Settings = lazy(() => import("./Settings"));
+const ShortcutsOverlay = lazy(() => import("./ShortcutsOverlay"));
+const TrashPanel = lazy(() => import("./TrashPanel"));
+const VersionTree = lazy(() => import("./VersionTree"));
 
 type ConvMessage = { role: "user" | "ai"; content: string };
 
@@ -166,18 +169,20 @@ export default function Layout() {
 
         {showVersionPanel && (
           <aside className="w-72 shrink-0 border-l border-border overflow-hidden flex flex-col bg-panel">
-            <VersionTree />
+            <Suspense fallback={null}><VersionTree /></Suspense>
           </aside>
         )}
       </div>
 
-      {showSettings && <Settings />}
-      {showTrash && <TrashPanel />}
+      <Suspense fallback={null}>
+        {showSettings && <Settings />}
+        {showTrash && <TrashPanel />}
+        {shortcutsOpen && <ShortcutsOverlay onClose={() => setShortcutsOpen(false)} />}
+      </Suspense>
       <D20Roller />
       <ReminderDaemon />
+      <BackupReminder />
 
-      {/* Fiche des raccourcis clavier */}
-      {shortcutsOpen && <ShortcutsOverlay onClose={() => setShortcutsOpen(false)} />}
 
       {/* Quick open modal */}
       {quickOpen && (
@@ -526,6 +531,7 @@ function ConvPanel({
           <X size={14} />
         </button>
       </div>
+      <CloudAiNotice service={onlineProviderLabel(settings.ai_provider)} className="shrink-0 px-3 py-1.5 border-b border-border" />
       {activeNote && (
         <div className="shrink-0 flex items-center gap-1.5 px-3 py-1.5 bg-accent/5 border-b border-border/50 text-[11px] text-muted">
           <FileText size={10} className="text-accent shrink-0" />

@@ -1,158 +1,184 @@
 # Guide de contribution — NATIA
 
-Merci de vouloir contribuer à NATIA ! Ce document explique comment configurer l'environnement, les conventions de code et le processus de contribution.
+Merci de vouloir contribuer à NATIA ! Ce document explique comment installer l'environnement, les règles du code et la façon de proposer une modification.
+
+---
+
+## Avant de commencer : la licence
+
+NATIA est publiée sous une licence « code source consultable », pas sous une licence libre (voir [LICENSE](../LICENSE)) :
+
+- vous pouvez forker le dépôt sur GitHub **pour proposer des modifications par pull request** vers ce dépôt ;
+- vous pouvez modifier le code pour votre usage personnel ;
+- vous ne pouvez pas publier votre propre version de NATIA, même gratuitement, ni l'utiliser commercialement sans accord.
+
+En proposant une pull request, vous acceptez que votre contribution puisse être intégrée et réutilisée par l'auteur selon l'article 4 de la licence.
 
 ---
 
 ## Prérequis
 
-- Node.js ≥ 18
+- Windows 10 ou 11 (NATIA est développée et testée sous Windows)
+- Node.js ≥ 20
 - Rust stable (`rustup update stable`)
-- Git ≥ 2.30
-- Ollama *(optionnel, pour tester les fonctionnalités IA)*
+- Git, pour cloner le dépôt
+- Ollama *(facultatif)*, pour tester l'IA locale
 
 ---
 
 ## Mise en place locale
 
 ```bash
-git clone https://github.com/votre-nom/natia.git
-cd natia/fablenote
+git clone https://github.com/Buntasam/NATIA.git
+cd NATIA/fablenote
 npm install
 npm run tauri dev
 ```
 
-La hot-reload Vite fonctionne pour le frontend. Pour les changements Rust, Tauri recompile automatiquement en mode `dev`.
+Le frontend se recharge à chaud (Vite, port 1420). Tauri recompile automatiquement le Rust à chaque modification.
+
+> La version de développement utilise le même dossier de données qu'une version installée (`%APPDATA%\com.natia.app`). Pour repartir de zéro : « Réinitialiser l'app » dans Paramètres → Données ou sur l'écran de verrouillage.
 
 ---
 
-## Architecture décisionnelle
+## Vérifier avant de proposer une modification
 
-### Pourquoi Tauri et pas Electron ?
+```bash
+cd NATIA/fablenote
+npx tsc --noEmit                                     # types TypeScript
+npm run build                                        # compilation du frontend
+cd src-tauri && cargo test --no-default-features --lib   # tests Rust
+```
 
-Tauri utilise le WebView natif du système (Edge WebView2 sur Windows, WebKit sur macOS/Linux) plutôt qu'un Chromium embarqué. Le binaire final est ~10× plus léger et la consommation mémoire au repos est bien inférieure.
+Pour compiler l'application complète sans créer d'installeur :
 
-### Pourquoi SQLite pour les métadonnées et HTML pour le contenu ?
+```bash
+npm run tauri build -- --no-bundle
+```
 
-- SQLite — requêtes rapides sur titres, tags, dossiers sans charger le contenu
-- HTML — format natif de TipTap, facile à versionner ligne par ligne avec Git
-- Git interne — chaque sauvegarde est un commit dans `AppDataDir/notes/.git` ; aucun service externe
-
-### Pourquoi Zustand et pas Redux ?
-
-Zustand a une API minimaliste parfaitement adaptée à une app mono-fenêtre sans besoin de middleware ou de reducers.
-
-### Pourquoi chiffrement au niveau des champs (field-level) et pas SQLCipher ?
-
-SQLCipher est une dépendance native qui complique le build cross-platform. Le chiffrement field-level avec AES-256-GCM est portable et évite les dépendances supplémentaires. Le préfixe `ENC:v1:` garantit la compatibilité avec des données non chiffrées (migration transparente).
+Un `npm run tauri build` complet produit aussi les fichiers de mise à jour signés et demande donc la clé privée de signature (`TAURI_SIGNING_PRIVATE_KEY`), réservée au mainteneur. Les releases officielles sont compilées par GitHub Actions.
 
 ---
 
-## Conventions de code
+## Choix d'architecture
+
+Le détail est dans [ARCHITECTURE.md](ARCHITECTURE.md). En bref :
+
+- **Tauri plutôt qu'Electron** : WebView du système au lieu d'un Chromium embarqué, binaire beaucoup plus léger.
+- **SQLite pour les métadonnées, HTML pour le contenu** : SQLite pour les titres, tags, dossiers et versions ; HTML car c'est le format natif de TipTap.
+- **Historique des versions dans SQLite** (`note_versions`), 200 versions au maximum par note.
+- **Zustand** : API minimale, suffisante pour une app à une fenêtre.
+- **Chiffrement champ par champ plutôt que SQLCipher** : pas de dépendance native à compiler, et le préfixe `ENC:v1:` permet d'activer ou retirer le mot de passe sur une base existante.
+
+---
+
+## Règles du code
 
 ### TypeScript (frontend)
 
-- Pas de `any` — typer explicitement via `src/types/index.ts`
-- Composants en PascalCase, hooks en `use*`
-- Styles via classes Tailwind uniquement (pas de style inline sauf cas exceptionnel)
-- Couleurs via les variables CSS (`bg-base`, `text-primary`, etc.) — ne jamais utiliser de couleurs hardcodées
-- Pas de `invoke()` dans les composants — passer par le store Zustand
+- Pas de `any` : typer via `src/types/index.ts`.
+- Composants en PascalCase, hooks en `use*`.
+- Styles avec Tailwind et les variables CSS du thème (`bg-base`, `text-primary`…), jamais de couleurs codées en dur.
+- Les actions sur les notes, dossiers et paramètres passent par le store Zustand.
+- Un paramètre enregistré par le bouton « Sauvegarder » se modifie via `form` / `set`, passés par `Settings.tsx` aux composants de `src/components/settings/`.
+- Les liens externes passent par `openUrl` (plugin `opener`) ; toute nouvelle URL doit être ajoutée dans `src-tauri/capabilities/default.json`.
 
 ### Rust (backend)
 
-- Chaque commande Tauri doit être déclarée avec `#[tauri::command]` et enregistrée dans `invoke_handler`
-- Erreurs retournées sous `Result<_, String>` pour être sérialisables vers le frontend
-- Pas de `unwrap()` dans le code de production — utiliser `?` ou `map_err`
-- Toujours utiliser `maybe_enc` / `maybe_dec` pour les lectures/écritures de données utilisateur (transparence chiffrement)
+- Chaque commande a `#[tauri::command]` et est enregistrée dans `invoke_handler` (`lib.rs`).
+- Les erreurs sont renvoyées en `Result<_, String>`.
+- Pas de `unwrap()` dans le code de production : utiliser `?` ou `map_err`.
+- Une commande lourde (parcours de toutes les notes…) doit être `async`, sinon elle bloque la fenêtre.
+- La logique testable va dans une fonction qui prend une connexion SQLite, la commande Tauri ne fait que l'appeler (voir `create_folder_in`, `search_rows`…).
 
-### Chiffrement
+### Chiffrement et sécurité
 
-- La clé AES (`enc_key`) ne doit **jamais** être loggée, sérialisée ou persistée
-- Toujours générer un nonce aléatoire frais avec `OsRng` pour chaque valeur chiffrée
-- Toutes les comparaisons de hash doivent être en temps constant (`subtle::ConstantTimeEq`)
+- Toute donnée personnelle lue ou écrite passe par `maybe_enc` / `maybe_dec` avec la clé de `AppState`.
+- Une nouvelle colonne ou table contenant des données personnelles doit être ajoutée à `encrypt_all_data` **et** `decrypt_all_data` (`crypto.rs`), avec un test.
+- Une valeur chiffrée ayant un nonce aléatoire, on ne peut pas la comparer en SQL (`WHERE`, `LIKE`) : charger, déchiffrer et filtrer en Rust.
+- Toute commande qui écrit des données appelle `crate::require_unlocked(&state)?` en premier.
+- La clé (`enc_key`) ne doit jamais être loguée, sérialisée ni persistée ; l'effacer avec `zeroize`.
+- Comparer les hash en temps constant.
+- Les tests ne doivent **jamais** utiliser le vrai coffre d'identifiants Windows : injecter le secret de l'appareil (voir `unwrap_dek_with` dans `settings.rs`).
 
-### Thème / dark mode
+### Thème
 
-Le système de thème repose sur deux mécanismes :
-
-1. **CSS** — classe `.dark` sur `<html>` + variables CSS dans `src/index.css`
-2. **Natif** — commande Tauri `set_window_theme(dark: bool)` qui appelle `window.set_theme()` pour synchroniser la barre de titre OS
-
-Toujours appeler les deux lors d'un changement de thème.
+Un changement de thème met à jour la classe `.dark` sur `<html>` (variables CSS de `src/index.css`) et appelle `set_window_theme` pour la barre de titre Windows.
 
 ---
 
 ## Ajouter une commande Tauri
 
-1. Écrire la fonction Rust dans `src-tauri/src/lib.rs` avec `#[tauri::command]`
-2. L'ajouter dans `tauri::generate_handler![...]` dans la fonction `run()`
-3. L'appeler depuis le frontend avec `invoke("nom_commande", { param: valeur })`
+1. Écrire la fonction dans le module concerné (`notes.rs`, `settings.rs`…) avec `#[tauri::command]`.
+2. L'ajouter dans `tauri::generate_handler![...]` dans `lib.rs`.
+3. L'appeler depuis le frontend avec `invoke("nom_commande", { param: valeur })` (les noms en camelCase côté JS sont convertis en snake_case côté Rust).
 
-Exemple minimal :
+Exemple avec des données chiffrées :
 
 ```rust
 #[tauri::command]
-fn ma_commande(texte: String) -> Result<String, String> {
-    Ok(format!("Reçu : {}", texte))
+pub fn ma_commande(valeur: String, state: State<AppState>) -> Result<(), String> {
+    crate::require_unlocked(&state)?;
+    // Copier la clé avant de verrouiller la base, pour ne jamais tenir les deux verrous.
+    let key = state.enc_key.lock().map_err(|e| e.to_string())?.clone();
+    let db = state.db.lock().map_err(|e| e.to_string())?;
+    db.execute("INSERT INTO ma_table(valeur) VALUES(?1)", params![maybe_enc(&key, &valeur)])
+        .map_err(|e| e.to_string())?;
+    Ok(())
 }
 ```
 
 ```ts
 import { invoke } from "@tauri-apps/api/core";
-const resultat = await invoke<string>("ma_commande", { texte: "bonjour" });
-```
-
-Si la commande lit ou écrit des données utilisateur, utiliser `maybe_enc` / `maybe_dec` avec la clé du `AppState` :
-
-```rust
-#[tauri::command]
-fn ma_commande_chiffree(state: State<AppState>, valeur: String) -> Result<String, String> {
-    let db = state.db.lock().unwrap();
-    let key = state.enc_key.lock().unwrap();
-    let enc = maybe_enc(&key, &valeur);
-    // ... stocker enc en DB ...
-    Ok(())
-}
+await invoke("ma_commande", { valeur: "bonjour" });
 ```
 
 ---
 
 ## Ajouter une opération IA
 
-Les opérations IA sont définies dans `src/components/AiPanel.tsx`. Chaque opération :
+Les opérations sont dans `src/components/AiPanel.tsx`. Elles appellent `aiChat()` ou `aiStream()` de `src/lib/aiInvoke.ts`, qui choisissent la bonne commande Rust selon le fournisseur actif. En streaming, la réponse arrive par les événements `ollama-token` puis `ollama-done`, quel que soit le fournisseur.
 
-1. Appelle `invoke("ollama_chat", { url, model, systemPrompt, userMessage })`
-2. Ou utilise `invoke("ollama_stream", ...)` + écoute de l'événement `ollama-chunk` pour le streaming
-
-Les prompts par défaut sont dans `src/store/index.ts` (`DEFAULT_SETTINGS`) et éditables par l'utilisateur dans les Paramètres.
+Les prompts par défaut sont dans `src/store/index.ts` (`DEFAULT_SETTINGS`) et les préréglages dans `src/components/settings/promptPresets.ts`.
 
 ---
 
-## Tester le chiffrement manuellement
+## Tester le chiffrement à la main
 
-1. Lancer l'app en dev : `npm run tauri dev`
-2. Ouvrir Paramètres → Avancé → Sécurité → Activer
-3. Choisir PIN ou alphanumérique, définir un mot de passe
-4. Fermer et relancer l'app — l'écran de verrouillage doit apparaître
-5. Saisir le bon mot de passe → les notes doivent se charger normalement
-6. Vérifier dans SQLite Browser que les titres en DB commencent par `ENC:v1:`
+1. `npm run tauri dev`, puis Paramètres → Sécurité → Activer.
+2. Choisir un PIN ou un mot de passe.
+3. Fermer et relancer l'app : l'écran de verrouillage doit apparaître.
+4. Saisir le bon mot de passe : les notes se chargent.
+5. Avec un outil SQLite (DB Browser for SQLite), ouvrir `%APPDATA%\com.natia.app\natia.db` : titres, tags, dossiers, contenus des versions et paramètres doivent commencer par `ENC:v1:`.
+
+Les tests Rust (`cargo test`) vérifient déjà qu'aucun texte témoin ne reste en clair après chiffrement.
 
 ---
 
-## Pull Requests
+## Pull requests
 
-1. Forker le dépôt et créer une branche depuis `main` : `git checkout -b feat/ma-feature`
-2. Commiter avec des messages clairs et concis en anglais ou français
-3. Ouvrir une PR vers `main` en décrivant le contexte, les changements et comment tester
-4. S'assurer que `npm run tauri build` passe sans erreur avant de soumettre
+1. Forker le dépôt et créer une branche depuis `main` : `git checkout -b feat/ma-fonctionnalite`.
+2. Commiter avec des messages clairs, en français ou en anglais.
+3. Lancer les vérifications ci-dessus.
+4. Ouvrir une pull request vers `main` en expliquant le contexte, les changements et comment tester.
+
+---
+
+## Publier une version (mainteneur)
+
+1. Pousser le code sur `main`.
+2. Créer et pousser un tag : `git tag v6.2.0` puis `git push origin v6.2.0` (format `vX.Y.Z` obligatoire, il devient le numéro de version de l'app).
+3. GitHub Actions lance les tests, compile, signe et crée un **brouillon** de release.
+4. Vérifier le brouillon, puis le publier comme release normale (pas « pre-release ») : les utilisateurs se verront proposer la mise à jour.
 
 ---
 
 ## Signaler un bug
 
-Ouvrir une issue GitHub avec :
-- La version de NATIA (visible dans `tauri.conf.json` → `version`)
-- L'OS et sa version
-- Les étapes pour reproduire
-- Le comportement attendu vs observé
-- Les logs de la console (F12 dans l'app en mode dev, ou `~/.local/share/com.fablenote.app/logs/` en production)
+Ouvrir une [issue](https://github.com/Buntasam/NATIA/issues) avec :
+
+- la version de NATIA (Paramètres → Application → Mises à jour) ;
+- la version de Windows ;
+- les étapes pour reproduire ;
+- le comportement attendu et le comportement observé ;
+- si possible, la trace du mode débogage (Paramètres → Application → Développement, puis onglet Debug du panneau IA). Vérifiez qu'elle ne contient rien de personnel avant de la partager.

@@ -4,6 +4,7 @@ import { open as openDialog, save } from "@tauri-apps/plugin-dialog";
 import { AlertTriangle, Download, FolderOpen, Trash2 as TrashIcon, Upload } from "lucide-react";
 import { useStore } from "../../store";
 import ResetConfirmDialog from "../ResetConfirmDialog";
+import { formatLastBackup, isBackupReminderEnabled, recordBackup, setBackupReminderEnabled } from "../../lib/backupReminder";
 import { Section, SecInput } from "./SettingsWidgets";
 
 export default function DataSettings() {
@@ -27,6 +28,8 @@ export default function DataSettings() {
   };
   // window.confirm() ne s'affiche pas dans Tauri : on passe par la boîte de confirmation de l'app.
   const [showResetDialog, setShowResetDialog] = useState(false);
+  const [reminderOn, setReminderOn] = useState(isBackupReminderEnabled);
+  const [lastBackup, setLastBackup] = useState(() => formatLastBackup());
 
   const handleExport = async () => {
     const isProtected = exportMode !== "plain";
@@ -47,6 +50,8 @@ export default function DataSettings() {
     try {
       await invoke("save_zip_to_path", { path: filePath, password: isProtected ? exportPw : null, mode: isProtected ? exportMode : null });
       setExportPw(""); setExportPw2("");
+      recordBackup();
+      setLastBackup(formatLastBackup());
       setExportDone(true);
       setTimeout(() => setExportDone(false), 3000);
     } catch (e) { setExportError(String(e)); }
@@ -83,7 +88,21 @@ export default function DataSettings() {
         <div className="flex flex-col gap-3">
           <div>
             <p className="text-sm text-secondary">Exporter toutes les notes</p>
-            <p className="text-[10px] text-muted mt-0.5">Archive ZIP · dossiers, sous-dossiers et fichiers HTML inclus</p>
+            <p className="text-[10px] text-muted mt-0.5">Archive ZIP · dossiers, sous-dossiers et fichiers HTML inclus · dernière sauvegarde : {lastBackup}</p>
+          </div>
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-xs text-secondary">Me rappeler de sauvegarder chaque semaine</p>
+              <p className="text-[10px] text-muted mt-0.5">Une petite fenêtre le propose si aucun export n'a été fait depuis 7 jours</p>
+            </div>
+            <button
+              role="switch"
+              aria-checked={reminderOn}
+              onClick={() => { setBackupReminderEnabled(!reminderOn); setReminderOn(!reminderOn); }}
+              className={`relative w-9 h-5 rounded-full transition-colors shrink-0 ${reminderOn ? "bg-accent" : "bg-border"}`}
+            >
+              <span className={`absolute top-0.5 w-4 h-4 rounded-full bg-white shadow-sm transition-transform ${reminderOn ? "left-[18px]" : "left-0.5"}`} />
+            </button>
           </div>
           <div className="flex gap-2">
             {([
