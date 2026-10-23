@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { openUrl } from "@tauri-apps/plugin-opener";
-import { Check, Cpu, Download, ExternalLink, Loader2, ShieldCheck, Trash2, X } from "lucide-react";
+import { Check, Cpu, Download, ExternalLink, Library, Loader2, ShieldCheck, Trash2, X } from "lucide-react";
 import { useStore } from "../../store";
 import { msg, trError, useLocale, useT } from "../../i18n";
 import { SettingsFormProps } from "./types";
@@ -14,7 +14,7 @@ interface ModelInfo { id: string; name: string; size: number; license: string; l
 interface Gpu { name: string; vram_mib: number }
 interface LlmStatus {
   engine_installed: boolean; engine_version: string; engine_size: number;
-  models: ModelInfo[]; recommended: string; ram_gb: number; gpu: Gpu | null;
+  models: ModelInfo[]; embed_model: ModelInfo; recommended: string; ram_gb: number; gpu: Gpu | null;
   running: string | null; downloading: boolean;
 }
 interface Progress { kind: "engine" | "model"; id: string; received: number; total: number }
@@ -105,7 +105,7 @@ export default function LocalAiPanel({ form, set }: Pick<SettingsFormProps, "for
       </div>
       <div className="flex items-center justify-between text-[10px] text-muted">
         <span>
-          {progress.kind === "engine" ? t("Moteur") : status.models.find((m) => m.id === progress.id)?.name}
+          {progress.kind === "engine" ? t("Moteur") : [...status.models, status.embed_model].find((m) => m.id === progress.id)?.name}
           {" · "}{gb(progress.received)} / {gb(progress.total)}
         </span>
         <button onClick={cancel} className="flex items-center gap-1 hover:text-red-400 transition-colors"><X size={10} />{t("Annuler")}</button>
@@ -198,6 +198,49 @@ export default function LocalAiPanel({ form, set }: Pick<SettingsFormProps, "for
           <p className="text-[10px] text-muted">
             {t("Moteur llama.cpp {v} (licence MIT). Le premier message charge le modèle en mémoire : quelques secondes avec une carte graphique, jusqu'à une minute sans.", { v: status.engine_version })}
           </p>
+
+          {/* Recherche intelligente : modèle d'embeddings, utilisé par « Toutes mes notes » */}
+          {(() => {
+            const em = status.embed_model;
+            const loading = busy === em.id || (progress?.kind === "model" && progress.id === em.id && progress.received < progress.total);
+            return (
+              <div className="flex flex-col gap-1.5 px-3 py-2 rounded-lg border border-border bg-hover">
+                <div className="flex items-start gap-2">
+                  <Library size={13} className="text-accent shrink-0 mt-0.5" />
+                  <div className="flex-1 min-w-0">
+                    <p className="text-xs font-medium text-primary flex items-center gap-1.5 flex-wrap">
+                      {t("Recherche intelligente dans les notes")}
+                      {em.installed && <span className="text-[9px] px-1.5 py-0.5 rounded bg-green-500/15 text-green-500 border border-green-500/25">{t("Activée")}</span>}
+                    </p>
+                    <p className="text-[10px] text-muted mt-0.5 leading-relaxed">
+                      {t("Dans la conversation, « Toutes mes notes » trouve aussi les notes qui en parlent avec d'autres mots (« budget » → « dépenses prévues »). Modèle {name} · {size} ·", { name: em.name, size: gb(em.size) })}{" "}
+                      <button onClick={() => openUrl(em.license_url).catch(() => {})} className="inline-flex items-center gap-0.5 hover:text-accent transition-colors">
+                        {t("licence {name}", { name: em.license })}<ExternalLink size={8} />
+                      </button>
+                    </p>
+                  </div>
+                  {loading ? (
+                    <Loader2 size={13} className="animate-spin text-accent shrink-0" />
+                  ) : em.installed ? (
+                    <button
+                      onClick={() => (confirmDelete === em.id ? deleteModel(em.id) : setConfirmDelete(em.id))}
+                      disabled={locked}
+                      title={t("Supprimer le modèle")}
+                      className={`flex items-center gap-1 px-2 py-1 rounded-lg text-[11px] transition-colors disabled:opacity-50 shrink-0 ${confirmDelete === em.id ? "bg-red-400/15 text-red-400 border border-red-400/30" : "text-muted hover:text-red-400"}`}
+                    >
+                      <Trash2 size={10} />{confirmDelete === em.id && t("Confirmer")}
+                    </button>
+                  ) : (
+                    <button onClick={() => run(em.id, () => invoke("llm_download_model", { id: em.id }))} disabled={locked}
+                      className="flex items-center gap-1 px-2 py-1 rounded-lg bg-panel border border-border text-[11px] text-secondary hover:text-primary hover:border-accent/40 transition-colors disabled:opacity-50 shrink-0">
+                      <Download size={10} />{t("Télécharger")}
+                    </button>
+                  )}
+                </div>
+                {loading && progressBar}
+              </div>
+            );
+          })()}
         </>
       )}
 

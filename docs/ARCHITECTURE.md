@@ -143,7 +143,9 @@ src-tauri/src/
 ├── system_lock.rs  ← verrouillage quand la session Windows se verrouille ou sort de veille
 ├── tray.rs         ← icône près de l'horloge, lancement avec Windows
 ├── legal.rs        ← acceptation des conditions d'utilisation (terms.json)
-├── backup.rs       ← sauvegarde automatique (dossier choisi, fréquence, N dernières)
+├── backup.rs       ← sauvegarde automatique (dossier choisi, fréquence, N dernières), restauration
+├── md_import.rs    ← import d'un coffre Obsidian ou d'un export Notion (Markdown → HTML, wikilinks, images)
+├── semantic.rs     ← recherche par le sens dans les notes (index d'embeddings chiffré dans user_data)
 └── llm.rs          ← IA intégrée : téléchargement vérifié de llama.cpp et des modèles, serveur local
 ```
 
@@ -164,7 +166,8 @@ Les commandes de dossiers, corbeille, export et recherche délèguent à des fon
 | `write_export_file` | Écrit une note exportée (`.md`, `.txt`, `.html` uniquement) à l'emplacement choisi |
 | `inspect_import`, `import_zip` | Import des trois formats d'export |
 | `search_notes` | Recherche plein texte (asynchrone, avec cache) |
-| `relevant_notes` | Notes les plus utiles à une question, avec un extrait (mode « Toutes mes notes ») : mots de la question pondérés par leur rareté, bonus dans le titre |
+| `relevant_notes` | Notes les plus utiles à une question, avec un extrait (mode « Toutes mes notes ») : mots de la question pondérés par leur rareté, bonus dans le titre ; fusionné (rang réciproque) avec la recherche par le sens si le modèle BGE-M3 est installé |
+| `import_markdown` | Importe un coffre Obsidian (dossier) ou un export Notion (.zip) sous un dossier racine ; une note déjà présente (même titre, même dossier) est ignorée |
 | `get_global_stats`, `get_all_reminders` | Statistiques, rappels |
 
 ### Commandes — `settings.rs`
@@ -216,6 +219,7 @@ Le serveur (`llama-server`) écoute sur `127.0.0.1` uniquement, sur un port libr
 |---|---|
 | `get_backup_config`, `set_backup_config` | Réglages (activée, dossier, fréquence, nombre gardé, mot de passe) et état de la dernière sauvegarde |
 | `run_backup` | Écrit `NATIA-sauvegarde-AAAA-MM-JJ_HHMMSS.zip` si la précédente est assez ancienne (ou tout de suite), puis supprime les plus anciennes |
+| `list_backups`, `restore_backup` | Sauvegardes du dossier ; réimport (les notes déjà présentes sont gardées), avec le mot de passe des sauvegardes ou un autre |
 
 Les réglages sont dans la table `settings` (chiffrés avec un mot de passe NATIA). Le mot de passe des archives suit la règle des clés API : coffre de Windows sans mot de passe NATIA, base chiffrée avec. Avec un mot de passe NATIA, une sauvegarde non protégée est refusée, pour ne pas copier en clair des notes chiffrées. Seuls les fichiers nommés par NATIA sont supprimés du dossier.
 

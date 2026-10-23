@@ -387,6 +387,7 @@ export const MANUAL_EN: ManualChapter[] = [
           ] },
           { p: "NATIA searches this PC for the notes containing the words of the question, gives excerpts to the AI, and shows the **notes used** under the answer: click one to open it." },
           { tip: "With the built-in AI or Ollama, nothing leaves your PC. With an online AI, excerpts of the notes found are sent to it." },
+          { p: "**Smart search** (Settings → Artificial intelligence, below the models, 0.6 GB): NATIA also finds notes that cover the topic in other words. The first question reads all your notes (“Reading your notes…”), later ones only the notes that changed. Everything stays on this PC, encrypted if a password is set." },
         ],
       },
       {

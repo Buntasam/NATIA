@@ -4,6 +4,7 @@ import { Check, FolderOpen, Loader2, Save } from "lucide-react";
 import { useStore } from "../../store";
 import { BackupConfig, BackupStatus, getBackupConfig, runBackup, setBackupConfig } from "../../lib/autoBackup";
 import { Section, SecInput } from "./SettingsWidgets";
+import BackupRestoreList from "./BackupRestoreList";
 import { trError, useLocale, useT } from "../../i18n";
 
 const KEEP_CHOICES = [3, 7, 14, 30];
@@ -21,6 +22,7 @@ export default function AutoBackupSettings() {
   const [error, setError] = useState("");
   const [busy, setBusy] = useState<"save" | "run" | null>(null);
   const [justSaved, setJustSaved] = useState(false);
+  const [listVersion, setListVersion] = useState(0);
 
   useEffect(() => {
     getBackupConfig()
@@ -43,7 +45,7 @@ export default function AutoBackupSettings() {
     setBusy("save");
     try {
       await setBackupConfig(config);
-      setSaved(config); setJustSaved(true);
+      setSaved(config); setJustSaved(true); setListVersion((v) => v + 1);
       return true;
     } catch (e) { setError(trError(e)); return false; }
     finally { setBusy(null); }
@@ -52,7 +54,7 @@ export default function AutoBackupSettings() {
   const runNow = async () => {
     if (dirty && !(await save())) return;
     setBusy("run"); setError("");
-    try { setStatus(await runBackup(true)); }
+    try { setStatus(await runBackup(true)); setListVersion((v) => v + 1); }
     catch (e) { setError(trError(e)); }
     finally { setBusy(null); }
   };
@@ -153,6 +155,8 @@ export default function AutoBackupSettings() {
             </button>
           )}
         </div>
+
+        {saved?.dir && <BackupRestoreList refresh={listVersion} />}
       </div>
     </Section>
   );

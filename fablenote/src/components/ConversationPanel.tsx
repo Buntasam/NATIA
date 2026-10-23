@@ -51,6 +51,8 @@ export function ConvPanel({ onClose }: { onClose: () => void }) {
   const [isStreaming, setIsStreaming] = useState(false);
   const [streamText, setStreamText] = useState("");
   const [copiedIdx, setCopiedIdx] = useState<number | null>(null);
+  /** Indexation des notes pour la recherche intelligente (premier usage, notes modifiées). */
+  const [indexing, setIndexing] = useState<{ done: number; total: number } | null>(null);
   const endRef = useRef<HTMLDivElement>(null);
   const tokenRef = useRef<(() => void) | null>(null);
   const doneRef = useRef<(() => void) | null>(null);
@@ -161,8 +163,12 @@ export function ConvPanel({ onClose }: { onClose: () => void }) {
     // Mode « Toutes mes notes » : les notes utiles à cette question, cherchées sur ce PC.
     let notes: RelevantNote[] | null = null;
     if (scope === "all") {
+      const un = await listen<{ done: number; total: number }>("notes-index", (e) => {
+        setIndexing(e.payload.done < e.payload.total ? e.payload : null);
+      });
       try { notes = await invoke<RelevantNote[]>("relevant_notes", { question: msg, limit: NOTES_PER_QUESTION }); }
       catch { notes = []; }
+      finally { un(); setIndexing(null); }
     }
     const sources: NoteRef[] | undefined = notes?.length ? notes.map(({ id, title }) => ({ id, title })) : undefined;
 
@@ -335,7 +341,9 @@ export function ConvPanel({ onClose }: { onClose: () => void }) {
             <div className={`max-w-[85%] px-3 py-2 rounded-xl rounded-bl-sm text-xs leading-relaxed whitespace-pre-wrap bg-hover text-secondary border border-border ${streamText ? "" : "flex items-center gap-1.5"}`}>
               {streamText
                 ? <>{streamText}<span className="animate-pulse text-accent ml-0.5">▋</span></>
-                : <><Loader2 size={11} className="text-accent animate-spin" /><span className="text-muted">{t("Réflexion…")}</span></>
+                : <><Loader2 size={11} className="text-accent animate-spin" /><span className="text-muted">
+                    {indexing ? t("Lecture de vos notes… {done}/{total}", indexing) : t("Réflexion…")}
+                  </span></>
               }
             </div>
           </div>

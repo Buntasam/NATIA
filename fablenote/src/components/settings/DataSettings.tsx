@@ -5,6 +5,7 @@ import { AlertTriangle, Download, FolderOpen, Trash2 as TrashIcon, Upload } from
 import { useStore } from "../../store";
 import ResetConfirmDialog from "../ResetConfirmDialog";
 import AutoBackupSettings from "./AutoBackupSettings";
+import ExternalImport from "./ExternalImport";
 import { formatLastBackup, isBackupReminderEnabled, recordBackup, setBackupReminderEnabled } from "../../lib/backupReminder";
 import { Section, SecInput } from "./SettingsWidgets";
 import { msg, trError, useT } from "../../i18n";
@@ -175,6 +176,8 @@ export default function DataSettings() {
             )}
             {importMsg && <p className={`text-xs ${importMsg.ok ? "text-accent" : "text-red-400"}`}>{importMsg.ok ? "✓ " : ""}{importMsg.text}</p>}
           </div>
+
+          <ExternalImport />
         </div>
       </Section>
 

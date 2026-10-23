@@ -12,7 +12,7 @@ use tauri::State;
 
 use crate::crypto::{maybe_dec, maybe_enc};
 use crate::db::{keychain_get, keychain_set};
-use crate::notes::{build_notes_zip, protect_zip, Protection};
+use crate::notes::{build_notes_zip, import_notes_in, protect_zip, unwrap_export, ImportReport, Protection};
 use crate::AppState;
 
 pub(crate) const BACKUP_PASSWORD_NAME: &str = "backup_password";
@@ -29,6 +29,12 @@ pub struct BackupConfig {
     pub keep: u32,
     /// Mot de passe de l'archive (AES-256) ; vide = archive non protégée.
     pub password: String,
+}
+
+#[derive(Serialize, Clone, Debug, PartialEq)]
+pub struct BackupFile {
+    pub name: String,
+    pub size: u64,
 }
 
 #[derive(Serialize, Clone, Debug, Default)]
@@ -120,16 +126,26 @@ fn validate(config: &BackupConfig, app_protected: bool) -> Result<(), String> {
     Ok(())
 }
 
-/// Supprime les plus anciennes sauvegardes de NATIA du dossier au-delà de `keep`.
-/// Seuls les fichiers nommés par NATIA sont concernés ; les noms datés se trient dans l'ordre.
-fn prune(dir: &Path, keep: u32) -> Result<(), String> {
+fn is_backup_name(name: &str) -> bool {
+    name.starts_with(FILE_PREFIX) && name.ends_with(".zip") && !name.contains(['/', '\\', ':']) && !name.contains("..")
+}
+
+/// Sauvegardes de NATIA présentes dans le dossier, de la plus ancienne à la plus récente
+/// (les noms datés se trient dans l'ordre).
+fn backup_files(dir: &Path) -> Result<Vec<PathBuf>, String> {
     let mut files: Vec<PathBuf> = std::fs::read_dir(dir)
         .map_err(|e| e.to_string())?
         .filter_map(|e| e.ok().map(|e| e.path()))
-        .filter(|p| p.is_file() && p.file_name().and_then(|n| n.to_str())
-            .is_some_and(|n| n.starts_with(FILE_PREFIX) && n.ends_with(".zip")))
+        .filter(|p| p.is_file() && p.file_name().and_then(|n| n.to_str()).is_some_and(is_backup_name))
         .collect();
     files.sort();
+    Ok(files)
+}
+
+/// Supprime les plus anciennes sauvegardes de NATIA du dossier au-delà de `keep`.
+/// Seuls les fichiers nommés par NATIA sont concernés.
+fn prune(dir: &Path, keep: u32) -> Result<(), String> {
+    let files = backup_files(dir)?;
     let excess = files.len().saturating_sub(keep as usize);
     for f in &files[..excess] {
         let _ = std::fs::remove_file(f);
@@ -201,6 +217,47 @@ pub fn run_backup(now: bool, state: State<AppState>) -> Result<BackupStatus, Str
     Ok(read_status(&db, &key))
 }
 
+/// Sauvegardes du dossier choisi, de la plus récente à la plus ancienne.
+#[tauri::command]
+pub fn list_backups(state: State<AppState>) -> Result<Vec<BackupFile>, String> {
+    crate::require_unlocked(&state)?;
+    let key = *state.enc_key.lock().map_err(|e| e.to_string())?;
+    let dir = {
+        let db = state.db.lock().map_err(|e| e.to_string())?;
+        read_config(&db, &key).dir
+    };
+    let dir = PathBuf::from(dir.trim());
+    if dir.as_os_str().is_empty() || !dir.is_dir() { return Ok(vec![]); }
+    let mut files: Vec<BackupFile> = backup_files(&dir)?
+        .into_iter()
+        .filter_map(|p| Some(BackupFile {
+            name: p.file_name()?.to_str()?.to_string(),
+            size: std::fs::metadata(&p).map(|m| m.len()).unwrap_or(0),
+        }))
+        .collect();
+    files.reverse();
+    Ok(files)
+}
+
+/// Réimporte une sauvegarde du dossier : les notes absentes reviennent, celles déjà
+/// présentes ne sont pas remplacées. Sans `password`, celui des sauvegardes est essayé.
+#[tauri::command]
+pub fn restore_backup(name: String, password: Option<String>, state: State<AppState>) -> Result<ImportReport, String> {
+    crate::require_unlocked(&state)?;
+    if !is_backup_name(&name) { return Err("Nom de sauvegarde invalide".to_string()); }
+    let key = *state.enc_key.lock().map_err(|e| e.to_string())?;
+    let config = {
+        let db = state.db.lock().map_err(|e| e.to_string())?;
+        read_config(&db, &key)
+    };
+    let path = PathBuf::from(config.dir.trim()).join(&name);
+    let bytes = std::fs::read(&path).map_err(|e| e.to_string())?;
+    let password = password.filter(|p| !p.is_empty()).unwrap_or(config.password);
+    let archive = unwrap_export(bytes, Some(password.as_str()).filter(|p| !p.is_empty()))?;
+    let db = state.db.lock().map_err(|e| e.to_string())?;
+    import_notes_in(&db, &state.notes_dir, &key, archive)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -228,6 +285,15 @@ mod tests {
         assert!(validate(&config("C:\\Sauvegardes", "court"), true).is_err());
         assert!(validate(&config("C:\\Sauvegardes", "un-long-mot-de-passe"), true).is_ok());
         assert!(validate(&config("  ", "un-long-mot-de-passe"), false).is_err());
+    }
+
+    #[test]
+    fn backup_names_cannot_leave_the_folder() {
+        assert!(is_backup_name("NATIA-sauvegarde-2026-10-23_080000.zip"));
+        assert!(!is_backup_name("NATIA-sauvegarde-../../secret.zip"));
+        assert!(!is_backup_name("NATIA-sauvegarde-x\\..\\a.zip"));
+        assert!(!is_backup_name("NATIA-sauvegarde-C:a.zip"));
+        assert!(!is_backup_name("photo.zip"));
     }
 
     #[test]

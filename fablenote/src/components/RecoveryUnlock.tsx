@@ -19,7 +19,7 @@ export default function RecoveryUnlock({ onClose, onDone }: { onClose: () => voi
   const [loading, setLoading] = useState(false);
 
   const submit = async () => {
-    if (pwType === "pin" && !/^\d{4,8}$/.test(pw)) { setError(t("PIN : 4 à 8 chiffres requis")); return; }
+    if (pwType === "pin" && !/^\d{6,8}$/.test(pw)) { setError(t("PIN : 6 à 8 chiffres requis")); return; }
     if (pwType === "alpha" && pw.length < 6) { setError(t("Minimum 6 caractères")); return; }
     if (pw !== confirm) { setError(t("Les mots de passe ne correspondent pas")); return; }
     setLoading(true); setError("");
@@ -63,7 +63,7 @@ export default function RecoveryUnlock({ onClose, onDone }: { onClose: () => voi
             </button>
           ))}
         </div>
-        <SecInput label={pwType === "pin" ? t("Nouveau PIN (4–8 chiffres)") : t("Nouveau mot de passe")} value={pw} onChange={setPw} show={show} onToggleShow={() => setShow((s) => !s)} />
+        <SecInput label={pwType === "pin" ? t("Nouveau PIN (6–8 chiffres)") : t("Nouveau mot de passe")} value={pw} onChange={setPw} show={show} onToggleShow={() => setShow((s) => !s)} />
         <PasswordStrengthMeter value={pw} type={pwType} />
         <SecInput label={t("Confirmer")} value={confirm} onChange={setConfirm} show={show} onToggleShow={() => setShow((s) => !s)} />
 

@@ -375,7 +375,7 @@ fn get_folders_in(db: &rusqlite::Connection, key: &Key) -> Result<Vec<String>, S
     Ok(folders)
 }
 
-fn create_folder_in(db: &rusqlite::Connection, key: &Key, path: &str) -> Result<(), String> {
+pub(crate) fn create_folder_in(db: &rusqlite::Connection, key: &Key, path: &str) -> Result<(), String> {
     if load_folder_rows(db, key)?.iter().any(|f| f.path == path) { return Ok(()); }
     db.execute("INSERT OR IGNORE INTO folders(path) VALUES(?1)", [maybe_enc(key, path)]).map_err(|e| e.to_string())?;
     Ok(())
@@ -801,7 +801,7 @@ fn is_protected(archive: &mut zip::ZipArchive<std::io::Cursor<Vec<u8>>>) -> bool
 }
 
 /// Renvoie l'archive des notes (avec metadata.json), en déchiffrant l'enveloppe si besoin.
-fn unwrap_export(bytes: Vec<u8>, password: Option<&str>) -> Result<zip::ZipArchive<std::io::Cursor<Vec<u8>>>, String> {
+pub(crate) fn unwrap_export(bytes: Vec<u8>, password: Option<&str>) -> Result<zip::ZipArchive<std::io::Cursor<Vec<u8>>>, String> {
     let mut outer = open_zip(bytes)?;
     if !is_protected(&mut outer) { return Ok(outer); }
     let pw = password.filter(|p| !p.is_empty()).ok_or("Cette sauvegarde est protégée : mot de passe requis")?;
@@ -815,7 +815,7 @@ fn unwrap_export(bytes: Vec<u8>, password: Option<&str>) -> Result<zip::ZipArchi
 
 /// Nettoie le HTML importé tout en gardant ce que l'éditeur produit
 /// (tâches, rappels, post-its, liens entre notes, images, surlignage, tableaux).
-fn sanitize_note_html(html: &str) -> String {
+pub(crate) fn sanitize_note_html(html: &str) -> String {
     ammonia::Builder::default()
         .add_tags(["input", "label"])
         .add_generic_attributes(["class", "style", "colspan", "rowspan"])
@@ -829,7 +829,7 @@ fn sanitize_note_html(html: &str) -> String {
         .to_string()
 }
 
-fn import_notes_in(
+pub(crate) fn import_notes_in(
     db: &rusqlite::Connection,
     notes_dir: &std::path::Path,
     key: &Key,
@@ -1172,22 +1172,36 @@ fn rank_notes(notes: &[(String, String)], cache: &SearchCache, terms: &[String],
         let (id, title) = &notes[i];
         let excerpt = cache.get(id).map(|c| {
             let first = terms.iter().filter_map(|t| c.folded.find(t.as_str())).min();
-            let total = c.plain.chars().count();
-            let at = first.map(|b| c.folded[..b].chars().count()).unwrap_or(0);
-            let start = at.saturating_sub(EXCERPT_CHARS / 3).min(total.saturating_sub(EXCERPT_CHARS));
-            let end = (start + EXCERPT_CHARS).min(total);
-            format!("{}{}{}", if start > 0 { "…" } else { "" }, char_slice(&c.plain, start, end), if end < total { "…" } else { "" })
+            excerpt_at(&c.plain, first.map(|b| c.folded[..b].chars().count()).unwrap_or(0))
         }).unwrap_or_default();
         RelevantNote { id: id.clone(), title: title.clone(), excerpt }
     }).collect()
 }
 
+/// Passage de `plain` d'au plus `EXCERPT_CHARS` caractères autour de la position `at`.
+fn excerpt_at(plain: &str, at: usize) -> String {
+    let total = plain.chars().count();
+    let start = at.saturating_sub(EXCERPT_CHARS / 3).min(total.saturating_sub(EXCERPT_CHARS));
+    let end = (start + EXCERPT_CHARS).min(total);
+    format!("{}{}{}", if start > 0 { "…" } else { "" }, char_slice(plain, start, end), if end < total { "…" } else { "" })
+}
+
 /// Les notes les plus utiles pour répondre à `question`, avec un passage de chacune.
+/// Recherche par mots-clés, complétée par la recherche par le sens quand le modèle
+/// d'embeddings de l'IA intégrée est installé (voir semantic.rs).
 #[tauri::command]
-pub async fn relevant_notes(state: State<'_, AppState>, question: String, limit: u32) -> Result<Vec<RelevantNote>, String> {
+pub async fn relevant_notes(
+    app: tauri::AppHandle,
+    state: State<'_, AppState>,
+    llm: State<'_, crate::llm::LlmState>,
+    question: String,
+    limit: u32,
+) -> Result<Vec<RelevantNote>, String> {
     crate::require_unlocked(&state)?;
+    let limit = limit.clamp(1, 8) as usize;
     let terms = question_terms(&question);
-    if terms.is_empty() { return Ok(vec![]); }
+    let semantic_on = crate::llm::embeddings_available(&app);
+    if terms.is_empty() && !semantic_on { return Ok(vec![]); }
     let key = state.enc_key.lock().map_err(|e| e.to_string())?.clone();
     let rows: Vec<(String, String)> = {
         let db = state.db.lock().map_err(|e| e.to_string())?;
@@ -1200,9 +1214,40 @@ pub async fn relevant_notes(state: State<'_, AppState>, question: String, limit:
         collected.map_err(|e| e.to_string())?
     };
     let notes: Vec<(String, String)> = rows.into_iter().map(|(id, t)| (id, maybe_dec(&key, &t))).collect();
-    let mut cache = state.search_cache.lock().map_err(|e| e.to_string())?;
-    for (id, _) in &notes { refresh_cached(&mut cache, id, &state.notes_dir, &key); }
-    Ok(rank_notes(&notes, &cache, &terms, limit.clamp(1, 8) as usize))
+    let (keyword, texts) = {
+        let mut cache = state.search_cache.lock().map_err(|e| e.to_string())?;
+        for (id, _) in &notes { refresh_cached(&mut cache, id, &state.notes_dir, &key); }
+        let keyword = rank_notes(&notes, &cache, &terms, limit);
+        let texts: Vec<crate::semantic::NoteText> = if semantic_on {
+            notes.iter().filter_map(|(id, title)| {
+                let c = cache.get(id)?;
+                let secs = c.stamp.1.and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok()).map(|d| d.as_secs()).unwrap_or(0);
+                Some(crate::semantic::NoteText { id: id.clone(), title: title.clone(), plain: c.plain.clone(), stamp: (c.stamp.0, secs) })
+            }).collect()
+        } else { vec![] };
+        (keyword, texts)
+    };
+    if !semantic_on { return Ok(keyword); }
+
+    // Recherche par le sens ; en cas d'échec (modèle qui ne démarre pas…), les mots-clés suffisent.
+    let hits = match crate::semantic::semantic_rank(&app, &llm, &state, &texts, &question, limit).await {
+        Ok(h) => h,
+        Err(e) => { eprintln!("recherche intelligente : {e}"); return Ok(keyword); }
+    };
+    let keyword_ids: Vec<String> = keyword.iter().map(|n| n.id.clone()).collect();
+    let semantic_ids: Vec<String> = hits.iter().map(|h| h.id.clone()).collect();
+    let mut by_keyword: std::collections::HashMap<String, RelevantNote> = keyword.into_iter().map(|n| (n.id.clone(), n)).collect();
+    let titles: std::collections::HashMap<&str, &str> = notes.iter().map(|(id, t)| (id.as_str(), t.as_str())).collect();
+    let plain: std::collections::HashMap<&str, &str> = texts.iter().map(|t| (t.id.as_str(), t.plain.as_str())).collect();
+    Ok(crate::semantic::fuse(&keyword_ids, &semantic_ids, limit).into_iter().filter_map(|id| {
+        if let Some(n) = by_keyword.remove(&id) { return Some(n); }
+        let hit = hits.iter().find(|h| h.id == id)?;
+        Some(RelevantNote {
+            title: titles.get(id.as_str())?.to_string(),
+            excerpt: excerpt_at(plain.get(id.as_str())?, hit.chunk_start),
+            id,
+        })
+    }).collect())
 }
 
 // ─── Global stats ─────────────────────────────────────────────────────────────

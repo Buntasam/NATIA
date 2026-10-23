@@ -407,6 +407,7 @@ export const MANUAL: ManualChapter[] = [
           ] },
           { p: "NATIA cherche sur ce PC les notes qui contiennent les mots de la question, en donne des extraits à l'IA, et affiche sous la réponse les **notes utilisées** : cliquez sur l'une d'elles pour l'ouvrir." },
           { tip: "Avec l'IA intégrée ou Ollama, rien ne quitte votre PC. Avec une IA en ligne, les extraits des notes trouvées lui sont envoyés." },
+          { p: "**Recherche intelligente** (Paramètres → Intelligence artificielle, sous les modèles, 0,6 Go) : NATIA trouve aussi les notes qui parlent du sujet avec d'autres mots. La première question lit toutes vos notes (« Lecture de vos notes… »), les suivantes seulement celles qui ont changé. Tout reste sur ce PC, chiffré si un mot de passe est actif." },
         ],
       },
       {

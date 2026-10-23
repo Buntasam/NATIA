@@ -83,6 +83,9 @@
         },
         {
           "url": "https://www.cnil.fr/en/home"
+        },
+        {
+          "url": "https://huggingface.co/BAAI/bge-m3"
         }
       ]
     }

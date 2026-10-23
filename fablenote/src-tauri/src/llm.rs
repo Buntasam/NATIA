@@ -82,8 +82,18 @@ pub const CATALOG: &[CatalogModel] = &[
     },
 ];
 
+/// Modèle d'« embeddings » de la recherche intelligente dans les notes (« Toutes mes notes ») :
+/// il transforme un texte en vecteur de sens, pour trouver une note qui parle de « dépenses »
+/// quand on demande « budget ». Multilingue, licence MIT.
+pub const EMBED_MODEL: CatalogModel = CatalogModel {
+    id: "bge-m3", name: "BGE-M3",
+    repo: "ggml-org/bge-m3-Q8_0-GGUF", file: "bge-m3-q8_0.gguf",
+    sha256: "aa473d51f451a22f0fcf39ba3330c14bed38a385712b1113440f69df4047a173", size: 634_553_760,
+    license: "MIT", license_url: "https://huggingface.co/BAAI/bge-m3",
+};
+
 fn catalog_model(id: &str) -> Result<&'static CatalogModel, String> {
-    CATALOG.iter().find(|m| m.id == id).ok_or_else(|| "Modèle inconnu".to_string())
+    CATALOG.iter().chain(std::iter::once(&EMBED_MODEL)).find(|m| m.id == id).ok_or_else(|| "Modèle inconnu".to_string())
 }
 
 /// Modèle conseillé selon la mémoire de la carte graphique dédiée et la RAM (en Go).
@@ -114,6 +124,8 @@ pub struct Gpu {
 #[derive(Default)]
 pub struct LlmState {
     server: tokio::sync::Mutex<Option<Server>>,
+    /// Second serveur, en mode embeddings, pour la recherche intelligente dans les notes.
+    embed_server: tokio::sync::Mutex<Option<Server>>,
     downloading: AtomicBool,
     cancel: AtomicBool,
     gpus: Mutex<Option<Vec<Gpu>>>,
@@ -223,6 +235,7 @@ pub struct LlmStatus {
     engine_version: &'static str,
     engine_size: u64,
     models: Vec<ModelInfo>,
+    embed_model: ModelInfo,
     recommended: &'static str,
     ram_gb: f64,
     gpu: Option<Gpu>,
@@ -237,19 +250,19 @@ pub async fn llm_status(app: AppHandle, state: State<'_, LlmState>) -> Result<Ll
     let gpu = pick_gpu(&gpus).cloned();
     let ram_gb = total_ram_gb();
     let vram_gb = gpu.as_ref().map(|g| g.vram_mib as f64 / 1024.0).unwrap_or(0.0);
-    let models = CATALOG
-        .iter()
-        .map(|m| ModelInfo {
-            id: m.id, name: m.name, size: m.size, license: m.license, license_url: m.license_url,
-            installed: model_path(&app, m).map(|p| p.is_file()).unwrap_or(false),
-        })
-        .collect();
+    let info = |m: &'static CatalogModel| ModelInfo {
+        id: m.id, name: m.name, size: m.size, license: m.license, license_url: m.license_url,
+        installed: model_path(&app, m).map(|p| p.is_file()).unwrap_or(false),
+    };
+    let models = CATALOG.iter().map(info).collect();
+    let embed_model = info(&EMBED_MODEL);
     let running = state.server.lock().await.as_ref().map(|s| s.model_id.clone());
     Ok(LlmStatus {
         engine_installed: installed,
         engine_version: ENGINE_VERSION,
         engine_size: ENGINE_SIZE,
         models,
+        embed_model,
         recommended: recommend(ram_gb, vram_gb),
         ram_gb,
         gpu,
@@ -400,8 +413,8 @@ pub fn llm_cancel_download(state: State<'_, LlmState>) {
 #[tauri::command]
 pub async fn llm_delete_model(app: AppHandle, state: State<'_, LlmState>, id: String) -> Result<(), String> {
     let m = catalog_model(&id)?;
-    {
-        let mut server = state.server.lock().await;
+    for slot in [&state.server, &state.embed_server] {
+        let mut server = slot.lock().await;
         if server.as_ref().is_some_and(|s| s.model_id == m.id) {
             if let Some(mut s) = server.take() { let _ = s.child.kill(); let _ = s.child.wait(); }
         }
@@ -460,7 +473,14 @@ fn log_tail(path: &Path) -> String {
 /// Démarre le serveur pour `model_id` (ou réutilise celui qui tourne) et renvoie (port, clé).
 async fn ensure_server(app: &AppHandle, state: &LlmState, model_id: &str) -> Result<(u16, String), String> {
     let m = catalog_model(model_id)?;
-    let mut server = state.server.lock().await;
+    start_server(app, state, &state.server, m, &["-c", CONTEXT_SIZE, "-np", "1"]).await
+}
+
+async fn start_server(
+    app: &AppHandle, state: &LlmState, slot: &tokio::sync::Mutex<Option<Server>>,
+    m: &'static CatalogModel, args: &[&str],
+) -> Result<(u16, String), String> {
+    let mut server = slot.lock().await;
     if let Some(s) = server.as_mut() {
         if s.model_id == m.id && s.child.try_wait().map(|st| st.is_none()).unwrap_or(false) {
             return Ok((s.port, s.key.clone()));
@@ -479,7 +499,7 @@ async fn ensure_server(app: &AppHandle, state: &LlmState, model_id: &str) -> Res
     let mut key_bytes = [0u8; 24];
     rand::thread_rng().fill_bytes(&mut key_bytes);
     let key = hex(&key_bytes);
-    let log_path = llm_dir(app)?.join("server.log");
+    let log_path = llm_dir(app)?.join(if std::ptr::eq(slot, &state.embed_server) { "embed-server.log" } else { "server.log" });
     let log = std::fs::File::create(&log_path).map_err(|e| e.to_string())?;
     let gpu = pick_gpu(&detect_gpus(app, state)).map(|g| g.device.clone());
 
@@ -487,7 +507,8 @@ async fn ensure_server(app: &AppHandle, state: &LlmState, model_id: &str) -> Res
     cmd.current_dir(&dir)
         .arg("-m").arg(&model)
         .args(["--host", "127.0.0.1", "--port", &port.to_string(), "--api-key", &key])
-        .args(["--no-webui", "--offline", "-c", CONTEXT_SIZE, "-np", "1"])
+        .args(["--no-webui", "--offline"])
+        .args(args)
         .stdin(Stdio::null())
         .stdout(Stdio::null())
         .stderr(Stdio::from(log));
@@ -521,10 +542,58 @@ async fn ensure_server(app: &AppHandle, state: &LlmState, model_id: &str) -> Res
 
 pub fn shutdown(app: &AppHandle) {
     if let Some(state) = app.try_state::<LlmState>() {
-        if let Ok(mut server) = state.server.try_lock() {
-            if let Some(mut s) = server.take() { let _ = s.child.kill(); let _ = s.child.wait(); }
+        for slot in [&state.server, &state.embed_server] {
+            if let Ok(mut server) = slot.try_lock() {
+                if let Some(mut s) = server.take() { let _ = s.child.kill(); let _ = s.child.wait(); }
+            }
         }
     }
+}
+
+// ─── Embeddings (recherche intelligente dans les notes) ───────────────────────
+
+/// Le modèle d'embeddings et le moteur sont-ils installés ?
+pub(crate) fn embeddings_available(app: &AppHandle) -> bool {
+    engine_installed(app) && model_path(app, &EMBED_MODEL).map(|p| p.is_file()).unwrap_or(false)
+}
+
+/// Taille de lot du serveur d'embeddings : un extrait doit y tenir en entier.
+const EMBED_BATCH: &str = "2048";
+
+/// Vecteurs de sens des `texts`, normalisés (le produit scalaire donne la similarité cosinus).
+pub(crate) async fn embed(app: &AppHandle, state: &LlmState, texts: &[String]) -> Result<Vec<Vec<f32>>, String> {
+    if texts.is_empty() { return Ok(vec![]); }
+    let (port, key) = start_server(
+        app, state, &state.embed_server, &EMBED_MODEL,
+        &["--embedding", "-c", EMBED_BATCH, "-b", EMBED_BATCH, "-ub", EMBED_BATCH, "-np", "1"],
+    ).await?;
+    let resp = local_client()?
+        .post(format!("http://127.0.0.1:{}/v1/embeddings", port))
+        .bearer_auth(&key)
+        .json(&serde_json::json!({ "input": texts }))
+        .send()
+        .await
+        .map_err(|e| format!("Recherche intelligente : {}", e))?;
+    if !resp.status().is_success() {
+        let status = resp.status();
+        return Err(format!("Recherche intelligente {} : {}", status, resp.text().await.unwrap_or_default()));
+    }
+    let json: serde_json::Value = resp.json().await.map_err(|e| e.to_string())?;
+    let data = json["data"].as_array().ok_or("Recherche intelligente : réponse inattendue")?;
+    let mut out = vec![Vec::new(); texts.len()];
+    for item in data {
+        let i = item["index"].as_u64().unwrap_or(0) as usize;
+        let v: Vec<f32> = item["embedding"].as_array().map(|a| a.iter().filter_map(|x| x.as_f64()).map(|x| x as f32).collect()).unwrap_or_default();
+        if i < out.len() { out[i] = normalize(v); }
+    }
+    if out.iter().any(|v| v.is_empty()) { return Err("Recherche intelligente : réponse incomplète".to_string()); }
+    Ok(out)
+}
+
+pub(crate) fn normalize(mut v: Vec<f32>) -> Vec<f32> {
+    let norm = v.iter().map(|x| x * x).sum::<f32>().sqrt();
+    if norm > 0.0 { v.iter_mut().for_each(|x| *x /= norm); }
+    v
 }
 
 #[tauri::command]
@@ -626,7 +695,9 @@ mod tests {
         }
         assert_eq!(ENGINE_SHA256.len(), 64);
         assert!(ENGINE_URL.starts_with("https://github.com/ggml-org/llama.cpp/releases/download/"));
-        for id in ["gemma3-1b", "gemma3-4b", "mistral-7b", "gemma3-12b"] { assert!(catalog_model(id).is_ok()); }
+        for id in ["gemma3-1b", "gemma3-4b", "mistral-7b", "gemma3-12b", "bge-m3"] { assert!(catalog_model(id).is_ok()); }
+        assert_eq!(EMBED_MODEL.sha256.len(), 64);
+        assert!(!CATALOG.iter().any(|m| m.id == EMBED_MODEL.id), "le modèle d'embeddings n'est pas un modèle de chat");
     }
 
     #[test]

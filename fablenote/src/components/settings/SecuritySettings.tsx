@@ -33,7 +33,7 @@ export default function SecuritySettings({ form, set }: Pick<SettingsFormProps, 
   const cancelSec = () => { setSecMode("idle"); setSecA(""); setSecB(""); setSecC(""); setSecError(""); };
 
   const doSetup = async () => {
-    if (secPwType === "pin" && !/^\d{4,8}$/.test(secA)) { setSecError(t("PIN : 4 à 8 chiffres requis")); return; }
+    if (secPwType === "pin" && !/^\d{6,8}$/.test(secA)) { setSecError(t("PIN : 6 à 8 chiffres requis")); return; }
     if (secPwType === "alpha" && secA.length < 6) { setSecError(t("Minimum 6 caractères")); return; }
     if (secA !== secB) { setSecError(t("Les mots de passe ne correspondent pas")); return; }
     setSecLoading(true); setSecError("");
@@ -61,7 +61,7 @@ export default function SecuritySettings({ form, set }: Pick<SettingsFormProps, 
 
   const doChange = async () => {
     if (secA !== secB) { setSecError(t("Les nouveaux mots de passe ne correspondent pas")); return; }
-    if (secPwType === "pin" && !/^\d{4,8}$/.test(secA)) { setSecError(t("PIN : 4 à 8 chiffres requis")); return; }
+    if (secPwType === "pin" && !/^\d{6,8}$/.test(secA)) { setSecError(t("PIN : 6 à 8 chiffres requis")); return; }
     if (secPwType === "alpha" && secA.length < 6) { setSecError(t("Minimum 6 caractères")); return; }
     setSecLoading(true); setSecError("");
     try { await changePassword(secC, secA, secPwType); cancelSec(); }
@@ -171,7 +171,7 @@ export default function SecuritySettings({ form, set }: Pick<SettingsFormProps, 
               {t("Un PIN se devine plus facilement qu'un mot de passe. Pour des notes sensibles, préférez un mot de passe long.")}
             </p>
           )}
-          <SecInput label={secPwType === "pin" ? t("Code PIN (4–8 chiffres)") : t("Mot de passe (min. 6 car.)")} value={secA} onChange={setSecA} show={secShowA} onToggleShow={() => setSecShowA(s => !s)} />
+          <SecInput label={secPwType === "pin" ? t("Code PIN (6–8 chiffres)") : t("Mot de passe (min. 6 car.)")} value={secA} onChange={setSecA} show={secShowA} onToggleShow={() => setSecShowA(s => !s)} />
           <PasswordStrengthMeter value={secA} type={secPwType} />
           <SecInput label={t("Confirmer")} value={secB} onChange={setSecB} show={secShowB} onToggleShow={() => setSecShowB(s => !s)} />
           <p className="text-[10px] text-muted leading-relaxed">
@@ -200,7 +200,7 @@ export default function SecuritySettings({ form, set }: Pick<SettingsFormProps, 
               {t("Un PIN se devine plus facilement qu'un mot de passe. Pour des notes sensibles, préférez un mot de passe long.")}
             </p>
           )}
-          <SecInput label={secPwType === "pin" ? t("Nouveau PIN (4–8 chiffres)") : t("Nouveau mot de passe")} value={secA} onChange={setSecA} show={secShowB} onToggleShow={() => setSecShowB(s => !s)} />
+          <SecInput label={secPwType === "pin" ? t("Nouveau PIN (6–8 chiffres)") : t("Nouveau mot de passe")} value={secA} onChange={setSecA} show={secShowB} onToggleShow={() => setSecShowB(s => !s)} />
           <PasswordStrengthMeter value={secA} type={secPwType} />
           <SecInput label={t("Confirmer le nouveau")} value={secB} onChange={setSecB} show={secShowB} onToggleShow={() => setSecShowB(s => !s)} />
           {secError && <p className="text-xs text-red-400">{secError}</p>}

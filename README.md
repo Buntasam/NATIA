@@ -50,7 +50,7 @@ L'installeur n'est pas signé : Windows SmartScreen affiche « Windows a protég
 - **Connexions** — plusieurs clés API nommées, avec fournisseur, couleur et modèle
 - **Opérations** — correction, résumé, titre, tri automatique, traduction, email, continuation de texte
 - **Conversation** — chat avec le contexte de la note active, historique enregistré (reprendre, renommer, chercher, supprimer)
-- **Interroger ses notes** — mode « Toutes mes notes » : l'IA répond à partir des notes trouvées sur le PC et indique lesquelles elle a utilisées
+- **Interroger ses notes** — mode « Toutes mes notes » : l'IA répond à partir des notes trouvées sur le PC et indique lesquelles elle a utilisées ; avec la recherche intelligente (modèle BGE-M3), elle trouve aussi les notes formulées avec d'autres mots
 - **Mémoire IA** — contexte persistant ajouté aux prompts
 - **Streaming** — réponses affichées au fil de l'eau
 - **Indicateur « IA en ligne »** — rappelle quand le texte est envoyé à un fournisseur extérieur
@@ -68,7 +68,8 @@ L'installeur n'est pas signé : Windows SmartScreen affiche « Windows a protég
 - **Blocage après erreurs** — délais croissants, conservés même après redémarrage
 - **Verrouillage automatique** — après inactivité, quand Windows se verrouille ou quand le PC sort de veille
 - **Export / import** — ZIP classique, protégé AES-256 (7-Zip) ou compatible Windows ; rappel de sauvegarde chaque semaine
-- **Sauvegarde automatique** — chaque jour ou chaque semaine, dans le dossier de votre choix, en gardant les N dernières
+- **Sauvegarde automatique** — chaque jour ou chaque semaine, dans le dossier de votre choix, en gardant les N dernières ; restauration en un clic
+- **Import Obsidian et Notion** — dossiers, tags, tâches, images et liens `[[…]]` conservés
 - **Clé de récupération** — rouvre les notes en cas d'oubli du mot de passe, de réinstallation de Windows ou de changement de PC
 - **Indicateur de solidité** du mot de passe
 - **Réinitialisation** — pour repartir de zéro, depuis l'écran de verrouillage

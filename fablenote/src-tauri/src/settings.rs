@@ -228,9 +228,25 @@ fn check_password(db: &rusqlite::Connection, password: &str, wrong: &str) -> Res
 
 // ─── Password commands ────────────────────────────────────────────────────────
 
+/// Règles d'un nouveau mot de passe. Un PIN de 4 ou 5 chiffres se casse vite si un
+/// programme malveillant lit la base et le secret du PC : 6 chiffres minimum.
+/// Les PIN plus courts déjà en place continuent de fonctionner.
+pub(crate) fn validate_new_password(password: &str, pw_type: &str) -> Result<(), String> {
+    if pw_type == "pin" {
+        let n = password.chars().count();
+        if !(6..=8).contains(&n) || !password.chars().all(|c| c.is_ascii_digit()) {
+            return Err("PIN : 6 à 8 chiffres requis".to_string());
+        }
+    } else if password.chars().count() < 6 {
+        return Err("Minimum 6 caractères".to_string());
+    }
+    Ok(())
+}
+
 #[tauri::command]
 /// Renvoie la clé de récupération, à montrer une seule fois à l'utilisateur.
 pub fn setup_password(password: String, pw_type: String, state: State<AppState>) -> Result<String, String> {
+    validate_new_password(&password, &pw_type)?;
     let mut dek = generate_dek();
     let code = generate_recovery_code();
     {
@@ -267,6 +283,7 @@ pub fn create_recovery_code(password: String, state: State<AppState>) -> Result<
 /// Écran de verrouillage : clé de récupération + nouveau mot de passe.
 #[tauri::command]
 pub fn recover_with_code(code: String, new_password: String, pw_type: String, state: State<AppState>) -> Result<bool, String> {
+    validate_new_password(&new_password, &pw_type)?;
     let result = {
         let db = state.db.lock().map_err(|e| e.to_string())?;
         begin_attempt(&db, unix_now())?;
@@ -402,6 +419,8 @@ pub fn verify_password(password: String, state: State<AppState>) -> Result<bool,
 pub fn change_password(old_pass: String, new_pass: String, pw_type: Option<String>, state: State<AppState>) -> Result<(), String> {
     let mut dek = {
         let db = state.db.lock().map_err(|e| e.to_string())?;
+        let kind = pw_type.clone().or_else(|| config_get(&db, "password_type").ok()).unwrap_or_else(|| "alpha".to_string());
+        validate_new_password(&new_pass, &kind)?;
         let dek = check_password(&db, &old_pass, "Ancien mot de passe incorrect")?;
         wrap_dek(&db, &new_pass, &dek, get_or_create_device_secret(), pw_type.as_deref())?;
         dek
@@ -764,6 +783,18 @@ pub fn set_window_theme(window: tauri::Window, dark: bool) -> Result<(), String>
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn new_pins_need_six_digits() {
+        use super::validate_new_password as v;
+        assert!(v("123456", "pin").is_ok());
+        assert!(v("12345678", "pin").is_ok());
+        assert!(v("1234", "pin").is_err());
+        assert!(v("123456789", "pin").is_err());
+        assert!(v("12a456", "pin").is_err());
+        assert!(v("motdepasse", "alpha").is_ok());
+        assert!(v("court", "alpha").is_err());
+    }
+
     use super::*;
 
     // Sources de secret factices : les tests ne touchent jamais au vrai coffre Windows.

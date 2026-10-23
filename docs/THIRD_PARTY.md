@@ -16,6 +16,7 @@ NATIA ne contient pas ces composants dans son installeur : ils sont télécharg�
 | Gemma 3 1B, 4B et 12B (instruction) | `gemma-3-*-it-Q4_K_M.gguf` | https://huggingface.co/ggml-org | Gemma Terms of Use — https://ai.google.dev/gemma/terms |
 | Phi-4 mini (instruction) | `Phi-4-mini-instruct-Q4_K_M.gguf` | https://huggingface.co/unsloth/Phi-4-mini-instruct-GGUF | MIT |
 | Mistral 7B Instruct v0.3 | `Mistral-7B-Instruct-v0.3-Q4_K_M.gguf` | https://huggingface.co/bartowski/Mistral-7B-Instruct-v0.3-GGUF | Apache 2.0 |
+| BGE-M3 (embeddings, recherche intelligente dans les notes) | `bge-m3-q8_0.gguf` | https://huggingface.co/ggml-org/bge-m3-Q8_0-GGUF | MIT — https://huggingface.co/BAAI/bge-m3 |
 
 En téléchargeant un modèle, l'utilisateur accepte sa licence ; l'interface affiche un lien vers chacune.
 
@@ -23,5 +24,5 @@ En téléchargeant un modèle, l'utilisateur accepte sa licence ; l'interface af
 
 1. Choisir une version publiée depuis au moins deux semaines.
 2. Relever l'URL exacte et l'empreinte SHA-256 (champ `digest` de l'API GitHub pour llama.cpp, champ `lfs.sha256` de l'API Hugging Face pour un modèle) et la taille en octets.
-3. Mettre à jour `ENGINE_*` ou `CATALOG` dans `llm.rs`, ce tableau et le manuel (`manualContent.ts` et `manualContent.en.ts`).
+3. Mettre à jour `ENGINE_*`, `CATALOG` ou `EMBED_MODEL` dans `llm.rs`, ce tableau et le manuel (`manualContent.ts` et `manualContent.en.ts`).
 4. Vérifier en local que `llama-server --version` démarre et qu'un message en français reçoit une réponse.

@@ -28,7 +28,8 @@ aes-gcm = { version = "0.10", features = ["aes"] }
 rand = "0.8"
 base64 = "0.22"
 zip = { version = "=2.6.1", default-features = false, features = ["deflate", "aes-crypto"] }
-ammonia = "3"
+ammonia = "~4.1.8"
+pulldown-cmark = { version = "=0.13.0", default-features = false, features = ["html"] }
 keyring = { version = "3", features = ["windows-native", "apple-native"] }
 tauri-plugin-dialog = "2"
 tauri-plugin-notification = "2"

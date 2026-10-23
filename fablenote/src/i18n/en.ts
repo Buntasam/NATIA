@@ -1208,6 +1208,40 @@ const en: Record<string, string> = {
   "Posez une question : l'IA cherche la réponse dans vos notes et indique lesquelles elle a utilisées.": "Ask a question: the AI looks for the answer in your notes and shows which ones it used.",
   "Notes utilisées :": "Notes used:",
   "Ouvrir la note": "Open the note",
+
+  // ── Restaurer une sauvegarde
+  "{n} note restaurée": "{n} note restored",
+  "{n} notes restaurées": "{n} notes restored",
+  "{n} déjà présente": "{n} already there",
+  "{n} déjà présentes": "{n} already there",
+  "Restaurer une sauvegarde": "Restore a backup",
+  "Les notes absentes reviennent ; celles déjà présentes ne sont pas remplacées.": "Missing notes come back; notes already there are not replaced.",
+  "Mot de passe de cette sauvegarde": "Password of this backup",
+  "{n} Mo": "{n} MB",
+  "Nom de sauvegarde invalide": "Invalid backup name",
+
+  // ── Import Obsidian / Notion
+  "Choisir le dossier du coffre Obsidian": "Choose the Obsidian vault folder",
+  "Choisir l'export Notion": "Choose the Notion export",
+  "Export Notion (Markdown)": "Notion export (Markdown)",
+  "Importer depuis une autre application": "Import from another app",
+  "Obsidian : choisissez le dossier du coffre. Notion : Paramètres → Exporter → « Markdown et CSV », puis choisissez le .zip. Dossiers, tags, tâches, images et liens [[…]] sont conservés ; tout est rangé dans un dossier au nom du coffre ou « Notion ».": "Obsidian: choose the vault folder. Notion: Settings → Export → “Markdown & CSV”, then choose the .zip. Folders, tags, tasks, images and [[…]] links are kept; everything goes into a folder named after the vault, or “Notion”.",
+  "Coffre Obsidian…": "Obsidian vault…",
+  "Export Notion (.zip)…": "Notion export (.zip)…",
+  "Aucune note Markdown (.md) trouvée": "No Markdown (.md) note found",
+  "Dossier trop volumineux pour un import (1 Go ou 20 000 fichiers maximum)": "Folder too large to import (1 GB or 20,000 files maximum)",
+  "Archive trop volumineuse pour un import (1 Go ou 20 000 fichiers maximum)": "Archive too large to import (1 GB or 20,000 files maximum)",
+
+  // ── Recherche intelligente
+  "Lecture de vos notes… {done}/{total}": "Reading your notes… {done}/{total}",
+  "Recherche intelligente dans les notes": "Smart search in notes",
+  "Activée": "On",
+  "Dans la conversation, « Toutes mes notes » trouve aussi les notes qui en parlent avec d'autres mots (« budget » → « dépenses prévues »). Modèle {name} · {size} ·": "In the chat, “All my notes” also finds notes that talk about it in other words (“budget” → “planned expenses”). Model {name} · {size} ·",
+
+  // ── PIN 6 chiffres
+  "PIN : 6 à 8 chiffres requis": "PIN: 6 to 8 digits required",
+  "Nouveau PIN (6–8 chiffres)": "New PIN (6–8 digits)",
+  "Code PIN (6–8 chiffres)": "PIN code (6–8 digits)",
 };
 
 export default en;

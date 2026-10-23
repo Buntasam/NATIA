@@ -9,6 +9,8 @@ mod backup;
 mod crypto;
 mod db;
 mod legal;
+mod md_import;
+mod semantic;
 mod notes;
 mod settings;
 mod llm;
@@ -252,6 +254,8 @@ pub fn run() {
             backup::get_backup_config,
             backup::set_backup_config,
             backup::run_backup,
+            backup::list_backups,
+            backup::restore_backup,
             legal::get_terms_acceptance,
             legal::accept_terms,
             notes::get_all_notes,
@@ -276,6 +280,7 @@ pub fn run() {
             notes::reveal_data_dir,
             notes::save_zip_to_path,
             notes::relevant_notes,
+            md_import::import_markdown,
             notes::inspect_import,
             notes::import_zip,
             notes::export_note_to_path,
