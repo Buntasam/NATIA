@@ -60,7 +60,10 @@ NATIA est développée et testée sous **Windows**. Le verrouillage avec la sess
 | `ResetConfirmDialog.tsx` | Confirmation de la réinitialisation complète |
 | `PostItsPanel.tsx` | Gestion des post-its de l'écran de verrouillage depuis l'app |
 | `BackupReminder.tsx` | Rappel hebdomadaire de sauvegarde |
-| `Disclaimer.tsx` | Avertissements au premier lancement (bêta, chiffrement, IA locale) |
+| `SetupGuide.tsx` | Guide de démarrage après l'acceptation des conditions : mot de passe, IA, sauvegarde automatique |
+| `UpdatePrompt.tsx` | Au démarrage : propose la nouvelle version (installer ou plus tard), confirme une mise à jour installée |
+| `ConversationPanel.tsx` | Conversation IA (note ouverte ou « Toutes mes notes ») et historique des conversations |
+| `AutoBackupDaemon.tsx` | Demande la sauvegarde automatique à l'ouverture puis toutes les 30 min (le backend décide si elle est due) |
 | `Settings.tsx` | Fenêtre des paramètres : navigation, formulaire, enregistrement |
 | `settings/*.tsx` | Une catégorie de paramètres par fichier (Apparence, IA, Prompts, Mémoire, Sécurité, Données, Application, Manuel). Le texte du manuel est dans `settings/manualContent.ts` |
 | `TreeMapPanel.tsx`, `CalendarPanel.tsx`, `GraphPanel.tsx` | Vues arborescence, calendrier, graphe |
@@ -89,6 +92,8 @@ NATIA est développée et testée sous **Windows**. Le verrouillage avec la sess
 | `lockSafely.ts` | Enregistre la note en cours, puis verrouille |
 | `updater.ts` | Vérification et installation des mises à jour |
 | `backupReminder.ts` | Dates de dernière sauvegarde, report du rappel |
+| `autoBackup.ts` | Réglages et lancement de la sauvegarde automatique |
+| `conversations.ts` | Historique des conversations IA (user_data `ai_conversations`, 100 au plus) |
 | `lockPostIts.ts` | Stockage des post-its de l'écran de verrouillage (localStorage, en clair par conception) |
 | `memoryContext.ts` | Construit le contexte « mémoire IA » ajouté aux prompts |
 | `markdown.ts` | Conversion Markdown → HTML |
@@ -106,7 +111,7 @@ NATIA est développée et testée sous **Windows**. Le verrouillage avec la sess
 
 Le texte français sert de clé : `t("Nouvelle note")`. Une traduction manquante affiche le français. `msg("…")` marque un texte stocké dans une constante et traduit à l'affichage. Une clé `"Moyen@@intensité"` permet deux traductions pour un même texte français. `npm run i18n:check` liste les textes sans traduction.
 
-Les prompts IA connus (valeurs par défaut, préréglages, consignes de longueur) suivent la langue : `localizePrompts()` est appliqué au chargement et à l'enregistrement des paramètres, et quand la langue change. Un prompt modifié par l'utilisateur n'est jamais converti. Les messages d'erreur du backend restent en français et sont traduits par `trError()`.
+Les prompts IA connus (valeurs par défaut, préréglages, consignes de longueur) suivent la langue des prompts : `promptLang()` renvoie le choix de `usePromptLangChoice` (localStorage `natia_prompt_lang`) ou, à défaut, la langue de l'interface. `localizePrompts()` est appliqué au chargement et à l'enregistrement des paramètres, et quand l'une des deux langues change. Un prompt modifié par l'utilisateur n'est jamais converti. Les messages d'erreur du backend restent en français et sont traduits par `trError()`.
 
 Le manuel existe en deux fichiers (`settings/manualContent.ts` et `manualContent.en.ts`) avec les mêmes identifiants de chapitres.
 
@@ -138,6 +143,7 @@ src-tauri/src/
 ├── system_lock.rs  ← verrouillage quand la session Windows se verrouille ou sort de veille
 ├── tray.rs         ← icône près de l'horloge, lancement avec Windows
 ├── legal.rs        ← acceptation des conditions d'utilisation (terms.json)
+├── backup.rs       ← sauvegarde automatique (dossier choisi, fréquence, N dernières)
 └── llm.rs          ← IA intégrée : téléchargement vérifié de llama.cpp et des modèles, serveur local
 ```
 
@@ -158,6 +164,7 @@ Les commandes de dossiers, corbeille, export et recherche délèguent à des fon
 | `write_export_file` | Écrit une note exportée (`.md`, `.txt`, `.html` uniquement) à l'emplacement choisi |
 | `inspect_import`, `import_zip` | Import des trois formats d'export |
 | `search_notes` | Recherche plein texte (asynchrone, avec cache) |
+| `relevant_notes` | Notes les plus utiles à une question, avec un extrait (mode « Toutes mes notes ») : mots de la question pondérés par leur rareté, bonus dans le titre |
 | `get_global_stats`, `get_all_reminders` | Statistiques, rappels |
 
 ### Commandes — `settings.rs`
@@ -202,6 +209,15 @@ Tous les fournisseurs diffusent leur réponse avec les événements `ollama-toke
 | `llm_chat`, `llm_stream`, `llm_stop` | Chat ; le serveur démarre au premier message |
 
 Le serveur (`llama-server`) écoute sur `127.0.0.1` uniquement, sur un port libre, avec une clé aléatoire à chaque lancement, sans interface web (`--no-webui`) et hors ligne (`--offline`). Il est rattaché à NATIA par un Job Object Windows (`KILL_ON_JOB_CLOSE`) : il s'arrête avec l'app, même en cas de plantage. La carte graphique dédiée la mieux dotée est choisie (`--device`) ; `--fit` adapte le nombre de couches à la mémoire disponible. Le flux SSE est découpé en octets puis en lignes, pour ne jamais couper un caractère accentué.
+
+### Commandes — `backup.rs`
+
+| Commande | Description |
+|---|---|
+| `get_backup_config`, `set_backup_config` | Réglages (activée, dossier, fréquence, nombre gardé, mot de passe) et état de la dernière sauvegarde |
+| `run_backup` | Écrit `NATIA-sauvegarde-AAAA-MM-JJ_HHMMSS.zip` si la précédente est assez ancienne (ou tout de suite), puis supprime les plus anciennes |
+
+Les réglages sont dans la table `settings` (chiffrés avec un mot de passe NATIA). Le mot de passe des archives suit la règle des clés API : coffre de Windows sans mot de passe NATIA, base chiffrée avec. Avec un mot de passe NATIA, une sauvegarde non protégée est refusée, pour ne pas copier en clair des notes chiffrées. Seuls les fichiers nommés par NATIA sont supprimés du dossier.
 
 ### Commandes — `legal.rs`
 

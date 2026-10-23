@@ -4,6 +4,7 @@ import { open as openDialog, save } from "@tauri-apps/plugin-dialog";
 import { AlertTriangle, Download, FolderOpen, Trash2 as TrashIcon, Upload } from "lucide-react";
 import { useStore } from "../../store";
 import ResetConfirmDialog from "../ResetConfirmDialog";
+import AutoBackupSettings from "./AutoBackupSettings";
 import { formatLastBackup, isBackupReminderEnabled, recordBackup, setBackupReminderEnabled } from "../../lib/backupReminder";
 import { Section, SecInput } from "./SettingsWidgets";
 import { msg, trError, useT } from "../../i18n";
@@ -176,6 +177,8 @@ export default function DataSettings() {
           </div>
         </div>
       </Section>
+
+      <AutoBackupSettings />
 
       <Section title={t("Désinstallation")}>
         <div className="flex flex-col gap-2">

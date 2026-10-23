@@ -2,11 +2,10 @@ import React, { useEffect, useState } from "react";
 import { getVersion } from "@tauri-apps/api/app";
 import { invoke } from "@tauri-apps/api/core";
 import { openUrl } from "@tauri-apps/plugin-opener";
-import { Bug, Download, ExternalLink, Github, Lightbulb, RotateCcw, Star } from "lucide-react";
-import { checkForUpdate, getPendingUpdate, isAutoUpdateEnabled, setAutoUpdateEnabled } from "../../lib/updater";
-import { callSaveNow } from "../CloseOverlay";
+import { Bug, Compass, Download, ExternalLink, Github, Lightbulb, RotateCcw, Star } from "lucide-react";
+import { checkForUpdate, getPendingUpdate, installPendingUpdate, isAutoUpdateEnabled, setAutoUpdateEnabled } from "../../lib/updater";
 import { isCloseToTray, setCloseToTray } from "../../lib/windowPrefs";
-import { DISCLAIMER_KEY } from "../Disclaimer";
+import { openSetupGuide, useSetupGuide } from "../SetupGuide";
 import { Section } from "./SettingsWidgets";
 import { SettingsFormProps } from "./types";
 import { useT } from "../../i18n";
@@ -22,7 +21,7 @@ const openExternal = (e: React.MouseEvent<HTMLAnchorElement>) => {
 };
 
 export default function AppSettings({ form, set }: Pick<SettingsFormProps, "form" | "set">) {
-  const [disclaimerReset, setDisclaimerReset] = useState(false);
+  const guideQueued = useSetupGuide((s) => s.open);
   const t = useT();
   const [autoUpdate, setAutoUpdate] = useState(isAutoUpdateEnabled);
   const [appVersion, setAppVersion] = useState("");
@@ -53,40 +52,26 @@ export default function AppSettings({ form, set }: Pick<SettingsFormProps, "form
   const installUpdate = async () => {
     const u = getPendingUpdate();
     if (!u) return;
-    // L'installeur ferme l'app : on enregistre la note en cours avant.
-    callSaveNow();
-    await new Promise((r) => setTimeout(r, 600));
-    let total = 0, received = 0;
-    setUpd({ status: "downloading", version: u.version, progress: 0 });
     try {
-      await u.downloadAndInstall((ev) => {
-        if (ev.event === "Started") total = ev.data.contentLength ?? 0;
-        if (ev.event === "Progress") {
-          received += ev.data.chunkLength;
-          setUpd((s) => ({ ...s, progress: total ? Math.min(100, Math.round((received / total) * 100)) : 0 }));
-        }
-      });
+      await installPendingUpdate((progress) => setUpd({ status: "downloading", version: u.version, progress }));
     } catch (e) {
       setUpd({ status: "error", error: t("Échec de l'installation : {e}", { e: String(e) }) });
     }
   };
 
-  const resetDisclaimer = () => {
-    localStorage.removeItem(DISCLAIMER_KEY);
-    setDisclaimerReset(true);
-    setTimeout(() => setDisclaimerReset(false), 2000);
-  };
   return (
     <>
       <Section title={t("Application")}>
         <div className="flex items-center justify-between">
           <div>
-            <p className="text-sm text-secondary">{t("Message de bienvenue")}</p>
-            <p className="text-[10px] text-muted mt-0.5">{t("Réafficher le message d'avertissement au prochain lancement")}</p>
+            <p className="text-sm text-secondary">{t("Guide de démarrage")}</p>
+            <p className="text-[10px] text-muted mt-0.5">
+              {guideQueued ? t("Il s'affichera à la fermeture des paramètres.") : t("Mot de passe, IA, sauvegarde automatique : les trois réglages conseillés")}
+            </p>
           </div>
-          <button onClick={resetDisclaimer} className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-hover border border-border text-xs text-secondary hover:text-primary hover:border-accent/40 transition-colors">
-            <RotateCcw size={11} className={disclaimerReset ? "text-accent" : ""} />
-            {disclaimerReset ? t("Réinitialisé ✓") : t("Réinitialiser")}
+          <button onClick={openSetupGuide} disabled={guideQueued} className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-hover border border-border text-xs text-secondary hover:text-primary hover:border-accent/40 transition-colors disabled:opacity-50">
+            <Compass size={11} className={guideQueued ? "text-accent" : ""} />
+            {t("Revoir le guide")}
           </button>
         </div>
       </Section>
@@ -111,7 +96,7 @@ export default function AppSettings({ form, set }: Pick<SettingsFormProps, "form
         <div className="flex items-center justify-between">
           <div>
             <p className="text-sm text-secondary">{t("Rechercher au démarrage")}</p>
-            <p className="text-[10px] text-muted mt-0.5">{t("Version installée : {v} · une notification signale les nouvelles versions", { v: appVersion || "…" })}</p>
+            <p className="text-[10px] text-muted mt-0.5">{t("Version installée : {v} · une fenêtre propose les nouvelles versions au démarrage", { v: appVersion || "…" })}</p>
           </div>
           <button
             role="switch"

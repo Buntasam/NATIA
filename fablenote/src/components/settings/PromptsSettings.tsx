@@ -6,8 +6,9 @@ import { PromptVersion, Settings as SettingsType } from "../../types";
 import { Section } from "./SettingsWidgets";
 import { PROMPT_FIELDS, PROMPT_PRESETS } from "./promptPresets";
 import { SettingsFormProps } from "./types";
-import { locale, useLang, useT } from "../../i18n";
-import { promptIn } from "../../i18n/prompts";
+import { locale, useT } from "../../i18n";
+import { promptIn, usePromptLang } from "../../i18n/prompts";
+import PromptLangPicker from "../PromptLangPicker";
 
 interface ShadowLibEntry { id: string; name: string; value: string; }
 
@@ -42,7 +43,7 @@ function fmtDate(iso: string) {
 export default function PromptsSettings({ form, set, setForm }: SettingsFormProps) {
   const { settings } = useStore();
   const t = useT();
-  const lang = useLang((s) => s.lang);
+  const lang = usePromptLang();
   const localDefault = (key: keyof SettingsType) => promptIn(DEFAULT_SETTINGS[key] as string, lang);
   const [openDefault, setOpenDefault] = useState<string | null>(null);
   const [allReset, setAllReset] = useState(false);
@@ -109,6 +110,15 @@ export default function PromptsSettings({ form, set, setForm }: SettingsFormProp
   };
   return (
     <>
+      <Section title={t("Langue des prompts")}>
+        <div className="flex flex-col gap-2">
+          <p className="text-[11px] text-muted leading-relaxed">
+            {t("Langue des prompts par défaut et des préréglages, et donc des réponses de l'IA. Un prompt que vous avez écrit ou modifié n'est jamais traduit.")}
+          </p>
+          <PromptLangPicker />
+        </div>
+      </Section>
+
       <Section title={t("Prompts système")}>
         <div className="flex flex-col gap-7">
           {PROMPT_FIELDS.map(({ key, label, rows }) => (

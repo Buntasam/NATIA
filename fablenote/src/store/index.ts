@@ -2,7 +2,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { create } from "zustand";
 import { Note, NoteMetadata, Settings, TrashItem, Version } from "../types";
 import { tr, useLang } from "../i18n";
-import { localizePrompts } from "../i18n/prompts";
+import { localizePrompts, promptLang, usePromptLangChoice } from "../i18n/prompts";
 
 export type MemoryNodeType = "projet" | "utilisateur" | "contexte" | "sujet";
 
@@ -552,15 +552,15 @@ export const useStore = create<AppStore>((set, get) => ({
   loadSettings: async () => {
     try {
       const settings = await invoke<Settings>("get_settings");
-      set({ settings: localizePrompts(settings, useLang.getState().lang) });
+      set({ settings: localizePrompts(settings, promptLang()) });
     } catch {
-      set({ settings: localizePrompts(DEFAULT_SETTINGS, useLang.getState().lang) });
+      set({ settings: localizePrompts(DEFAULT_SETTINGS, promptLang()) });
     }
   },
 
   saveSettings: async (raw) => {
-    // Les prompts par défaut suivent la langue de l'interface (voir i18n/prompts.ts).
-    const settings = localizePrompts(raw, useLang.getState().lang);
+    // Les prompts par défaut suivent la langue des prompts (voir i18n/prompts.ts).
+    const settings = localizePrompts(raw, promptLang());
     await invoke("update_settings", { settings });
     set({ settings });
   },
@@ -624,9 +624,12 @@ export const useStore = create<AppStore>((set, get) => ({
     set((s) => (s.activeNote ? { activeNote: { ...s.activeNote, content } } : {})),
 }));
 
-// Langue changée : les prompts par défaut suivent (enregistrés au prochain « Sauvegarder »).
-useLang.subscribe(({ lang }) => {
+// Langue des prompts changée (interface ou choix explicite) : les prompts par défaut
+// suivent. Rien à enregistrer : la conversion est refaite à chaque chargement.
+const relocalizePrompts = () => {
   const { settings } = useStore.getState();
-  const next = localizePrompts(settings, lang);
+  const next = localizePrompts(settings, promptLang());
   if (next !== settings) useStore.setState({ settings: next });
-});
+};
+useLang.subscribe(relocalizePrompts);
+usePromptLangChoice.subscribe(relocalizePrompts);

@@ -120,13 +120,14 @@ export const LEGAL: ManualChapter[] = [
         title: "3. Quand des données quittent votre ordinateur",
         blocks: [
           { table: { head: ["Fonction", "Destinataire", "Données envoyées", "Quand"], rows: [
-            ["IA en ligne", "Anthropic, OpenAI, Google ou Mistral (selon votre choix)", "Le texte soumis à l'IA (note, sélection, conversation, prompt système, mémoire IA si activée) et votre clé API", "Seulement quand vous lancez une action IA avec ce fournisseur"],
+            ["IA en ligne", "Anthropic, OpenAI, Google ou Mistral (selon votre choix)", "Le texte soumis à l'IA (note, sélection, conversation, prompt système, mémoire IA si activée, extraits des notes trouvées en mode « Toutes mes notes ») et votre clé API", "Seulement quand vous lancez une action IA avec ce fournisseur"],
             ["Claude Code CLI", "Anthropic, via votre compte Claude", "Les mêmes", "Idem"],
             ["IA intégrée, Ollama", "Personne (traitement sur votre PC)", "—", "—"],
             ["Installation de l'IA intégrée", "GitHub (moteur), Hugging Face (modèles)", "Données techniques de connexion (adresse IP, logiciel)", "Une fois, au téléchargement"],
             ["Recherche de mises à jour", "GitHub", "Données techniques de connexion", "Au démarrage ou à la demande ; désactivable (Paramètres → Application)"],
             ["Dictée vocale", "Microsoft, si la reconnaissance vocale de Windows / Edge passe par ses services en ligne", "Le son du micro pendant la dictée", "Seulement pendant une dictée"],
             ["Liens externes", "Le site ouvert dans votre navigateur", "Selon ce site", "Quand vous cliquez sur un lien"],
+            ["Sauvegarde automatique", "Le dossier que vous choisissez (et le service qui le synchronise, comme OneDrive)", "Une archive de toutes les notes, protégée par mot de passe si vous en fixez un", "À la fréquence choisie, si vous l'activez"],
           ] } },
           { p: "Ces tiers traitent les données selon leur propre politique de confidentialité, parfois hors de l'Union européenne :" },
           { links: [

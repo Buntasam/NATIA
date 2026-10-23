@@ -1,7 +1,6 @@
 import { invoke } from "@tauri-apps/api/core";
 import { Settings } from "../types";
-import { useLang } from "../i18n";
-import { promptIn } from "../i18n/prompts";
+import { promptIn, promptLang } from "../i18n/prompts";
 
 type History = { role: string; content: string }[];
 
@@ -15,7 +14,7 @@ const INTENSITY: Record<string, string> = {
 function applyIntensity(system: string, intensity?: string): string {
   // medium (ou inconnu) : pas de contrainte ajoutée
   const rule = intensity ? INTENSITY[intensity] : undefined;
-  return rule ? `${system}\n\n${promptIn(rule, useLang.getState().lang)}` : system;
+  return rule ? `${system}\n\n${promptIn(rule, promptLang())}` : system;
 }
 
 export async function aiChat(

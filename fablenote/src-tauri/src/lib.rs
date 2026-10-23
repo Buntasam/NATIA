@@ -5,6 +5,7 @@ use std::sync::Mutex;
 use tauri::Manager;
 
 mod ai;
+mod backup;
 mod crypto;
 mod db;
 mod legal;
@@ -248,6 +249,9 @@ pub fn run() {
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
+            backup::get_backup_config,
+            backup::set_backup_config,
+            backup::run_backup,
             legal::get_terms_acceptance,
             legal::accept_terms,
             notes::get_all_notes,
@@ -271,6 +275,7 @@ pub fn run() {
             notes::empty_trash,
             notes::reveal_data_dir,
             notes::save_zip_to_path,
+            notes::relevant_notes,
             notes::inspect_import,
             notes::import_zip,
             notes::export_note_to_path,
@@ -373,7 +378,7 @@ async fn reset_app(app_handle: tauri::AppHandle) -> Result<(), String> {
     notes::clear_search_cache(&state);
 
     // Les clés API sans mot de passe vivent dans le keychain OS, hors du dossier de données.
-    for name in db::API_KEY_NAMES.iter().chain([&db::DEVICE_SECRET_NAME]) {
+    for name in db::API_KEY_NAMES.iter().chain([&db::DEVICE_SECRET_NAME, &backup::BACKUP_PASSWORD_NAME]) {
         let _ = db::keychain_set(name, "");
     }
 

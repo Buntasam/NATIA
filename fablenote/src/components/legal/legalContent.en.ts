@@ -112,13 +112,14 @@ export const LEGAL_EN: ManualChapter[] = [
         title: "3. When data leaves your computer",
         blocks: [
           { table: { head: ["Feature", "Recipient", "Data sent", "When"], rows: [
-            ["Online AI", "Anthropic, OpenAI, Google or Mistral (your choice)", "The text submitted to the AI (note, selection, conversation, system prompt, AI memory if enabled) and your API key", "Only when you run an AI action with that provider"],
+            ["Online AI", "Anthropic, OpenAI, Google or Mistral (your choice)", "The text submitted to the AI (note, selection, conversation, system prompt, AI memory if enabled, excerpts of the notes found in “All my notes” mode) and your API key", "Only when you run an AI action with that provider"],
             ["Claude Code CLI", "Anthropic, through your Claude account", "The same", "Same"],
             ["Built-in AI, Ollama", "No one (processed on your PC)", "—", "—"],
             ["Built-in AI setup", "GitHub (engine), Hugging Face (models)", "Technical connection data (IP address, software)", "Once, when downloading"],
             ["Update check", "GitHub", "Technical connection data", "At startup or on request; can be turned off (Settings → Application)"],
             ["Voice dictation", "Microsoft, if Windows / Edge speech recognition uses its online services", "Microphone audio during dictation", "Only while dictating"],
             ["External links", "The site opened in your browser", "Depends on that site", "When you click a link"],
+            ["Automatic backup", "The folder you choose (and the service that syncs it, such as OneDrive)", "An archive of all notes, password-protected if you set one", "At the chosen frequency, if you turn it on"],
           ] } },
           { p: "These third parties process data under their own privacy policy, sometimes outside the European Union:" },
           { links: [

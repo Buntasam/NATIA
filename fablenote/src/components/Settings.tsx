@@ -14,6 +14,7 @@ import SecuritySettings from "./settings/SecuritySettings";
 import ManualSettings from "./settings/ManualSettings";
 import LegalSettings from "./settings/LegalSettings";
 import { msg, useT } from "../i18n";
+import { localizePrompts, usePromptLang } from "../i18n/prompts";
 
 // ─── Catégories de la navigation latérale ─────────────────────────────────────
 
@@ -26,7 +27,7 @@ const NAV: { key: SettingsCat; label: string; desc: string; icon: React.ReactNod
   { key: "memory",     label: msg("Mémoire IA"),                desc: msg("Mémoire persistante et graphe neuronal"),               icon: <BrainCircuit size={14} />, keywords: msg("memoire graphe noeud neuronal collecte") },
   { key: "security",   label: msg("Sécurité"),                  desc: msg("Mot de passe, chiffrement, verrouillage automatique"),  icon: <Shield size={14} />,       keywords: msg("securite mot de passe pin verrouillage chiffrement aes argon lock recuperation") },
   { key: "data",       label: msg("Données"),                   desc: msg("Export, dossier de données, désinstallation"),          icon: <Database size={14} />,     keywords: msg("export zip sauvegarde donnees dossier desinstaller backup archive import") },
-  { key: "app",        label: msg("Application"),               desc: msg("Démarrage, mises à jour, outils de développement"),     icon: <Wrench size={14} />,       keywords: msg("disclaimer avertissement debogage debug developpement demarrage mise a jour fermeture windows") },
+  { key: "app",        label: msg("Application"),               desc: msg("Démarrage, mises à jour, outils de développement"),     icon: <Wrench size={14} />,       keywords: msg("guide demarrage bienvenue debogage debug developpement mise a jour fermeture windows") },
   { key: "legal",      label: msg("Confidentialité"),           desc: msg("Conditions d'utilisation, politique de confidentialité, RGPD"), icon: <FileText size={14} />, keywords: msg("rgpd gdpr confidentialite vie privee conditions utilisation cgu cnil droits donnees personnelles licence") },
   { key: "manual",     label: msg("Manuel"),                    desc: msg("Guide d'utilisation : installer une IA, utiliser l'app, sécurité, sauvegardes"), icon: <BookOpen size={14} />, keywords: msg("manuel aide guide tutoriel installation ollama api cle claude cli node modele utilisation raccourcis sauvegarde recuperation") },
   { key: "stats",      label: msg("Statistiques"),              desc: msg("Activité et métriques de tes notes"),                   icon: <BarChart2 size={14} />,    keywords: msg("statistiques graphique mots notes activite tags kpi") },
@@ -38,6 +39,10 @@ export default function Settings() {
   const { settings, saveSettings, toggleSettings } = useStore();
   const t = useT();
   const [form, setForm] = useState<SettingsType>({ ...settings });
+
+  // Langue des prompts changée : le formulaire ouvert suit, comme les réglages du store.
+  const promptLanguage = usePromptLang();
+  useEffect(() => { setForm((f) => localizePrompts(f, promptLanguage)); }, [promptLanguage]);
   const [cat, setCat] = useState<SettingsCat>(() => {
     const saved = localStorage.getItem("natia_settings_cat") as SettingsCat | null;
     return saved && NAV.some((n) => n.key === saved) ? saved : "appearance";

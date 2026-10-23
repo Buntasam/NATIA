@@ -1,18 +1,16 @@
 import { useEffect, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
-import { isPermissionGranted, sendNotification } from "@tauri-apps/plugin-notification";
 import { lockSafely } from "./lib/lockSafely";
 import { isCloseToTray } from "./lib/windowPrefs";
-import { checkForUpdate, isAutoUpdateEnabled } from "./lib/updater";
 import { useStore } from "./store";
 import Layout from "./components/Layout";
-import Disclaimer from "./components/Disclaimer";
+import SetupGuide, { openSetupGuide } from "./components/SetupGuide";
+import UpdatePrompt from "./components/UpdatePrompt";
 import TermsGate from "./components/legal/TermsGate";
 import { LEGAL_VERSION } from "./components/legal/legalContent";
 import LockScreen from "./components/LockScreen";
 import CloseOverlay, { waitForCloseConfirm, callSaveNow } from "./components/CloseOverlay";
-import { tr } from "./i18n";
 
 export default function App() {
   const { loadNotes, loadSettings, loadFolders, loadColors, loadMemoryNodes, theme, setTheme, isDark, checkSecurity, isLocked, hasPassword } = useStore();
@@ -54,18 +52,6 @@ export default function App() {
   useEffect(() => {
     invoke("set_window_theme", { dark: isDark }).catch(() => {});
   }, [isDark]);
-
-  // Vérification silencieuse au démarrage, une fois les conditions acceptées :
-  // pas de release publiée ou pas de réseau = rien à signaler.
-  useEffect(() => {
-    if (terms !== "ok" || !isAutoUpdateEnabled()) return;
-    checkForUpdate()
-      .then(async (u) => {
-        if (!u || !(await isPermissionGranted())) return;
-        sendNotification({ title: tr("NATIA {v} est disponible", { v: u.version }), body: tr("Paramètres → Application → Mises à jour") });
-      })
-      .catch(() => {});
-  }, [terms]);
 
   // Session Windows verrouillée ou PC sorti de veille (voir src-tauri/src/system_lock.rs).
   useEffect(() => {
@@ -125,13 +111,15 @@ export default function App() {
   return (
     <>
       <CloseOverlay />
+      {/* Une fois les conditions acceptées : rien n'est demandé au réseau avant. */}
+      {terms === "ok" && <UpdatePrompt />}
       {terms === null ? null : terms !== "ok" ? (
-        <TermsGate updated={terms === "old"} onAccepted={() => setTerms("ok")} />
+        <TermsGate updated={terms === "old"} onAccepted={() => { setTerms("ok"); if (terms === "missing") openSetupGuide(); }} />
       ) : hasPassword && isLocked ? (
         <LockScreen />
       ) : (
         <>
-          <Disclaimer />
+          <SetupGuide />
           <Layout />
         </>
       )}

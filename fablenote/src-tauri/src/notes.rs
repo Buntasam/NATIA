@@ -658,7 +658,7 @@ fn collect_notes_export(db: &rusqlite::Connection) -> Result<Vec<(String, String
 /// Nom de l'unique fichier visible dans un export protégé.
 pub(crate) const PROTECTED_INNER_NAME: &str = "NATIA-notes.zip";
 
-fn build_notes_zip(db: &rusqlite::Connection, notes_dir: &std::path::Path, key: &Key) -> Result<Vec<u8>, String> {
+pub(crate) fn build_notes_zip(db: &rusqlite::Connection, notes_dir: &std::path::Path, key: &Key) -> Result<Vec<u8>, String> {
     use std::io::Write;
     use zip::write::SimpleFileOptions;
 
@@ -694,7 +694,7 @@ fn build_notes_zip(db: &rusqlite::Connection, notes_dir: &std::path::Path, key: 
 }
 
 #[derive(Clone, Copy, PartialEq, Debug)]
-enum Protection {
+pub(crate) enum Protection {
     /// AES-256 : solide, mais l'Explorateur Windows ne sait pas l'ouvrir (7-Zip requis).
     Aes,
     /// ZipCrypto : seul chiffrement que l'Explorateur Windows sait ouvrir, mais cassable
@@ -704,7 +704,7 @@ enum Protection {
 
 /// Le format ZIP laisse les noms de fichiers en clair : l'export complet est donc
 /// rangé dans une seule entrée chiffrée, pour ne révéler ni titres ni dossiers.
-fn protect_zip(inner: &[u8], password: &str, mode: Protection) -> Result<Vec<u8>, String> {
+pub(crate) fn protect_zip(inner: &[u8], password: &str, mode: Protection) -> Result<Vec<u8>, String> {
     use std::io::Write;
     use zip::unstable::write::FileOptionsExt;
     use zip::write::SimpleFileOptions;
@@ -1049,6 +1049,19 @@ fn file_stamp(fp: &std::path::Path) -> (u64, Option<std::time::SystemTime>) {
     std::fs::metadata(fp).map(|m| (m.len(), m.modified().ok())).unwrap_or((0, None))
 }
 
+/// Met à jour le texte en cache d'une note si son fichier a changé.
+fn refresh_cached(cache: &mut SearchCache, id: &str, notes_dir: &std::path::Path, key: &Key) {
+    let fp = notes_dir.join(format!("{}.html", id));
+    let stamp = file_stamp(&fp);
+    let fresh = cache.get(id).is_some_and(|c| c.stamp == stamp && c.with_key == key.is_some());
+    if !fresh {
+        let raw = std::fs::read_to_string(&fp).unwrap_or_default();
+        let plain = strip_html(&maybe_dec(key, &raw));
+        let folded = fold(&plain);
+        cache.insert(id.to_string(), CachedText { stamp, with_key: key.is_some(), plain, folded });
+    }
+}
+
 fn search_rows(
     rows: Vec<(String, String, Option<String>, String)>,
     notes_dir: &std::path::Path,
@@ -1060,15 +1073,7 @@ fn search_rows(
     cache.retain(|id, _| rows.iter().any(|r| &r.0 == id));
     let mut results = Vec::new();
     for (id, enc_title, folder, updated_at) in rows {
-        let fp = notes_dir.join(format!("{}.html", id));
-        let stamp = file_stamp(&fp);
-        let fresh = cache.get(&id).is_some_and(|c| c.stamp == stamp && c.with_key == key.is_some());
-        if !fresh {
-            let raw = std::fs::read_to_string(&fp).unwrap_or_default();
-            let plain = strip_html(&maybe_dec(key, &raw));
-            let folded = fold(&plain);
-            cache.insert(id.clone(), CachedText { stamp, with_key: key.is_some(), plain, folded });
-        }
+        refresh_cached(cache, &id, notes_dir, key);
         let entry = &cache[&id];
         let title = maybe_dec(key, &enc_title);
         if fold(&title).contains(&q) || entry.folded.contains(&q) {
@@ -1104,6 +1109,102 @@ pub async fn search_notes(state: State<'_, AppState>, query: String) -> Result<V
     Ok(search_rows(rows, &state.notes_dir, &key, &mut cache, &query))
 }
 
+// ─── Notes utiles à une question (« Mes notes » dans la conversation IA) ─────
+
+/// Mots trop courants pour départager les notes.
+const STOP_WORDS: &[&str] = &[
+    "les", "des", "une", "est", "que", "qui", "quoi", "pour", "dans", "par", "sur", "avec", "pas", "plus",
+    "mes", "mon", "tes", "ton", "ses", "son", "nos", "vos", "leur", "leurs", "cette", "ces", "aux", "elle",
+    "ils", "elles", "nous", "vous", "moi", "toi", "suis", "sont", "etait", "ete", "avoir", "etre",
+    "fait", "faire", "comment", "pourquoi", "quand", "quel", "quelle", "quels", "quelles", "dit",
+    "ecrit", "note", "notes", "sujet", "propos", "tout", "tous", "toutes", "bien", "aussi", "alors",
+    "the", "and", "for", "what", "when", "where", "which", "who", "why", "how", "did", "does", "about",
+    "with", "from", "that", "this", "have", "has", "was", "were", "are", "you", "your", "our", "wrote",
+];
+
+/// Mots de la question qui servent à chercher : 3 lettres ou plus, hors mots courants.
+fn question_terms(question: &str) -> Vec<String> {
+    let mut terms: Vec<String> = Vec::new();
+    for w in fold(question).split(|c: char| !c.is_alphanumeric()) {
+        if w.chars().count() < 3 || STOP_WORDS.contains(&w) { continue; }
+        // Pluriel retiré : « reunions » trouve aussi « reunion » (la recherche se fait par inclusion).
+        let w = if w.chars().count() > 4 && (w.ends_with('s') || w.ends_with('x')) { &w[..w.len() - 1] } else { w };
+        if !terms.iter().any(|t| t == w) { terms.push(w.to_string()); }
+    }
+    terms
+}
+
+#[derive(Serialize, Debug)]
+pub struct RelevantNote {
+    pub id: String,
+    pub title: String,
+    /// Passage de la note autour du premier mot trouvé, au plus `EXCERPT_CHARS` caractères.
+    pub excerpt: String,
+}
+
+const EXCERPT_CHARS: usize = 1800;
+
+/// Classe les notes par pertinence : chaque mot de la question pèse d'autant plus
+/// qu'il est rare dans l'ensemble des notes, et compte davantage dans le titre.
+fn rank_notes(notes: &[(String, String)], cache: &SearchCache, terms: &[String], limit: usize) -> Vec<RelevantNote> {
+    if terms.is_empty() { return vec![]; }
+    let n = notes.len() as f64;
+    let titles: Vec<String> = notes.iter().map(|(_, t)| fold(t)).collect();
+    let text = |id: &str| cache.get(id).map(|c| c.folded.as_str()).unwrap_or("");
+    let weights: Vec<f64> = terms.iter().map(|t| {
+        let df = notes.iter().zip(&titles)
+            .filter(|((id, _), title)| title.contains(t.as_str()) || text(id).contains(t.as_str()))
+            .count() as f64;
+        ((n + 1.0) / (df + 1.0)).ln() + 1.0
+    }).collect();
+
+    let mut scored: Vec<(f64, usize)> = notes.iter().enumerate().filter_map(|(i, (id, _))| {
+        let score: f64 = terms.iter().zip(&weights).map(|(t, w)| {
+            let in_title = if titles[i].contains(t.as_str()) { 3.0 } else { 0.0 };
+            let hits = text(id).matches(t.as_str()).take(20).count() as f64;
+            w * (in_title + if hits > 0.0 { 1.0 + hits.ln() } else { 0.0 })
+        }).sum();
+        (score > 0.0).then_some((score, i))
+    }).collect();
+    scored.sort_by(|a, b| b.0.partial_cmp(&a.0).unwrap_or(std::cmp::Ordering::Equal));
+
+    scored.into_iter().take(limit).map(|(_, i)| {
+        let (id, title) = &notes[i];
+        let excerpt = cache.get(id).map(|c| {
+            let first = terms.iter().filter_map(|t| c.folded.find(t.as_str())).min();
+            let total = c.plain.chars().count();
+            let at = first.map(|b| c.folded[..b].chars().count()).unwrap_or(0);
+            let start = at.saturating_sub(EXCERPT_CHARS / 3).min(total.saturating_sub(EXCERPT_CHARS));
+            let end = (start + EXCERPT_CHARS).min(total);
+            format!("{}{}{}", if start > 0 { "…" } else { "" }, char_slice(&c.plain, start, end), if end < total { "…" } else { "" })
+        }).unwrap_or_default();
+        RelevantNote { id: id.clone(), title: title.clone(), excerpt }
+    }).collect()
+}
+
+/// Les notes les plus utiles pour répondre à `question`, avec un passage de chacune.
+#[tauri::command]
+pub async fn relevant_notes(state: State<'_, AppState>, question: String, limit: u32) -> Result<Vec<RelevantNote>, String> {
+    crate::require_unlocked(&state)?;
+    let terms = question_terms(&question);
+    if terms.is_empty() { return Ok(vec![]); }
+    let key = state.enc_key.lock().map_err(|e| e.to_string())?.clone();
+    let rows: Vec<(String, String)> = {
+        let db = state.db.lock().map_err(|e| e.to_string())?;
+        let mut stmt = db
+            .prepare("SELECT id, title FROM notes WHERE deleted_at IS NULL")
+            .map_err(|e| e.to_string())?;
+        let mapped = stmt.query_map([], |row| Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?)))
+            .map_err(|e| e.to_string())?;
+        let collected: SqlResult<Vec<_>> = mapped.collect();
+        collected.map_err(|e| e.to_string())?
+    };
+    let notes: Vec<(String, String)> = rows.into_iter().map(|(id, t)| (id, maybe_dec(&key, &t))).collect();
+    let mut cache = state.search_cache.lock().map_err(|e| e.to_string())?;
+    for (id, _) in &notes { refresh_cached(&mut cache, id, &state.notes_dir, &key); }
+    Ok(rank_notes(&notes, &cache, &terms, limit.clamp(1, 8) as usize))
+}
+
 // ─── Global stats ─────────────────────────────────────────────────────────────
 
 #[derive(Serialize)]
@@ -1128,6 +1229,35 @@ pub fn get_global_stats(state: State<AppState>) -> Result<GlobalStats, String> {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn question_terms_skip_common_words() {
+        assert_eq!(super::question_terms("Qu'ai-je écrit sur le projet Orion et les réunions ?"), vec!["projet", "orion", "reunion"]);
+        assert!(super::question_terms("et le la ?").is_empty());
+    }
+
+    #[test]
+    fn rank_prefers_rare_words_and_titles() {
+        use super::*;
+        let mut cache = SearchCache::new();
+        for (id, text) in [
+            ("a", "Réunion du lundi. Projet Orion : budget validé, lancement en mars."),
+            ("b", "Liste de courses : tomates, pâtes. Réunion parents d'élèves."),
+            ("c", "Idées de vacances au soleil."),
+        ] {
+            cache.insert(id.to_string(), CachedText { stamp: (0, None), with_key: false, plain: text.to_string(), folded: fold(text) });
+        }
+        let notes = vec![
+            ("a".to_string(), "Compte rendu".to_string()),
+            ("b".to_string(), "Divers".to_string()),
+            ("c".to_string(), "Orion".to_string()),
+        ];
+        let ranked = rank_notes(&notes, &cache, &question_terms("Où en est le budget du projet Orion ?"), 5);
+        let ids: Vec<&str> = ranked.iter().map(|r| r.id.as_str()).collect();
+        assert_eq!(ids, vec!["a", "c"]);
+        assert!(ranked[0].excerpt.contains("budget"));
+        assert!(rank_notes(&notes, &cache, &question_terms("chocolat"), 5).is_empty());
+    }
+
     use super::*;
     use crate::crypto::{generate_dek, ENC_PREFIX};
 

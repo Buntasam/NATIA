@@ -6,8 +6,8 @@ import ApiKeysPanel from "../ApiKeysPanel";
 import { Field, Input, Section } from "./SettingsWidgets";
 import { PROMPT_PRESETS, TEMP_PRESET_MAP } from "./promptPresets";
 import { SettingsFormProps } from "./types";
-import { msg, trError, useLang, useT } from "../../i18n";
-import { promptIn } from "../../i18n/prompts";
+import { msg, trError, useT } from "../../i18n";
+import { promptIn, usePromptLang } from "../../i18n/prompts";
 import LocalAiPanel from "./LocalAiPanel";
 
 const INTENSITY_LEVELS: {
@@ -26,7 +26,7 @@ const INTENSITY_LEVELS: {
 
 export default function AiSettings({ form, set, setForm }: SettingsFormProps) {
   const t = useT();
-  const lang = useLang((s) => s.lang);
+  const lang = usePromptLang();
   const [showClaudeKey, setShowClaudeKey] = useState(false);
   const [showOpenAiKey, setShowOpenAiKey] = useState(false);
   const [showGeminiKey, setShowGeminiKey] = useState(false);

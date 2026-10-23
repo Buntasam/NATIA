@@ -41,7 +41,8 @@ export const MANUAL_EN: ManualChapter[] = [
         title: "App language",
         blocks: [
           { p: "Settings → Appearance → **Language**: French or English. On first launch, NATIA uses the Windows language." },
-          { p: "The default AI prompts switch language too (click **Save** in the settings to keep the change). Prompts you wrote yourself are left untouched, and so is the content of your notes." },
+          { p: "The default AI prompts switch language too. Prompts you wrote yourself are left untouched, and so is the content of your notes." },
+          { tip: "For prompts (and therefore answers) in a different language from the interface: Settings → Prompts → **Prompt language**, or the small flags next to “System prompt” in the AI panel (`Ctrl+Shift+A`)." },
         ],
       },
     ],
@@ -372,6 +373,20 @@ export const MANUAL_EN: ManualChapter[] = [
         title: "Chat",
         blocks: [
           { p: "Chat with the AI, with the open note as context. Chat history length is set in Settings → Artificial intelligence." },
+          { p: "Conversations are saved (encrypted if a password is set) and listed to the right of the chat: click one to resume it, the pencil (or double-click) to rename it, the bin (twice) to delete it, and **New** to start another. The **Search** field filters conversations by their content. Opening a note resumes its last conversation." },
+          { p: "The button next to **New** inserts the whole conversation into the open note." },
+        ],
+      },
+      {
+        title: "Ask all your notes",
+        blocks: [
+          { steps: [
+            "Open the chat (`Ctrl+Shift+A`, then **Chat**).",
+            "At the start of a conversation, choose **All my notes** instead of the open note.",
+            "Ask your question, for example “What did I decide for the Orion project?”.",
+          ] },
+          { p: "NATIA searches this PC for the notes containing the words of the question, gives excerpts to the AI, and shows the **notes used** under the answer: click one to open it." },
+          { tip: "With the built-in AI or Ollama, nothing leaves your PC. With an online AI, excerpts of the notes found are sent to it." },
         ],
       },
       {
@@ -386,7 +401,7 @@ export const MANUAL_EN: ManualChapter[] = [
           { list: [
             "**Temperature**: low = precise, consistent answers; high = more creative.",
             "**Token usage** (Eco → Max): answer length. Eco costs less with a paid API.",
-            "**Prompts**: edit the instructions of each action in Settings → Prompts. The default prompts follow the app language.",
+            "**Prompts**: edit the instructions of each action in Settings → Prompts. The default prompts follow the prompt language (the app language unless you choose otherwise).",
           ] },
         ],
       },
@@ -461,6 +476,19 @@ export const MANUAL_EN: ManualChapter[] = [
         ],
       },
       {
+        title: "Automatic backup",
+        blocks: [
+          { steps: [
+            "Settings → Data → **Automatic backup**: turn on the switch.",
+            "**Choose…**: the backup folder (OneDrive, USB stick, external drive…).",
+            "Pick the frequency (every day or every week) and how many backups to keep, then **Save**.",
+          ] },
+          { p: "NATIA writes a `NATIA-sauvegarde-date.zip` archive at startup when the previous one is old enough, and deletes the oldest beyond the number chosen. **Back up now** makes one right away." },
+          { warn: "If your notes are password-protected, backups must be too (AES-256). Write this password down: without it, the archives won't open." },
+          { p: "To restore: Settings → Data → **Import**, then choose the archive." },
+        ],
+      },
+      {
         title: "Import",
         blocks: [
           { p: "Settings → Data → Import: pick a NATIA export (any of the three formats). Notes already present aren't duplicated." },
@@ -499,7 +527,13 @@ export const MANUAL_EN: ManualChapter[] = [
       {
         title: "Updates",
         blocks: [
-          { p: "A new version is offered at startup (Settings → Application to turn this off or check manually). Installation is automatic and your notes are kept." },
+          { p: "At startup, a window offers the new version: **Update** installs it (the current note is saved, then NATIA restarts), **Later** postpones it to the next launch. Settings → Application to turn the check off or check manually. Your notes are kept." },
+        ],
+      },
+      {
+        title: "Setup guide",
+        blocks: [
+          { p: "On first launch (and after a reset), a guide offers the three recommended settings: password, AI, automatic backup. Each is optional. Settings → Application → **Show the guide** to reopen it." },
         ],
       },
       {

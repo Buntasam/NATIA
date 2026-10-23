@@ -36,6 +36,7 @@ import { aiChat, aiStream, activeModel } from "../lib/aiInvoke";
 import { buildMemoryContext } from "../lib/memoryContext";
 import { locale, msg, tr, trError, useT } from "../i18n";
 import { useStore } from "../store";
+import PromptLangPicker from "./PromptLangPicker";
 import Tip from "./Tooltip";
 import DebugConsole from "./DebugConsole";
 import { addAiLog } from "../debug/logger";
@@ -1364,13 +1365,16 @@ export default function AiPanel({ onOpenConv }: { onOpenConv: () => void }) {
 
             {/* Shadow prompt */}
             <div>
-              <button
-                onClick={() => setShowShadow((s) => !s)}
-                className="flex items-center gap-1.5 text-xs text-muted hover:text-primary transition-colors w-full"
-              >
-                {showShadow ? "▲" : "▼"}
-                <span className="ml-0.5">{t("Prompt système")}</span>
-              </button>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => setShowShadow((s) => !s)}
+                  className="flex items-center gap-1.5 text-xs text-muted hover:text-primary transition-colors flex-1"
+                >
+                  {showShadow ? "▲" : "▼"}
+                  <span className="ml-0.5">{t("Prompt système")}</span>
+                </button>
+                <PromptLangPicker compact />
+              </div>
               {showShadow && (
                 <textarea
                   value={shadowPrompt}

@@ -61,7 +61,8 @@ export const MANUAL: ManualChapter[] = [
         title: "Langue de l'application",
         blocks: [
           { p: "Paramètres → Apparence → **Langue** : français ou anglais. Au premier lancement, NATIA prend la langue de Windows." },
-          { p: "Les prompts IA par défaut changent aussi de langue (cliquez sur **Sauvegarder** dans les paramètres pour garder le changement). Les prompts que vous avez écrits vous-même ne sont pas modifiés, ni le contenu de vos notes." },
+          { p: "Les prompts IA par défaut changent aussi de langue. Les prompts que vous avez écrits vous-même ne sont pas modifiés, ni le contenu de vos notes." },
+          { tip: "Pour des prompts (et donc des réponses) dans une autre langue que l'interface : Paramètres → Prompts → **Langue des prompts**, ou les petits drapeaux à côté de « Prompt système » dans le panneau IA (`Ctrl+Shift+A`)." },
         ],
       },
     ],
@@ -392,6 +393,20 @@ export const MANUAL: ManualChapter[] = [
         title: "Conversation",
         blocks: [
           { p: "Discutez avec l'IA en lui donnant la note ouverte comme contexte. L'historique de conversation se règle dans Paramètres → Intelligence artificielle." },
+          { p: "Les conversations sont enregistrées (chiffrées si un mot de passe est actif) et listées à droite du chat : cliquez sur l'une d'elles pour la reprendre, sur le crayon (ou double-clic) pour la renommer, sur la corbeille (deux fois) pour la supprimer, et sur **Nouvelle** pour en commencer une autre. Le champ **Chercher** filtre les conversations par leur contenu. En ouvrant une note, sa dernière conversation est reprise." },
+          { p: "Le bouton à côté de **Nouvelle** insère toute la conversation dans la note ouverte." },
+        ],
+      },
+      {
+        title: "Interroger toutes ses notes",
+        blocks: [
+          { steps: [
+            "Ouvrez la conversation (`Ctrl+Shift+A`, puis **Conversation**).",
+            "Au début d'une conversation, choisissez **Toutes mes notes** au lieu de la note ouverte.",
+            "Posez votre question, par exemple « Qu'ai-je décidé pour le projet Orion ? ».",
+          ] },
+          { p: "NATIA cherche sur ce PC les notes qui contiennent les mots de la question, en donne des extraits à l'IA, et affiche sous la réponse les **notes utilisées** : cliquez sur l'une d'elles pour l'ouvrir." },
+          { tip: "Avec l'IA intégrée ou Ollama, rien ne quitte votre PC. Avec une IA en ligne, les extraits des notes trouvées lui sont envoyés." },
         ],
       },
       {
@@ -406,7 +421,7 @@ export const MANUAL: ManualChapter[] = [
           { list: [
             "**Température** : bas = réponses précises et constantes, haut = plus créatives.",
             "**Consommation de tokens** (Éco → Maxi) : la longueur des réponses. Éco coûte moins cher avec une API payante.",
-            "**Prompts** : modifiez les instructions de chaque opération dans Paramètres → Prompts. Les prompts par défaut suivent la langue de l'application.",
+            "**Prompts** : modifiez les instructions de chaque opération dans Paramètres → Prompts. Les prompts par défaut suivent la langue des prompts (celle de l'application, sauf choix contraire).",
           ] },
         ],
       },
@@ -481,6 +496,19 @@ export const MANUAL: ManualChapter[] = [
         ],
       },
       {
+        title: "Sauvegarde automatique",
+        blocks: [
+          { steps: [
+            "Paramètres → Données → **Sauvegarde automatique** : activez l'interrupteur.",
+            "**Choisir…** : le dossier des sauvegardes (OneDrive, clé USB, disque externe…).",
+            "Choisissez la fréquence (chaque jour ou chaque semaine) et le nombre de sauvegardes gardées, puis **Enregistrer**.",
+          ] },
+          { p: "NATIA écrit une archive `NATIA-sauvegarde-date.zip` au démarrage quand la précédente est assez ancienne, et supprime les plus anciennes au-delà du nombre choisi. **Sauvegarder maintenant** en fait une tout de suite." },
+          { warn: "Si vos notes sont protégées par un mot de passe, les sauvegardes doivent l'être aussi (AES-256). Notez ce mot de passe : sans lui, les archives ne s'ouvrent pas." },
+          { p: "Pour restaurer : Paramètres → Données → **Importer**, puis choisissez l'archive." },
+        ],
+      },
+      {
         title: "Importer",
         blocks: [
           { p: "Paramètres → Données → Importer : choisissez un export NATIA (n'importe lequel des trois formats). Les notes déjà présentes ne sont pas dupliquées." },
@@ -519,7 +547,13 @@ export const MANUAL: ManualChapter[] = [
       {
         title: "Mises à jour",
         blocks: [
-          { p: "Une nouvelle version est proposée au démarrage (Paramètres → Application pour désactiver ou vérifier à la main). L'installation est automatique et vos notes sont conservées." },
+          { p: "Au démarrage, une fenêtre propose la nouvelle version : **Mettre à jour** l'installe (la note en cours est enregistrée, puis NATIA redémarre), **Plus tard** la reporte au prochain lancement. Paramètres → Application pour désactiver la recherche ou vérifier à la main. Vos notes sont conservées." },
+        ],
+      },
+      {
+        title: "Guide de démarrage",
+        blocks: [
+          { p: "Au premier lancement (et après une réinitialisation), un guide propose les trois réglages conseillés : mot de passe, IA, sauvegarde automatique. Chacun est facultatif. Paramètres → Application → **Revoir le guide** pour le rouvrir." },
         ],
       },
       {

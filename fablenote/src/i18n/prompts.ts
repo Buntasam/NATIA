@@ -1,10 +1,51 @@
-// Prompts envoyés à l'IA : leur langue suit celle de l'interface.
+// Prompts envoyés à l'IA : leur langue suit celle de l'interface, sauf si une
+// langue des prompts est choisie (Paramètres → Prompts, ou le drapeau du panneau IA).
 //
 // Seuls les textes connus (valeurs par défaut et préréglages) sont convertis ;
 // un prompt écrit ou modifié par l'utilisateur n'est jamais touché.
 
+import { create } from "zustand";
 import type { Settings } from "../types";
-import type { Lang } from "./index";
+import { useLang, type Lang } from "./index";
+
+const PROMPT_LANG_KEY = "natia_prompt_lang";
+
+function initialPromptLang(): Lang | null {
+  try {
+    const saved = localStorage.getItem(PROMPT_LANG_KEY);
+    if (saved === "fr" || saved === "en") return saved;
+  } catch { /* stockage indisponible */ }
+  return null;
+}
+
+interface PromptLangState {
+  /** null : comme l'interface. */
+  choice: Lang | null;
+  setChoice: (l: Lang | null) => void;
+}
+
+export const usePromptLangChoice = create<PromptLangState>((set) => ({
+  choice: initialPromptLang(),
+  setChoice: (choice) => {
+    try {
+      if (choice) localStorage.setItem(PROMPT_LANG_KEY, choice);
+      else localStorage.removeItem(PROMPT_LANG_KEY);
+    } catch { /* préférence non conservée */ }
+    set({ choice });
+  },
+}));
+
+/** Langue des prompts envoyés à l'IA. */
+export function promptLang(): Lang {
+  return usePromptLangChoice.getState().choice ?? useLang.getState().lang;
+}
+
+/** Langue des prompts, pour un composant. */
+export function usePromptLang(): Lang {
+  const choice = usePromptLangChoice((s) => s.choice);
+  const lang = useLang((s) => s.lang);
+  return choice ?? lang;
+}
 
 /** Texte français → anglais. */
 export const PROMPTS_EN: Record<string, string> = {

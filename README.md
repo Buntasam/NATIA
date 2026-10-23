@@ -49,7 +49,8 @@ L'installeur n'est pas signé : Windows SmartScreen affiche « Windows a protég
 - **Claude Code CLI** — avec un abonnement Claude, sans clé API
 - **Connexions** — plusieurs clés API nommées, avec fournisseur, couleur et modèle
 - **Opérations** — correction, résumé, titre, tri automatique, traduction, email, continuation de texte
-- **Conversation** — chat avec le contexte de la note active
+- **Conversation** — chat avec le contexte de la note active, historique enregistré (reprendre, renommer, chercher, supprimer)
+- **Interroger ses notes** — mode « Toutes mes notes » : l'IA répond à partir des notes trouvées sur le PC et indique lesquelles elle a utilisées
 - **Mémoire IA** — contexte persistant ajouté aux prompts
 - **Streaming** — réponses affichées au fil de l'eau
 - **Indicateur « IA en ligne »** — rappelle quand le texte est envoyé à un fournisseur extérieur
@@ -67,6 +68,7 @@ L'installeur n'est pas signé : Windows SmartScreen affiche « Windows a protég
 - **Blocage après erreurs** — délais croissants, conservés même après redémarrage
 - **Verrouillage automatique** — après inactivité, quand Windows se verrouille ou quand le PC sort de veille
 - **Export / import** — ZIP classique, protégé AES-256 (7-Zip) ou compatible Windows ; rappel de sauvegarde chaque semaine
+- **Sauvegarde automatique** — chaque jour ou chaque semaine, dans le dossier de votre choix, en gardant les N dernières
 - **Clé de récupération** — rouvre les notes en cas d'oubli du mot de passe, de réinstallation de Windows ou de changement de PC
 - **Indicateur de solidité** du mot de passe
 - **Réinitialisation** — pour repartir de zéro, depuis l'écran de verrouillage
@@ -74,7 +76,7 @@ L'installeur n'est pas signé : Windows SmartScreen affiche « Windows a protég
 ### Divers
 - **Post-its de l'écran de verrouillage**, redimensionnables et masquables (non chiffrés)
 - **Enregistreur vocal** avec transcription par l'IA
-- **Français ou anglais** — interface, manuel et prompts IA par défaut (Paramètres → Apparence → Langue)
+- **Français ou anglais** — interface, manuel et prompts IA par défaut (Paramètres → Apparence → Langue) ; les prompts peuvent avoir leur propre langue (Paramètres → Prompts, ou les drapeaux du panneau IA)
 - **Manuel intégré** (Paramètres → Manuel) — installer Ollama, une clé API ou Claude Code CLI, et utiliser l'app pas à pas
 - **Icône près de l'horloge** — fermer la fenêtre garde NATIA active pour les rappels ; lancement avec Windows en option
 - **Export d'une note** en Markdown, texte, HTML ou PDF
