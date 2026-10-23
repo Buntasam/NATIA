@@ -7,6 +7,7 @@ use tauri::Manager;
 mod ai;
 mod crypto;
 mod db;
+mod legal;
 mod notes;
 mod settings;
 mod llm;
@@ -247,6 +248,8 @@ pub fn run() {
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
+            legal::get_terms_acceptance,
+            legal::accept_terms,
             notes::get_all_notes,
             notes::get_note,
             notes::create_note,

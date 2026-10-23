@@ -85,7 +85,7 @@ function Block({ b }: { b: ManualBlock }) {
   );
 }
 
-function Topic({ topic, open, onToggle }: { topic: ManualTopic; open: boolean; onToggle: () => void }) {
+export function Topic({ topic, open, onToggle }: { topic: ManualTopic; open: boolean; onToggle: () => void }) {
   return (
     <div className="border border-border rounded-lg overflow-hidden">
       <button

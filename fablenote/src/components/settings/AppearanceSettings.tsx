@@ -2,16 +2,12 @@ import { useState } from "react";
 import { useStore } from "../../store";
 import { Section } from "./SettingsWidgets";
 import { SettingsFormProps } from "./types";
-import { LANGUAGES, Lang, msg, useLang, useT } from "../../i18n";
-import flagEn from "../../assets/flags/en.png";
-import flagFr from "../../assets/flags/fr.png";
-
-const FLAGS: Record<Lang, string> = { fr: flagFr, en: flagEn };
+import { msg, useT } from "../../i18n";
+import LanguagePicker from "../LanguagePicker";
 
 export default function AppearanceSettings({ form, set }: Pick<SettingsFormProps, "form" | "set">) {
   const { theme, setTheme } = useStore();
   const t = useT();
-  const { lang, setLang } = useLang();
   const [diceEnabled, setDiceEnabled] = useState(() => localStorage.getItem("natia_dice_enabled") === "1");
   return (
     <>
@@ -21,22 +17,7 @@ export default function AppearanceSettings({ form, set }: Pick<SettingsFormProps
             <p className="text-sm text-secondary">{t("Langue de l'application")}</p>
             <p className="text-[10px] text-muted mt-0.5">{t("Les prompts IA et le contenu de vos notes ne sont pas traduits")}</p>
           </div>
-          <div role="radiogroup" aria-label={t("Langue de l'application")} className="flex gap-1.5 shrink-0">
-            {LANGUAGES.map((l) => (
-              <button
-                key={l.code}
-                role="radio"
-                aria-checked={lang === l.code}
-                onClick={() => setLang(l.code)}
-                className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border text-xs transition-colors ${
-                  lang === l.code ? "bg-accent/15 border-accent/40 text-accent font-medium" : "bg-hover border-border text-secondary hover:text-primary"
-                }`}
-              >
-                <img src={FLAGS[l.code]} alt="" width={24} height={16} className="rounded-[2px] shadow-sm" />
-                {l.label}
-              </button>
-            ))}
-          </div>
+          <LanguagePicker />
         </div>
       </Section>
 

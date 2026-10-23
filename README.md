@@ -236,8 +236,17 @@ Les données sont dans `%APPDATA%\com.natia.app\` :
 - `natia.db` — base SQLite (notes, dossiers, versions, paramètres, clés API, configuration de sécurité)
 - `notes\` — contenu des notes en HTML (chiffré si un mot de passe est actif)
 - `llm\` — moteur et modèles de l'IA intégrée (aucune donnée personnelle)
+- `terms.json` — version et date d'acceptation des conditions d'utilisation
 
 Pour sauvegarder ou changer de PC, le plus simple est l'export protégé. Une copie de ce dossier fonctionne aussi, mais sur un autre PC elle ne s'ouvre qu'avec la clé de récupération.
+
+---
+
+## Confidentialité et conditions d'utilisation
+
+NATIA ne collecte aucune donnée : pas de compte, pas de statistiques, pas de publicité. Des données ne quittent le PC que lorsque l'utilisateur s'en sert : texte envoyé à une IA en ligne, recherche de mises à jour et téléchargement de l'IA intégrée (GitHub, Hugging Face), dictée vocale.
+
+Les conditions d'utilisation et la politique de confidentialité (RGPD) doivent être acceptées au premier lancement, après une réinitialisation et à chaque changement de leur contenu. Elles se relisent dans Paramètres → Confidentialité, avec les moyens d'exercer ses droits (export, effacement).
 
 ---
 

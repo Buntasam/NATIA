@@ -56,6 +56,33 @@
         },
         {
           "url": "https://www.apache.org/licenses/LICENSE-2.0"
+        },
+        {
+          "url": "https://www.anthropic.com/legal/privacy"
+        },
+        {
+          "url": "https://openai.com/policies/privacy-policy"
+        },
+        {
+          "url": "https://policies.google.com/privacy"
+        },
+        {
+          "url": "https://legal.mistral.ai/terms/privacy-policy"
+        },
+        {
+          "url": "https://docs.github.com/en/site-policy/privacy-policies/github-general-privacy-statement"
+        },
+        {
+          "url": "https://huggingface.co/privacy"
+        },
+        {
+          "url": "https://privacy.microsoft.com/"
+        },
+        {
+          "url": "https://www.cnil.fr/fr/plaintes"
+        },
+        {
+          "url": "https://www.cnil.fr/en/home"
         }
       ]
     }

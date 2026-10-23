@@ -1102,6 +1102,27 @@ const en: Record<string, string> = {
   "Archive du moteur incomplète": "Incomplete engine archive",
   "IA intégrée non installée : Paramètres → Intelligence artificielle": "Built-in AI not installed: Settings → Artificial intelligence",
   "L'IA intégrée met trop de temps à démarrer : essayez un modèle plus petit.": "The built-in AI is taking too long to start: try a smaller model.",
+
+  // ── Conditions et confidentialité
+  "Vos notes restent sur votre ordinateur. NATIA ne collecte rien : pas de compte, pas de statistiques, pas de publicité.": "Your notes stay on your computer. NATIA collects nothing: no account, no statistics, no ads.",
+  "Une IA en ligne (Claude, OpenAI, Gemini, Mistral) reçoit le texte que vous lui soumettez. L'IA intégrée et Ollama restent sur votre PC.": "An online AI (Claude, OpenAI, Gemini, Mistral) receives the text you submit to it. The built-in AI and Ollama stay on your PC.",
+  "Version bêta fournie en l'état : faites des sauvegardes et gardez votre mot de passe et votre clé de récupération.": "Beta version provided as is: make backups and keep your password and recovery key safe.",
+  "Les conditions de NATIA ont changé": "NATIA's terms have changed",
+  "Bienvenue dans NATIA": "Welcome to NATIA",
+  "Lisez et acceptez la nouvelle version pour continuer.": "Read and accept the new version to continue.",
+  "Avant de commencer, lisez et acceptez les conditions d'utilisation et la politique de confidentialité.": "Before you start, read and accept the terms of use and the privacy policy.",
+  "J'ai lu et j'accepte les conditions d'utilisation et la politique de confidentialité.": "I have read and accept the terms of use and the privacy policy.",
+  "Refuser et quitter": "Decline and quit",
+  "Accepter et continuer": "Accept and continue",
+  "Vos données, vos droits": "Your data, your rights",
+  "NATIA ne collecte aucune donnée : tout reste sur ce PC, sauf ce que vous envoyez vous-même à une IA en ligne. Vous pouvez à tout moment exporter ou effacer l'ensemble de vos données.": "NATIA collects no data: everything stays on this PC, except what you send to an online AI yourself. You can export or erase all your data at any time.",
+  "Exporter mes données": "Export my data",
+  "Tout effacer (réinitialiser)": "Erase everything (reset)",
+  "Conditions acceptées le {date} (version du {v})": "Terms accepted on {date} (version of {v})",
+  "Textes": "Documents",
+  "Confidentialité": "Privacy",
+  "Conditions d'utilisation, politique de confidentialité, RGPD": "Terms of use, privacy policy, GDPR",
+  "rgpd gdpr confidentialite vie privee conditions utilisation cgu cnil droits donnees personnelles licence": "gdpr privacy terms of use conditions cnil rights personal data licence",
 };
 
 export default en;

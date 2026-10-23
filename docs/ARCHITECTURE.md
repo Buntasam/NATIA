@@ -137,6 +137,7 @@ src-tauri/src/
 ├── db.rs           ← schéma SQLite, coffre d'identifiants, couleurs, versions
 ├── system_lock.rs  ← verrouillage quand la session Windows se verrouille ou sort de veille
 ├── tray.rs         ← icône près de l'horloge, lancement avec Windows
+├── legal.rs        ← acceptation des conditions d'utilisation (terms.json)
 └── llm.rs          ← IA intégrée : téléchargement vérifié de llama.cpp et des modèles, serveur local
 ```
 
@@ -202,6 +203,15 @@ Tous les fournisseurs diffusent leur réponse avec les événements `ollama-toke
 
 Le serveur (`llama-server`) écoute sur `127.0.0.1` uniquement, sur un port libre, avec une clé aléatoire à chaque lancement, sans interface web (`--no-webui`) et hors ligne (`--offline`). Il est rattaché à NATIA par un Job Object Windows (`KILL_ON_JOB_CLOSE`) : il s'arrête avec l'app, même en cas de plantage. La carte graphique dédiée la mieux dotée est choisie (`--device`) ; `--fit` adapte le nombre de couches à la mémoire disponible. Le flux SSE est découpé en octets puis en lignes, pour ne jamais couper un caractère accentué.
 
+### Commandes — `legal.rs`
+
+| Commande | Description |
+|---|---|
+| `get_terms_acceptance` | Version et date des conditions acceptées, ou rien |
+| `accept_terms` | Enregistre l'acceptation de la version affichée |
+
+Les textes sont dans `src/components/legal/legalContent.ts` (et `.en.ts`), avec `LEGAL_VERSION`. `App.tsx` affiche `TermsGate` tant que la version acceptée diffère de `LEGAL_VERSION` ; rien d'autre n'est affiché, et la recherche de mises à jour n'est pas lancée, avant l'acceptation. `terms.json` est hors de la base pour être lisible avant le déverrouillage ; `reset_app` l'efface avec le reste du dossier, d'où une nouvelle acceptation.
+
 ### Commandes — `tray.rs`
 
 | Commande | Description |
@@ -228,8 +238,9 @@ Le serveur (`llama-server`) écoute sur `127.0.0.1` uniquement, sur un port libr
 │   ├── user_data        (key, value*) — mémoire IA, bibliothèque de prompts
 │   └── app_config       (key, value) — sel, hash de vérification, DEK chiffrée,
 │                                       device_bound, failed_attempts, lock_until…
-└── notes\
-    └── {uuid}.html*     ← contenu des notes
+├── notes\
+│   └── {uuid}.html*     ← contenu des notes
+└── terms.json        (version et date d'acceptation des conditions)
 ```
 
 *\* Chiffré en AES-256-GCM quand un mot de passe est actif.* Restent en clair : les dates, le nombre de notes, les couleurs et modèles des connexions, les post-its de l'écran de verrouillage (localStorage).
