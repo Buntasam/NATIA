@@ -136,7 +136,8 @@ src-tauri/src/
 ├── crypto.rs       ← AES-256-GCM, Argon2id, chiffrement/déchiffrement de toute la base
 ├── db.rs           ← schéma SQLite, coffre d'identifiants, couleurs, versions
 ├── system_lock.rs  ← verrouillage quand la session Windows se verrouille ou sort de veille
-└── tray.rs         ← icône près de l'horloge, lancement avec Windows
+├── tray.rs         ← icône près de l'horloge, lancement avec Windows
+└── llm.rs          ← IA intégrée : téléchargement vérifié de llama.cpp et des modèles, serveur local
 ```
 
 Plugins : `single-instance` (enregistré en premier : un second lancement remet la fenêtre existante au premier plan), `autostart` (lancement avec Windows, argument `--minimized` pour démarrer caché), `dialog`, `notification`, `opener`, `updater`.
@@ -190,6 +191,17 @@ Tous les fournisseurs diffusent leur réponse avec les événements `ollama-toke
 | `reset_app` | Supprime toutes les données, vide le coffre et recrée une base vide |
 | `toggle_maximize_window`, `exit_app` | Fenêtre, fermeture après enregistrement |
 
+### Commandes — `llm.rs` (IA intégrée)
+
+| Commande | Description |
+|---|---|
+| `llm_status` | Moteur installé ?, modèles du catalogue, RAM, carte graphique, modèle conseillé |
+| `llm_install_engine` | Télécharge le zip llama.cpp (Vulkan, version figée), vérifie son SHA-256, n'extrait que `llama-server.exe` et ses DLL |
+| `llm_download_model`, `llm_cancel_download`, `llm_delete_model` | Modèles du catalogue (URL, taille et SHA-256 figés) ; progression par l'événement `llm-download` |
+| `llm_chat`, `llm_stream`, `llm_stop` | Chat ; le serveur démarre au premier message |
+
+Le serveur (`llama-server`) écoute sur `127.0.0.1` uniquement, sur un port libre, avec une clé aléatoire à chaque lancement, sans interface web (`--no-webui`) et hors ligne (`--offline`). Il est rattaché à NATIA par un Job Object Windows (`KILL_ON_JOB_CLOSE`) : il s'arrête avec l'app, même en cas de plantage. La carte graphique dédiée la mieux dotée est choisie (`--device`) ; `--fit` adapte le nombre de couches à la mémoire disponible. Le flux SSE est découpé en octets puis en lignes, pour ne jamais couper un caractère accentué.
+
 ### Commandes — `tray.rs`
 
 | Commande | Description |
@@ -204,6 +216,7 @@ Tous les fournisseurs diffusent leur réponse avec les événements `ollama-toke
 
 ```
 %APPDATA%\com.natia.app\
+├── llm\              (moteur llama.cpp et modèles .gguf de l'IA intégrée, server.log)
 ├── natia.db
 │   ├── notes            (id, title*, tags*, folder*, created_at, updated_at, deleted_at)
 │   ├── folders          (path*, deleted_at)

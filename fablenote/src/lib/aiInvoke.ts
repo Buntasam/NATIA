@@ -65,6 +65,9 @@ export async function aiChat(
   if (settings.ai_provider === "claude_cli") {
     return invoke<string>("claude_cli_chat", { system: sys, message });
   }
+  if (settings.ai_provider === "local") {
+    return invoke<string>("llm_chat", { modelId: settings.local_model, system: sys, message, temperature });
+  }
   return invoke<string>("ollama_chat", {
     baseUrl: settings.ollama_url,
     model: ollamaModel ?? settings.default_model,
@@ -126,6 +129,9 @@ export async function aiStream(
   if (settings.ai_provider === "claude_cli") {
     return invoke<void>("claude_cli_stream", { system: sys, message, history });
   }
+  if (settings.ai_provider === "local") {
+    return invoke<void>("llm_stream", { modelId: settings.local_model, system: sys, message, temperature, history });
+  }
   return invoke<void>("ollama_stream", {
     baseUrl: settings.ollama_url,
     model: ollamaModel ?? settings.default_model,
@@ -142,5 +148,6 @@ export function activeModel(settings: Settings, ollamaModel?: string): string {
   if (settings.ai_provider === "gemini") return settings.gemini_model;
   if (settings.ai_provider === "mistral") return settings.mistral_model;
   if (settings.ai_provider === "claude_cli") return "claude (CLI)";
+  if (settings.ai_provider === "local") return settings.local_model || "—";
   return ollamaModel ?? settings.default_model;
 }

@@ -21,7 +21,8 @@ rusqlite = { version = "0.31", features = ["bundled"] }
 chrono = { version = "0.4", features = ["serde"] }
 uuid = { version = "1", features = ["v4"] }
 reqwest = { version = "0.12", features = ["json"] }
-tokio = { version = "1", features = ["process", "io-util"] }
+tokio = { version = "1", features = ["process", "io-util", "sync", "time"] }
+sha2 = "0.10"
 argon2 = "0.5"
 aes-gcm = { version = "0.10", features = ["aes"] }
 rand = "0.8"
@@ -42,4 +43,4 @@ default = ["custom-protocol"]
 custom-protocol = ["tauri/custom-protocol"]
 
 [target.'cfg(windows)'.dependencies]
-windows-sys = { version = "0.60", features = ["Win32_Foundation", "Win32_System_RemoteDesktop", "Win32_System_SystemInformation", "Win32_System_WindowsProgramming"] }
+windows-sys = { version = "0.60", features = ["Win32_Foundation", "Win32_Security", "Win32_System_JobObjects", "Win32_System_RemoteDesktop", "Win32_System_SystemInformation", "Win32_System_WindowsProgramming"] }

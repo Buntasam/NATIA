@@ -8,6 +8,7 @@ import { PROMPT_PRESETS, TEMP_PRESET_MAP } from "./promptPresets";
 import { SettingsFormProps } from "./types";
 import { msg, trError, useLang, useT } from "../../i18n";
 import { promptIn } from "../../i18n/prompts";
+import LocalAiPanel from "./LocalAiPanel";
 
 const INTENSITY_LEVELS: {
   key: "eco" | "low" | "medium" | "high" | "max";
@@ -48,6 +49,10 @@ export default function AiSettings({ form, set, setForm }: SettingsFormProps) {
   };
   return (
     <>
+      <Section title={t("IA intégrée (recommandée)")}>
+        <LocalAiPanel form={form} set={set} />
+      </Section>
+
       <Section title={t("Clés API & connexions")}>
         <ApiKeysPanel />
       </Section>
@@ -57,7 +62,7 @@ export default function AiSettings({ form, set, setForm }: SettingsFormProps) {
         <div className="flex flex-col gap-1.5">
           <label className="text-xs text-muted">{t("Fournisseur")}</label>
           <div className="flex flex-wrap gap-1.5">
-            {(["ollama", "claude", "openai", "gemini", "mistral", "claude_cli"] as const).map((p) => (
+            {(["local", "ollama", "claude", "openai", "gemini", "mistral", "claude_cli"] as const).map((p) => (
               <button
                 key={p}
                 onClick={() => set("ai_provider", p)}
@@ -67,7 +72,7 @@ export default function AiSettings({ form, set, setForm }: SettingsFormProps) {
                     : "bg-hover border-border text-muted hover:text-primary"
                 }`}
               >
-                {p === "ollama" ? "Ollama" : p === "claude" ? "Claude API" : p === "openai" ? "OpenAI" : p === "gemini" ? "Gemini" : p === "mistral" ? "Mistral" : "Claude CLI"}
+                {p === "local" ? t("IA intégrée") : p === "ollama" ? "Ollama" : p === "claude" ? "Claude API" : p === "openai" ? "OpenAI" : p === "gemini" ? "Gemini" : p === "mistral" ? "Mistral" : "Claude CLI"}
               </button>
             ))}
           </div>

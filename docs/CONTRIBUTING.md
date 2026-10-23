@@ -86,6 +86,7 @@ Le détail est dans [ARCHITECTURE.md](ARCHITECTURE.md). En bref :
 - Une nouvelle fonctionnalité visible s'accompagne d'une mise à jour du manuel, en français et en anglais (`src/components/settings/manualContent.ts` et `manualContent.en.ts`).
 - Tout texte affiché passe par `t("…")` (composant, avec `const t = useT()`) ou `tr("…")` (hors composant), et sa traduction est ajoutée dans `src/i18n/en.ts`. Les variables s'écrivent `t("{n} notes", { n })`. Vérifier avec `npm run i18n:check` avant de proposer une modification.
 - Un prompt IA par défaut ou un préréglage ajouté doit avoir sa version anglaise dans `src/i18n/prompts.ts`.
+- IA intégrée : le moteur et les modèles ne se téléchargent que depuis les URL figées dans `llm.rs`, avec leur SHA-256. Pour en changer, suivre [THIRD_PARTY.md](THIRD_PARTY.md).
 - Pas de `window.confirm`, `window.prompt` ni `alert` : Tauri ne les affiche pas. Pas de lien `<a download>` non plus : passer par la boîte « Enregistrer sous » (`save` du plugin dialog) puis une commande Rust.
 
 ### Rust (backend)

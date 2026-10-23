@@ -519,6 +519,7 @@ pub fn get_settings(state: State<AppState>) -> Result<Settings, String> {
         context_messages,
         debug_mode,
         prompt_intensity: get("prompt_intensity", defaults.prompt_intensity),
+        local_model: get("local_model", defaults.local_model),
     })
 }
 
@@ -587,6 +588,7 @@ pub fn update_settings(settings: Settings, state: State<AppState>) -> Result<(),
         ("context_messages",     context_messages_str.as_str()),
         ("debug_mode",           debug_mode_str),
         ("prompt_intensity",     settings.prompt_intensity.as_str()),
+        ("local_model",          settings.local_model.as_str()),
     ];
     for &(k, v) in &all {
         if key.is_none() && API_KEY_NAMES.contains(&k) {

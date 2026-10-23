@@ -172,6 +172,7 @@ export const DEFAULT_SETTINGS: Settings = {
   context_messages: 0,
   debug_mode: false,
   prompt_intensity: "medium",
+  local_model: "",
 };
 
 /** Titre donné à une note qui vient d'être créée. */

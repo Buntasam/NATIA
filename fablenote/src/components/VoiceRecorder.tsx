@@ -236,7 +236,7 @@ export default function VoiceRecorder({ onInsert }: Props) {
   };
 
   const reformatWithAi = async () => {
-    if (!settings.ollama_url || !settings.default_model || segmentsRef.current.length === 0) return;
+    if (segmentsRef.current.length === 0) return;
     setIsReformatting(true);
     setAiText("");
     setShowAiResult(true);
@@ -300,7 +300,11 @@ export default function VoiceRecorder({ onInsert }: Props) {
   const isMulti    = speakerSet.size > 1;
   const lastSpk    = segments.length > 0 ? segments[segments.length - 1].speaker : speakerRef.current;
 
-  const canAi = settings.ai_provider === "ollama"
+  const canAi = settings.ai_provider === "local"
+    ? !!settings.local_model
+    : settings.ai_provider === "claude_cli"
+    ? true
+    : settings.ai_provider === "ollama"
     ? !!(settings.ollama_url && settings.default_model)
     : settings.ai_provider === "claude"
       ? !!settings.claude_api_key

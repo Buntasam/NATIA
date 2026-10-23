@@ -9,6 +9,7 @@ mod crypto;
 mod db;
 mod notes;
 mod settings;
+mod llm;
 mod system_lock;
 mod tray;
 
@@ -101,6 +102,9 @@ pub struct Settings {
     pub debug_mode: bool,
     #[serde(default = "default_prompt_intensity")]
     pub prompt_intensity: String,
+    /// Modèle de l'IA intégrée (identifiant du catalogue de llm.rs), vide si aucun.
+    #[serde(default)]
+    pub local_model: String,
 }
 
 fn default_temperature() -> f64 { 0.7 }
@@ -144,6 +148,7 @@ impl Default for Settings {
             context_messages: 0,
             debug_mode: false,
             prompt_intensity: "medium".to_string(),
+            local_model: String::new(),
         }
     }
 }
@@ -228,6 +233,7 @@ pub fn run() {
             let conn = Connection::open(&db_path).expect("cannot open database");
             db::init_db(&conn).expect("cannot init database");
 
+            app.manage(llm::LlmState::default());
             app.manage(AppState {
                 db: Mutex::new(conn),
                 notes_dir,
@@ -270,6 +276,14 @@ pub fn run() {
             tray::set_autostart,
             tray::hide_main_window,
             tray::set_tray_language,
+            llm::llm_status,
+            llm::llm_install_engine,
+            llm::llm_download_model,
+            llm::llm_cancel_download,
+            llm::llm_delete_model,
+            llm::llm_chat,
+            llm::llm_stream,
+            llm::llm_stop,
             notes::search_notes,
             notes::get_global_stats,
             notes::get_all_reminders,
@@ -319,8 +333,12 @@ pub fn run() {
             reset_app,
             exit_app,
         ])
-        .run(tauri::generate_context!())
-        .expect("error while running tauri application");
+        .build(tauri::generate_context!())
+        .expect("error while running tauri application")
+        .run(|app, event| {
+            // L'IA intégrée s'arrête avec NATIA (le Job Object Windows couvre aussi les plantages).
+            if let tauri::RunEvent::Exit = event { llm::shutdown(app); }
+        });
 }
 
 #[tauri::command]
@@ -392,5 +410,6 @@ async fn reset_app(app_handle: tauri::AppHandle) -> Result<(), String> {
 
 #[tauri::command]
 fn exit_app(app_handle: tauri::AppHandle) {
+    llm::shutdown(&app_handle);
     app_handle.exit(0);
 }

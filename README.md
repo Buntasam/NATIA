@@ -43,7 +43,8 @@ L'installeur n'est pas signé : Windows SmartScreen affiche « Windows a protég
 - **Tags**, **corbeille** avec restauration, **modèles de notes**
 
 ### IA multi-fournisseur
-- **Ollama** — IA locale, rien ne quitte votre PC
+- **IA intégrée** — llama.cpp tourne dans NATIA : installation en un clic, modèle choisi selon le PC, rien ne quitte votre PC
+- **Ollama** — autre option locale, à installer séparément
 - **Claude API**, **OpenAI**, **Gemini**, **Mistral** — avec une clé API
 - **Claude Code CLI** — avec un abonnement Claude, sans clé API
 - **Connexions** — plusieurs clés API nommées, avec fournisseur, couleur et modèle
@@ -111,7 +112,7 @@ L'installeur n'est pas signé : Windows SmartScreen affiche « Windows a protég
 | Backend | Rust (rusqlite, reqwest, chrono, uuid) |
 | Chiffrement | aes-gcm (AES-256-GCM), argon2 (Argon2id), keyring (coffre Windows), zip (export AES-256) |
 | Base de données | SQLite |
-| IA | Ollama · Claude API · OpenAI · Gemini · Mistral · Claude CLI |
+| IA | llama.cpp intégré · Ollama · Claude API · OpenAI · Gemini · Mistral · Claude CLI |
 | Plugins Tauri | notification, dialog, opener, updater, single-instance, autostart |
 | Build | Vite 5, GitHub Actions |
 
@@ -197,7 +198,20 @@ Un PIN se devine plus facilement qu'un mot de passe : pour des notes sensibles, 
 
 ## Configuration de l'IA
 
-### Ollama (local)
+### IA intégrée (recommandée)
+Paramètres → Intelligence artificielle → **Installer l'IA intégrée**. NATIA télécharge le moteur [llama.cpp](https://github.com/ggml-org/llama.cpp) (33 Mo), analyse le PC (RAM, carte graphique) puis télécharge le modèle conseillé :
+
+| Modèle | Taille | Pour |
+|---|---|---|
+| Gemma 3 1B | 0,8 Go | PC modeste (8 Go de RAM) |
+| Gemma 3 4B | 2,5 Go | 16 Go de RAM ou petite carte graphique |
+| Phi-4 mini | 2,5 Go | Alternative à Gemma 3 4B |
+| Mistral 7B | 4,4 Go | Carte graphique de 6 Go ou plus |
+| Gemma 3 12B | 7,3 Go | Carte graphique de 10 Go ou plus |
+
+Le moteur et les modèles viennent de leurs sources officielles et sont vérifiés par leur empreinte SHA-256. Le moteur n'écoute que sur ce PC, avec une clé changée à chaque démarrage. Licences : voir [docs/THIRD_PARTY.md](docs/THIRD_PARTY.md).
+
+### Ollama (alternative locale)
 1. Installer [Ollama](https://ollama.com/) et le lancer.
 2. Télécharger un modèle adapté à votre PC, par exemple `ollama pull gemma3:1b`.
 3. Dans NATIA : Paramètres → Intelligence artificielle → Ollama, puis indiquer le modèle.
@@ -221,6 +235,7 @@ Les données sont dans `%APPDATA%\com.natia.app\` :
 
 - `natia.db` — base SQLite (notes, dossiers, versions, paramètres, clés API, configuration de sécurité)
 - `notes\` — contenu des notes en HTML (chiffré si un mot de passe est actif)
+- `llm\` — moteur et modèles de l'IA intégrée (aucune donnée personnelle)
 
 Pour sauvegarder ou changer de PC, le plus simple est l'export protégé. Une copie de ce dossier fonctionne aussi, mais sur un autre PC elle ne s'ouvre qu'avec la clé de récupération.
 

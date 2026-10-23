@@ -169,11 +169,55 @@ export const MANUAL_EN: ManualChapter[] = [
         title: "Comparison",
         blocks: [
           { table: { head: ["Option", "Cost", "Privacy", "You need"], rows: [
-            ["Ollama (local)", "Free", "Nothing leaves your PC", "A powerful enough PC"],
+            ["Built-in AI (recommended)", "Free", "Nothing leaves your PC", "One click, 1 to 3 GB to download"],
+            ["Ollama (local)", "Free", "Nothing leaves your PC", "Install Ollama separately"],
             ["Claude, OpenAI, Gemini, Mistral (API)", "Pay as you go (Gemini and Mistral have a limited free tier)", "The text is sent to the provider", "An API key"],
             ["Claude Code CLI", "Included in a Claude subscription", "The text is sent to Anthropic", "Node.js and a subscription"],
           ] } },
-          { tip: "For sensitive notes, use Ollama. For the best answer quality, an online API." },
+          { tip: "For sensitive notes, use the built-in AI (or Ollama). For the best answer quality, an online API." },
+        ],
+      },
+    ],
+  },
+
+  // ─── Built-in AI ──────────────────────────────────────────────────────────
+  {
+    id: "local-ai",
+    title: "Built-in AI (recommended)",
+    topics: [
+      {
+        title: "Install in one click",
+        blocks: [
+          { steps: [
+            "Settings → Artificial intelligence → **Install the built-in AI**.",
+            "NATIA downloads the llama.cpp engine (33 MB), checks your PC, then downloads the recommended model.",
+            "When it's done, the built-in AI is selected automatically: open the AI panel (`Ctrl+Shift+A`) to try it.",
+          ] },
+          { p: "Everything runs on your PC: no text is sent over the internet. The connection is only used for the one-time download." },
+          { tip: "The first message loads the model into memory: a few seconds with a graphics card, up to a minute without." },
+        ],
+      },
+      {
+        title: "Choose another model",
+        blocks: [
+          { p: "In the same section, each model can be downloaded, used or deleted. The “Recommended for this PC” badge takes your RAM and graphics card into account." },
+          { table: { head: ["Model", "Size", "For"], rows: [
+            ["Gemma 3 1B", "0.8 GB", "Modest PC (8 GB of RAM)"],
+            ["Gemma 3 4B", "2.5 GB", "16 GB of RAM or a small graphics card"],
+            ["Phi-4 mini", "2.5 GB", "Alternative to Gemma 3 4B"],
+            ["Mistral 7B", "4.4 GB", "Graphics card with 6 GB or more"],
+            ["Gemma 3 12B", "7.3 GB", "Graphics card with 10 GB or more"],
+          ] } },
+        ],
+      },
+      {
+        title: "Security and disk space",
+        blocks: [
+          { list: [
+            "The engine and models only come from their official sources (llama.cpp's GitHub, Hugging Face) and are checked against their fingerprint before use.",
+            "The engine can only be reached from this PC, with a secret key changed at every start, and it stops with NATIA.",
+            "Files live in `%APPDATA%\\com.natia.app\\llm`. Delete a model from the settings to free up space.",
+          ] },
         ],
       },
     ],
@@ -182,7 +226,7 @@ export const MANUAL_EN: ManualChapter[] = [
   // ─── Ollama ───────────────────────────────────────────────────────────────
   {
     id: "ollama",
-    title: "Install Ollama (local AI)",
+    title: "Ollama (local alternative)",
     topics: [
       {
         title: "1. Install Ollama",

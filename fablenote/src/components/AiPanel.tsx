@@ -188,6 +188,19 @@ export default function AiPanel({ onOpenConv }: { onOpenConv: () => void }) {
   };
 
   const effectiveSettings = { ...settings, ai_provider: localProvider };
+
+  // Modèles installés de l'IA intégrée, pour en changer sans passer par les paramètres.
+  const [localModels, setLocalModels] = useState<{ id: string; name: string }[]>([]);
+  useEffect(() => {
+    if (localProvider !== "local") return;
+    invoke<{ models: { id: string; name: string; installed: boolean }[] }>("llm_status")
+      .then((s) => setLocalModels(s.models.filter((m) => m.installed)))
+      .catch(() => setLocalModels([]));
+  }, [localProvider]);
+  const chooseLocalModel = (id: string) => {
+    const st = useStore.getState();
+    st.saveSettings({ ...st.settings, local_model: id }).catch(() => {});
+  };
   const isConnectionActive = activeConnectionId !== null;
   const activeConnectionInfo = apiConnections.find((c) => c.id === activeConnectionId);
   // Les connexions par clé API visent toujours un service en ligne ; seul Ollama reste local.
@@ -962,13 +975,13 @@ export default function AiPanel({ onOpenConv }: { onOpenConv: () => void }) {
           const activeConn = apiConnections.find((c) => c.id === activeConnectionId);
           const dotColor = isConnectionActive
             ? activeConn?.color ?? "#888888"
-            : localProvider === "claude_cli" ? "#f97316" : "#a1a1aa";
+            : localProvider === "claude_cli" ? "#f97316" : localProvider === "local" ? "#22c55e" : "#a1a1aa";
           const currentName = isConnectionActive
             ? activeConn?.name ?? t("Connexion")
-            : localProvider === "claude_cli" ? "Claude CLI" : t("Local");
+            : localProvider === "claude_cli" ? "Claude CLI" : localProvider === "local" ? t("IA intégrée") : "Ollama";
           const currentSub = isConnectionActive
             ? activeConn?.model || activeConn?.provider || ""
-            : localProvider === "claude_cli" ? "claude" : selectedModel;
+            : localProvider === "claude_cli" ? "claude" : localProvider === "local" ? (settings.local_model || t("aucun modèle")) : selectedModel;
 
           const intensityIdx = Math.max(0, INTENSITY.findIndex((l) => l.key === (settings.prompt_intensity ?? "medium")));
           const intensityActive = INTENSITY[intensityIdx];
@@ -1000,13 +1013,24 @@ export default function AiPanel({ onOpenConv }: { onOpenConv: () => void }) {
                     <div className="fixed inset-0 z-40" onClick={() => setProviderMenuOpen(false)} />
                     <div className="absolute left-0 right-0 top-full mt-1 z-50 bg-panel border border-border rounded-lg shadow-xl py-1 max-h-64 overflow-y-auto">
                       <button
+                        onClick={() => pick(() => { setLocalProvider("local"); setActiveConnectionId(null); })}
+                        className="w-full flex items-center gap-2 px-3 py-2 text-left hover:bg-hover transition-colors"
+                      >
+                        <span className="w-2 h-2 rounded-full shrink-0 bg-green-500" />
+                        <span className="flex-1 min-w-0">
+                          <span className="block text-xs font-medium text-primary">{t("IA intégrée")}</span>
+                          <span className="block text-[10px] text-muted truncate">{t("sur ce PC")} · {settings.local_model || t("aucun modèle")}</span>
+                        </span>
+                        {!isConnectionActive && localProvider === "local" && <CheckCheck size={12} className="text-accent shrink-0" />}
+                      </button>
+                      <button
                         onClick={() => pick(() => { setLocalProvider("ollama"); setActiveConnectionId(null); })}
                         className="w-full flex items-center gap-2 px-3 py-2 text-left hover:bg-hover transition-colors"
                       >
                         <span className="w-2 h-2 rounded-full shrink-0 bg-zinc-400" />
                         <span className="flex-1 min-w-0">
-                          <span className="block text-xs font-medium text-primary">{t("Local")}</span>
-                          <span className="block text-[10px] text-muted truncate">Ollama · {selectedModel || t("aucun modèle")}</span>
+                          <span className="block text-xs font-medium text-primary">Ollama</span>
+                          <span className="block text-[10px] text-muted truncate">{selectedModel || t("aucun modèle")}</span>
                         </span>
                         {!isConnectionActive && localProvider === "ollama" && <CheckCheck size={12} className="text-accent shrink-0" />}
                       </button>
@@ -1306,12 +1330,31 @@ export default function AiPanel({ onOpenConv }: { onOpenConv: () => void }) {
                     </div>
                   )}
                 </>
+              ) : localProvider === "local" && localModels.length > 0 ? (
+                <>
+                  <p className="text-xs text-muted mb-1.5">{t("IA intégrée · sur ce PC")}</p>
+                  <div className="relative">
+                    <select
+                      value={settings.local_model}
+                      onChange={(e) => chooseLocalModel(e.target.value)}
+                      className="w-full bg-hover border border-border rounded-lg px-3 py-1.5 text-sm text-primary outline-none appearance-none cursor-pointer"
+                    >
+                      {!localModels.some((m) => m.id === settings.local_model) && (
+                        <option value={settings.local_model}>{settings.local_model || t("Aucun modèle")}</option>
+                      )}
+                      {localModels.map((m) => (
+                        <option key={m.id} value={m.id}>{m.name}</option>
+                      ))}
+                    </select>
+                    <ChevronDown size={13} className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted pointer-events-none" />
+                  </div>
+                </>
               ) : (
                 <div className="flex items-center gap-2 px-3 py-2 bg-hover rounded-lg border border-border">
                   <Zap size={12} className="text-accent shrink-0" />
                   <div className="flex flex-col min-w-0">
                     <span className="text-[10px] text-muted uppercase tracking-wide">
-                      {localProvider === "claude" ? "Anthropic Claude" : localProvider === "openai" ? "OpenAI" : localProvider === "gemini" ? "Google Gemini" : localProvider === "claude_cli" ? "Claude Code CLI" : "Mistral AI"}
+                      {localProvider === "local" ? t("IA intégrée · sur ce PC") : localProvider === "claude" ? "Anthropic Claude" : localProvider === "openai" ? "OpenAI" : localProvider === "gemini" ? "Google Gemini" : localProvider === "claude_cli" ? "Claude Code CLI" : "Mistral AI"}
                     </span>
                     <span className="text-xs text-primary truncate">{activeModel(effectiveSettings)}</span>
                   </div>

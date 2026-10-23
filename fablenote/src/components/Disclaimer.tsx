@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { AlertTriangle, BookOpen, Cpu, Lock, ShieldAlert, Sparkles } from "lucide-react";
+import { AlertTriangle, BookOpen, Cpu, Download, Lock, ShieldAlert, Sparkles } from "lucide-react";
 import { useStore } from "../store";
 import { msg, useT } from "../i18n";
 
@@ -77,10 +77,20 @@ export default function Disclaimer() {
           <div className="flex flex-col gap-2.5 rounded-xl border border-red-500/40 bg-red-500/8 px-4 py-3.5">
             <div className="flex items-center gap-2">
               <Cpu size={14} className="text-red-500 shrink-0" />
-              <span className="text-xs font-semibold text-red-500">{t("IA en local : installez Ollama et choisissez un modèle adapté à votre PC")}</span>
+              <span className="text-xs font-semibold text-red-500">{t("IA locale : installez l'IA intégrée en un clic")}</span>
             </div>
             <p className="text-xs text-secondary/80 leading-relaxed">
-              {t("L'IA locale n'est pas incluse dans NATIA : installez")} <strong className="text-primary">Ollama</strong> {t("depuis")} <strong className="text-primary">ollama.com</strong>{t(", puis téléchargez un modèle, par exemple avec")} <code className="text-[10px] bg-red-500/10 px-1 rounded">ollama pull gemma3:1b</code>.
+              {t("NATIA peut faire tourner l'IA directement sur ce PC, sans rien envoyer sur internet. Le moteur et un modèle adapté à votre PC se téléchargent automatiquement (environ 1 à 3 Go).")}
+            </p>
+            <button
+              onClick={() => openSettings("ai")}
+              className="self-start flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-red-500 hover:bg-red-600 text-white text-xs font-medium transition-colors"
+            >
+              <Download size={11} />
+              {t("Installer l'IA intégrée")}
+            </button>
+            <p className="text-xs text-secondary/80 leading-relaxed">
+              <strong className="text-primary">{t("Vous préférez Ollama ?")}</strong> {t("Installez-le depuis")} <strong className="text-primary">ollama.com</strong>{t(", puis téléchargez un modèle, par exemple avec")} <code className="text-[10px] bg-red-500/10 px-1 rounded">ollama pull gemma3:1b</code>{t(". Repères pour choisir :")}
             </p>
             <ul className="text-xs text-secondary/80 leading-relaxed flex flex-col gap-1">
               {MODEL_TIERS.map((tier) => (
@@ -105,7 +115,7 @@ export default function Disclaimer() {
               className="self-start flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-red-500/15 hover:bg-red-500/25 border border-red-500/30 text-red-500 text-xs font-medium transition-colors"
             >
               <Sparkles size={11} />
-              {t("Configurer l'IA")}
+              {t("Autres choix d'IA (Ollama, clés API…)")}
             </button>
             <button
               onClick={() => openSettings("manual")}

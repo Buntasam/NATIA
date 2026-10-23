@@ -189,11 +189,55 @@ export const MANUAL: ManualChapter[] = [
         title: "Comparatif",
         blocks: [
           { table: { head: ["Solution", "Coût", "Confidentialité", "Il faut"], rows: [
-            ["Ollama (local)", "Gratuit", "Rien ne quitte le PC", "Un PC assez puissant"],
+            ["IA intégrée (recommandée)", "Gratuit", "Rien ne quitte le PC", "Un clic, 1 à 3 Go à télécharger"],
+            ["Ollama (local)", "Gratuit", "Rien ne quitte le PC", "Installer Ollama à part"],
             ["Claude, OpenAI, Gemini, Mistral (API)", "Payant à l'usage (Gemini et Mistral ont une offre gratuite limitée)", "Le texte est envoyé au fournisseur", "Une clé API"],
             ["Claude Code CLI", "Inclus dans un abonnement Claude", "Le texte est envoyé à Anthropic", "Node.js et un abonnement"],
           ] } },
-          { tip: "Pour des notes sensibles, utilisez Ollama. Pour la meilleure qualité de réponse, une API en ligne." },
+          { tip: "Pour des notes sensibles, utilisez l'IA intégrée (ou Ollama). Pour la meilleure qualité de réponse, une API en ligne." },
+        ],
+      },
+    ],
+  },
+
+  // ─── IA intégrée ───────────────────────────────────────────────────────────
+  {
+    id: "local-ai",
+    title: "IA intégrée (recommandée)",
+    topics: [
+      {
+        title: "Installer en un clic",
+        blocks: [
+          { steps: [
+            "Paramètres → Intelligence artificielle → **Installer l'IA intégrée**.",
+            "NATIA télécharge le moteur llama.cpp (33 Mo), analyse votre PC, puis télécharge le modèle conseillé.",
+            "Une fois terminé, l'IA intégrée est choisie automatiquement : ouvrez le panneau IA (`Ctrl+Shift+A`) pour l'essayer.",
+          ] },
+          { p: "Tout tourne sur votre PC : aucun texte n'est envoyé sur internet. La connexion ne sert qu'au téléchargement, une seule fois." },
+          { tip: "Le premier message charge le modèle en mémoire : quelques secondes avec une carte graphique, jusqu'à une minute sans." },
+        ],
+      },
+      {
+        title: "Choisir un autre modèle",
+        blocks: [
+          { p: "Dans la même section, chaque modèle peut être téléchargé, utilisé ou supprimé. Le badge « Recommandé pour ce PC » tient compte de votre RAM et de votre carte graphique." },
+          { table: { head: ["Modèle", "Taille", "Pour"], rows: [
+            ["Gemma 3 1B", "0,8 Go", "PC modeste (8 Go de RAM)"],
+            ["Gemma 3 4B", "2,5 Go", "16 Go de RAM ou petite carte graphique"],
+            ["Phi-4 mini", "2,5 Go", "Alternative à Gemma 3 4B"],
+            ["Mistral 7B", "4,4 Go", "Carte graphique de 6 Go ou plus"],
+            ["Gemma 3 12B", "7,3 Go", "Carte graphique de 10 Go ou plus"],
+          ] } },
+        ],
+      },
+      {
+        title: "Sécurité et place sur le disque",
+        blocks: [
+          { list: [
+            "Le moteur et les modèles viennent uniquement de leurs sources officielles (GitHub de llama.cpp, Hugging Face) et sont vérifiés par leur empreinte avant d'être utilisés.",
+            "Le moteur n'est joignable que depuis ce PC, avec une clé secrète changée à chaque démarrage, et s'arrête avec NATIA.",
+            "Les fichiers sont dans `%APPDATA%\\com.natia.app\\llm`. Supprimez un modèle depuis les paramètres pour libérer la place.",
+          ] },
         ],
       },
     ],
@@ -202,7 +246,7 @@ export const MANUAL: ManualChapter[] = [
   // ─── Ollama ────────────────────────────────────────────────────────────────
   {
     id: "ollama",
-    title: "Installer Ollama (IA locale)",
+    title: "Ollama (alternative locale)",
     topics: [
       {
         title: "1. Installer Ollama",

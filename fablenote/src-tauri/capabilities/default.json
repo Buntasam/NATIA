@@ -47,6 +47,15 @@
         },
         {
           "url": "https://www.7-zip.org/"
+        },
+        {
+          "url": "https://ai.google.dev/gemma/terms"
+        },
+        {
+          "url": "https://huggingface.co/microsoft/Phi-4-mini-instruct/blob/main/LICENSE"
+        },
+        {
+          "url": "https://www.apache.org/licenses/LICENSE-2.0"
         }
       ]
     }

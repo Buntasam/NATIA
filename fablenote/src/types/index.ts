@@ -30,7 +30,7 @@ export interface Settings {
   translate_prompt: string;
   continue_prompt: string;
   temperature: number;
-  ai_provider: "ollama" | "claude" | "openai" | "gemini" | "mistral" | "claude_cli";
+  ai_provider: "local" | "ollama" | "claude" | "openai" | "gemini" | "mistral" | "claude_cli";
   claude_api_key: string;
   claude_model: string;
   openai_api_key: string;
@@ -46,6 +46,8 @@ export interface Settings {
   context_messages: number;
   debug_mode: boolean;
   prompt_intensity: "eco" | "low" | "medium" | "high" | "max";
+  /** Modèle de l'IA intégrée (catalogue de src-tauri/src/llm.rs), vide si aucun. */
+  local_model: string;
 }
 
 export interface PromptVersion {
