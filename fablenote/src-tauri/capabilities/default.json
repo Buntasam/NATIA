@@ -86,6 +86,15 @@
         },
         {
           "url": "https://huggingface.co/BAAI/bge-m3"
+        },
+        {
+          "url": "https://www.microsoft.com/microsoft-365/onedrive/download"
+        },
+        {
+          "url": "https://www.dropbox.com/install"
+        },
+        {
+          "url": "https://www.google.com/drive/download/"
         }
       ]
     }

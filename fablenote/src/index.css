@@ -480,6 +480,23 @@ body,
   background: rgba(217, 119, 87, 0.18);
 }
 
+/* ─── Fichiers joints ────────────────────────────────────────────────────────── */
+.attachment-chip {
+  display: inline-block;
+  padding: 1px 8px;
+  margin: 0 1px;
+  border-radius: 6px;
+  border: 1px solid var(--color-border);
+  background: var(--color-hover);
+  color: var(--color-primary);
+  font-size: 0.85em;
+  cursor: pointer;
+  user-select: none;
+  transition: border-color 0.1s;
+}
+.attachment-chip:hover { border-color: #d97757; }
+.ProseMirror-selectednode.attachment-chip { outline: 2px solid rgba(217, 119, 87, 0.5); }
+
 /* ─── D20 animations ─────────────────────────────────────────────────────────── */
 
 @keyframes d20-shake {

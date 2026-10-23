@@ -108,9 +108,9 @@ export const LEGAL: ManualChapter[] = [
       {
         title: "2. Ce qui est stocké sur votre ordinateur",
         blocks: [
-          { p: "Dans `%APPDATA%\\com.natia.app` : les notes (titres, contenu, tags, dossiers, couleurs), leur historique de versions, la mémoire IA, l'historique des conversations IA, les paramètres et les modèles de l'IA intégrée. Les préférences d'affichage (langue, thème…) sont gardées par la fenêtre de l'application." },
+          { p: "Dans `%APPDATA%\\com.natia.app` : les notes (titres, contenu, tags, dossiers, couleurs), leurs fichiers joints, leur historique de versions, la mémoire IA, l'historique des conversations IA, les paramètres et les modèles de l'IA intégrée. Les préférences d'affichage (langue, thème…) sont gardées par la fenêtre de l'application." },
           { list: [
-            "Avec un mot de passe, les notes, titres, tags et clés API sont chiffrés (AES-256-GCM, clé dérivée par Argon2id). Les post-its restent en clair.",
+            "Avec un mot de passe, les notes, titres, tags, fichiers joints et clés API sont chiffrés (AES-256-GCM, clé dérivée par Argon2id). Les post-its restent en clair. Pour ouvrir un fichier joint, une copie déchiffrée est placée dans le dossier temporaire de Windows, effacée au verrouillage et à la fermeture.",
             "Sans mot de passe, les clés API sont rangées dans le gestionnaire d'identifiants de Windows et le reste est en clair dans la base locale.",
             "Le journal de débogage, s'il est activé, reste sur votre ordinateur.",
           ] },
@@ -127,7 +127,8 @@ export const LEGAL: ManualChapter[] = [
             ["Recherche de mises à jour", "GitHub", "Données techniques de connexion", "Au démarrage ou à la demande ; désactivable (Paramètres → Application)"],
             ["Dictée vocale", "Microsoft, si la reconnaissance vocale de Windows / Edge passe par ses services en ligne", "Le son du micro pendant la dictée", "Seulement pendant une dictée"],
             ["Liens externes", "Le site ouvert dans votre navigateur", "Selon ce site", "Quand vous cliquez sur un lien"],
-            ["Sauvegarde automatique", "Le dossier que vous choisissez (et le service qui le synchronise, comme OneDrive)", "Une archive de toutes les notes, protégée par mot de passe si vous en fixez un", "À la fréquence choisie, si vous l'activez"],
+            ["Sauvegarde automatique", "Le dossier que vous choisissez (et le service qui le synchronise, comme OneDrive)", "Une archive de toutes les notes et fichiers joints, protégée par mot de passe si vous en fixez un", "À la fréquence choisie, si vous l'activez"],
+            ["Synchronisation entre PC", "Le dossier partagé que vous choisissez (et le service qui le synchronise)", "Notes et fichiers joints, toujours chiffrés avec le mot de passe de synchronisation", "Toutes les 5 minutes, si vous l'activez"],
           ] } },
           { p: "Ces tiers traitent les données selon leur propre politique de confidentialité, parfois hors de l'Union européenne :" },
           { links: [

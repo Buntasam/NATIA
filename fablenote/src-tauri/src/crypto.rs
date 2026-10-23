@@ -62,6 +62,63 @@ pub(crate) fn decrypt_value(key: &[u8; 32], encoded: &str) -> Result<String, Str
     String::from_utf8(plain).map_err(|e| e.to_string())
 }
 
+/// En-tête d'un fichier binaire chiffré (fichiers joints).
+const ENC_BYTES_MAGIC: &[u8] = b"NATIA-ENC1\n";
+
+pub(crate) fn is_encrypted_bytes(data: &[u8]) -> bool {
+    data.starts_with(ENC_BYTES_MAGIC)
+}
+
+/// Fichier binaire chiffré : en-tête, nonce (12 octets), puis texte chiffré AES-256-GCM.
+pub(crate) fn encrypt_bytes(key: &[u8; 32], plain: &[u8]) -> Vec<u8> {
+    let cipher = Aes256Gcm::new_from_slice(key).expect("32-byte key");
+    let nonce = Aes256Gcm::generate_nonce(&mut AeadOsRng);
+    let ct = cipher.encrypt(&nonce, plain).expect("encryption failure");
+    [ENC_BYTES_MAGIC, nonce.as_slice(), &ct].concat()
+}
+
+pub(crate) fn decrypt_bytes(key: &[u8; 32], data: &[u8]) -> Result<Vec<u8>, String> {
+    if !is_encrypted_bytes(data) { return Ok(data.to_vec()); }
+    let rest = &data[ENC_BYTES_MAGIC.len()..];
+    if rest.len() < 12 { return Err("Fichier chiffré illisible".to_string()); }
+    let cipher = Aes256Gcm::new_from_slice(key).expect("32-byte key");
+    cipher
+        .decrypt(aes_gcm::Nonce::from_slice(&rest[..12]), &rest[12..])
+        .map_err(|_| "Déchiffrement échoué — mot de passe incorrect ?".to_string())
+}
+
+pub(crate) fn maybe_enc_bytes(key: &Option<[u8; 32]>, plain: &[u8]) -> Vec<u8> {
+    match key { Some(k) => encrypt_bytes(k, plain), None => plain.to_vec() }
+}
+
+pub(crate) fn maybe_dec_bytes(key: &Option<[u8; 32]>, data: &[u8]) -> Result<Vec<u8>, String> {
+    match key {
+        Some(k) => decrypt_bytes(k, data),
+        None if is_encrypted_bytes(data) => Err("Fichier chiffré : déverrouillez NATIA".to_string()),
+        None => Ok(data.to_vec()),
+    }
+}
+
+/// Noms et contenus des fichiers joints, chiffrés (`Some`) ou déchiffrés (`None`).
+fn convert_attachments(db: &Connection, notes_dir: &PathBuf, key: &[u8; 32], encrypt: bool) -> Result<(), String> {
+    let dir = crate::attachments::attachments_dir(notes_dir);
+    for (id, name) in collect_rows2(db, "SELECT id, name FROM attachments")? {
+        let new_name = if encrypt {
+            if name.starts_with(ENC_PREFIX) { name } else { encrypt_value(key, &name) }
+        } else if name.starts_with(ENC_PREFIX) { decrypt_value(key, &name)? } else { name };
+        db.execute("UPDATE attachments SET name=?1 WHERE id=?2", params![new_name, id]).map_err(|e| e.to_string())?;
+        let fp = dir.join(&id);
+        if let Ok(data) = std::fs::read(&fp) {
+            if encrypt && !is_encrypted_bytes(&data) {
+                std::fs::write(&fp, encrypt_bytes(key, &data)).map_err(|e| e.to_string())?;
+            } else if !encrypt && is_encrypted_bytes(&data) {
+                std::fs::write(&fp, decrypt_bytes(key, &data)?).map_err(|e| e.to_string())?;
+            }
+        }
+    }
+    Ok(())
+}
+
 pub(crate) fn maybe_dec(key: &Option<[u8; 32]>, s: &str) -> String {
     match key {
         Some(k) => decrypt_value(k, s).unwrap_or_else(|_| s.to_string()),
@@ -245,6 +302,7 @@ pub(crate) fn encrypt_all_data(db: &Connection, notes_dir: &PathBuf, key: &[u8; 
                 .map_err(|e| e.to_string())?;
         }
     }
+    convert_attachments(db, notes_dir, key, true)?;
     Ok(())
 }
 
@@ -336,6 +394,7 @@ pub(crate) fn decrypt_all_data(db: &Connection, notes_dir: &PathBuf, key: &[u8; 
         db.execute("INSERT OR REPLACE INTO item_colors(item_key, color) VALUES(?1,?2)", params![dec_or_keep(key, k)?, c])
             .map_err(|e| e.to_string())?;
     }
+    convert_attachments(db, notes_dir, key, false)?;
     Ok(())
 }
 

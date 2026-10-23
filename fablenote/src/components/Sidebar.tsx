@@ -19,6 +19,7 @@ import {
   Settings,
   Sun,
   Tag,
+  Paperclip,
   Trash2,
   MoveRight,
   Pencil,
@@ -147,6 +148,7 @@ export default function Sidebar() {
     renameFolder,
     toggleSettings,
     toggleTrash,
+    toggleAttachments,
     isLoading,
     itemColors,
     setItemColor,
@@ -657,6 +659,15 @@ export default function Sidebar() {
             <Settings size={15} />
             {t("Paramètres")}
           </button>
+          <Tip label={t("Fichiers liés")} side="top">
+            <button
+              onClick={toggleAttachments}
+              aria-label={t("Fichiers liés")}
+              className="p-1.5 rounded text-muted hover:text-primary hover:bg-hover transition-colors"
+            >
+              <Paperclip size={15} />
+            </button>
+          </Tip>
           <Tip label={t("Corbeille")} side="top">
             <button
               onClick={toggleTrash}

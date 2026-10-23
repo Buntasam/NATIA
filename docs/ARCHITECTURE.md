@@ -146,6 +146,8 @@ src-tauri/src/
 ├── backup.rs       ← sauvegarde automatique (dossier choisi, fréquence, N dernières), restauration
 ├── md_import.rs    ← import d'un coffre Obsidian ou d'un export Notion (Markdown → HTML, wikilinks, images)
 ├── semantic.rs     ← recherche par le sens dans les notes (index d'embeddings chiffré dans user_data)
+├── attachments.rs  ← fichiers joints (attachments/<id>, chiffrés), ouverture par copie temporaire
+├── sync.rs         ← synchronisation par dossier partagé (chiffré), fusion par empreinte de base
 └── llm.rs          ← IA intégrée : téléchargement vérifié de llama.cpp et des modèles, serveur local
 ```
 
@@ -212,6 +214,24 @@ Tous les fournisseurs diffusent leur réponse avec les événements `ollama-toke
 | `llm_chat`, `llm_stream`, `llm_stop` | Chat ; le serveur démarre au premier message |
 
 Le serveur (`llama-server`) écoute sur `127.0.0.1` uniquement, sur un port libre, avec une clé aléatoire à chaque lancement, sans interface web (`--no-webui`) et hors ligne (`--offline`). Il est rattaché à NATIA par un Job Object Windows (`KILL_ON_JOB_CLOSE`) : il s'arrête avec l'app, même en cas de plantage. La carte graphique dédiée la mieux dotée est choisie (`--device`) ; `--fit` adapte le nombre de couches à la mémoire disponible. Le flux SSE est découpé en octets puis en lignes, pour ne jamais couper un caractère accentué.
+
+### Commandes — `attachments.rs`
+
+| Commande | Description |
+|---|---|
+| `add_attachments` | Joint des fichiers (100 Mo max chacun) à une note |
+| `list_attachments`, `open_attachment`, `save_attachment_as`, `delete_attachment` | Vue « Fichiers liés », ouverture avec l'application associée, copie, suppression |
+
+Les fichiers sont dans `attachments/<id>` (chiffrés par `encrypt_bytes` avec un mot de passe NATIA, nom chiffré dans la table `attachments`). `encrypt_all_data` / `decrypt_all_data` les convertissent avec le reste. Les copies ouvertes sont dans `%TEMP%\natia-fichiers-ouverts`, effacé au verrouillage, au démarrage et à la fermeture. L'export ZIP les ajoute après `metadata.json` (`attachments/<id>` + `attachments.json`) ; l'import les rend à leur note.
+
+### Commandes — `sync.rs`
+
+| Commande | Description |
+|---|---|
+| `get_sync_config`, `set_sync_config` | Activation, dossier partagé, mot de passe de synchronisation (coffre Windows ou base chiffrée) |
+| `run_sync` | Une synchronisation complète ; l'interface l'appelle à l'ouverture, toutes les 5 min et au retour sur la fenêtre |
+
+Le dossier contient `natia-sync.json` (sel + contrôle du mot de passe), `notes/<id>.natia` et `attachments/<id>` (+ `.meta`), tous chiffrés (AES-256-GCM, clé Argon2id du mot de passe de synchronisation, sans secret du PC pour qu'un autre PC l'ouvre). Fusion : `sync_notes` garde l'empreinte (SHA-256 liée à la clé) de chaque note à la dernière synchro ; un seul côté changé → copie, les deux → la plus récente gagne et l'autre devient une note « (conflit …) » ; une modification l'emporte sur une suppression définitive. Les fichiers joints ne changent jamais : `sync_attachments` sert à propager les suppressions.
 
 ### Commandes — `backup.rs`
 

@@ -5,12 +5,14 @@ use std::sync::Mutex;
 use tauri::Manager;
 
 mod ai;
+mod attachments;
 mod backup;
 mod crypto;
 mod db;
 mod legal;
 mod md_import;
 mod semantic;
+mod sync;
 mod notes;
 mod settings;
 mod llm;
@@ -228,6 +230,8 @@ pub fn run() {
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_updater::Builder::new().build())
         .setup(|app| {
+            // Copies déchiffrées laissées par une fermeture brutale.
+            attachments::clear_open_copies();
             let data_dir = app.path().app_data_dir().expect("cannot resolve app data dir");
             let notes_dir = data_dir.join("notes");
             std::fs::create_dir_all(&notes_dir).expect("cannot create notes dir");
@@ -251,6 +255,16 @@ pub fn run() {
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
+            attachments::add_attachments,
+            attachments::list_attachments,
+            attachments::open_attachment,
+            attachments::save_attachment_as,
+            attachments::delete_attachment,
+            sync::get_sync_config,
+            sync::set_sync_config,
+            sync::run_sync,
+            sync::detect_cloud_folders,
+            sync::prepare_cloud_folder,
             backup::get_backup_config,
             backup::set_backup_config,
             backup::run_backup,
@@ -350,7 +364,7 @@ pub fn run() {
         .expect("error while running tauri application")
         .run(|app, event| {
             // L'IA intégrée s'arrête avec NATIA (le Job Object Windows couvre aussi les plantages).
-            if let tauri::RunEvent::Exit = event { llm::shutdown(app); }
+            if let tauri::RunEvent::Exit = event { llm::shutdown(app); attachments::clear_open_copies(); }
         });
 }
 
@@ -381,9 +395,10 @@ async fn reset_app(app_handle: tauri::AppHandle) -> Result<(), String> {
 
     *state.enc_key.lock().map_err(|e| e.to_string())? = None;
     notes::clear_search_cache(&state);
+    attachments::clear_open_copies();
 
     // Les clés API sans mot de passe vivent dans le keychain OS, hors du dossier de données.
-    for name in db::API_KEY_NAMES.iter().chain([&db::DEVICE_SECRET_NAME, &backup::BACKUP_PASSWORD_NAME]) {
+    for name in db::API_KEY_NAMES.iter().chain([&db::DEVICE_SECRET_NAME, &backup::BACKUP_PASSWORD_NAME, &sync::SYNC_PASSWORD_NAME]) {
         let _ = db::keychain_set(name, "");
     }
 
@@ -424,5 +439,6 @@ async fn reset_app(app_handle: tauri::AppHandle) -> Result<(), String> {
 #[tauri::command]
 fn exit_app(app_handle: tauri::AppHandle) {
     llm::shutdown(&app_handle);
+    attachments::clear_open_copies();
     app_handle.exit(0);
 }

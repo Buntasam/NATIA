@@ -40,6 +40,21 @@ pub(crate) fn init_db(db: &Connection) -> SqlResult<()> {
             key TEXT PRIMARY KEY,
             value TEXT NOT NULL
         );
+        CREATE TABLE IF NOT EXISTS attachments (
+            id TEXT PRIMARY KEY,
+            note_id TEXT NOT NULL,
+            name TEXT NOT NULL,
+            size INTEGER NOT NULL,
+            created_at TEXT NOT NULL
+        );
+        CREATE INDEX IF NOT EXISTS idx_attachments_note ON attachments(note_id);
+        CREATE TABLE IF NOT EXISTS sync_notes (
+            note_id TEXT PRIMARY KEY,
+            base_hash TEXT NOT NULL
+        );
+        CREATE TABLE IF NOT EXISTS sync_attachments (
+            id TEXT PRIMARY KEY
+        );
         CREATE TABLE IF NOT EXISTS notes (
             id TEXT PRIMARY KEY,
             title TEXT NOT NULL,

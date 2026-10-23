@@ -45,6 +45,7 @@ interface AppStore {
   showVersionPanel: boolean;
   showSettings: boolean;
   showTrash: boolean;
+  showAttachments: boolean;
   isLoading: boolean;
   isSaving: boolean;
   isConfirmingClose: boolean;
@@ -130,6 +131,7 @@ interface AppStore {
   toggleVersionPanel: () => void;
   toggleSettings: () => void;
   toggleTrash: () => void;
+  toggleAttachments: () => void;
   toggleFocusMode: () => void;
   toggleGraph: () => void;
 
@@ -259,6 +261,7 @@ export const useStore = create<AppStore>((set, get) => ({
   showVersionPanel: false,
   showSettings: false,
   showTrash: false,
+  showAttachments: false,
   isLoading: false,
   isSaving: false,
   isConfirmingClose: false,
@@ -610,6 +613,7 @@ export const useStore = create<AppStore>((set, get) => ({
   toggleVersionPanel: () => set((s) => ({ showVersionPanel: !s.showVersionPanel, showAiPanel: false })),
   toggleSettings: () => set((s) => ({ showSettings: !s.showSettings })),
   toggleTrash: () => set((s) => ({ showTrash: !s.showTrash })),
+  toggleAttachments: () => set((s) => ({ showAttachments: !s.showAttachments })),
 
   getTrash: () => invoke<TrashItem[]>("get_trash"),
   restoreFromTrash: async (id, itemType) => {

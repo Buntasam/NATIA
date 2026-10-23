@@ -56,6 +56,7 @@ fn enforce_grace(app: &AppHandle) {
     }
     if let Ok(mut r) = state.lock_request.lock() { *r = None; }
     crate::notes::clear_search_cache(&state);
+    crate::attachments::clear_open_copies();
     let _ = app.emit(LOCK_EVENT, ());
 }
 

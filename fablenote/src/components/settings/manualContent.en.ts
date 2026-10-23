@@ -378,6 +378,17 @@ export const MANUAL_EN: ManualChapter[] = [
         ],
       },
       {
+        title: "Attach files",
+        blocks: [
+          { steps: [
+            "In a note, click the **paperclip** in the toolbar and choose one or more files (100 MB maximum each).",
+            "A “📎 file name” chip appears in the note: click it to open the file with its app.",
+          ] },
+          { p: "**Linked files** (paperclip at the bottom of the sidebar) lists every attached file: search, open, **Save as…**, delete and go to the note." },
+          { p: "Files are stored with your notes, encrypted if a password is set, and included in exports, backups and sync. Permanently deleting a note deletes its files." },
+        ],
+      },
+      {
         title: "Ask all your notes",
         blocks: [
           { steps: [
@@ -474,6 +485,20 @@ export const MANUAL_EN: ManualChapter[] = [
           ] } },
           { links: [{ label: "Download 7-Zip", url: "https://www.7-zip.org/" }] },
           { tip: "Turn on the weekly reminder (Settings → Data) so you don't forget." },
+        ],
+      },
+      {
+        title: "Sync several PCs",
+        blocks: [
+          { steps: [
+            "On the first PC: Settings → Data → **Sync between several PCs**: turn on the switch.",
+            "Click **OneDrive**, **Dropbox** or **Google Drive** (the app must be installed and signed in to your account): NATIA creates a “NATIA-sync” folder in it. Or **Choose…** another folder, for example on a USB stick.",
+            "Choose a **sync password** (8 characters minimum), then **Save**.",
+            "On the other PC: same cloud app (same account) or same folder, and same password.",
+          ] },
+          { p: "NATIA syncs at startup, every 5 minutes and when you come back to the window (**Sync now** to force it). Notes, folders, tags, trash and attached files follow." },
+          { tip: "If a note was changed on both PCs between two syncs, the most recent version is kept and the other becomes a “(conflict …)” note. Nothing is lost; each received note also keeps a version in its history." },
+          { warn: "The whole shared folder is encrypted with the sync password: without it, its notes are unreadable, even for you. Write it down." },
         ],
       },
       {

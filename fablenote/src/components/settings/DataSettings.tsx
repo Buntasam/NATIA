@@ -6,6 +6,7 @@ import { useStore } from "../../store";
 import ResetConfirmDialog from "../ResetConfirmDialog";
 import AutoBackupSettings from "./AutoBackupSettings";
 import ExternalImport from "./ExternalImport";
+import SyncSettings from "./SyncSettings";
 import { formatLastBackup, isBackupReminderEnabled, recordBackup, setBackupReminderEnabled } from "../../lib/backupReminder";
 import { Section, SecInput } from "./SettingsWidgets";
 import { msg, trError, useT } from "../../i18n";
@@ -182,6 +183,8 @@ export default function DataSettings() {
       </Section>
 
       <AutoBackupSettings />
+
+      <SyncSettings />
 
       <Section title={t("Désinstallation")}>
         <div className="flex flex-col gap-2">

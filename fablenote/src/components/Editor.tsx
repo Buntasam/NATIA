@@ -18,6 +18,7 @@ import CodeBlockLowlight from "@tiptap/extension-code-block-lowlight";
 import { common, createLowlight } from "lowlight";
 import { PostIt } from "../extensions/PostIt";
 import { Wikilink } from "../extensions/Wikilink";
+import { Attachment } from "../extensions/Attachment";
 import { Reminder } from "../extensions/Reminder";
 import {
   Bell,
@@ -601,6 +602,7 @@ export default function Editor() {
       PostIt,
       Wikilink,
       Reminder,
+      Attachment,
     ],
     content: "",
     onUpdate: ({ editor }) => {
@@ -1165,6 +1167,13 @@ ${editor.getHTML()}
             const target = e.target as HTMLElement;
             if (!target.closest(".ProseMirror") && editor) {
               editor.commands.focus("end");
+            }
+            // Fichier joint : ouvert avec son application
+            const att = (target as HTMLElement).closest("[data-attachment-id]") as HTMLElement | null;
+            if (att) {
+              const id = att.getAttribute("data-attachment-id");
+              if (id) invoke("open_attachment", { id }).catch((err) => console.error("open_attachment:", err));
+              return;
             }
             // Wikilink click
             const wl = (target as HTMLElement).closest("[data-wikilink]") as HTMLElement | null;

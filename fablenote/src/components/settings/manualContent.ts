@@ -398,6 +398,17 @@ export const MANUAL: ManualChapter[] = [
         ],
       },
       {
+        title: "Joindre des fichiers",
+        blocks: [
+          { steps: [
+            "Dans une note, cliquez sur le **trombone** de la barre d'outils et choisissez un ou plusieurs fichiers (100 Mo maximum chacun).",
+            "Une pastille « 📎 nom du fichier » apparaît dans la note : cliquez dessus pour l'ouvrir avec son application.",
+          ] },
+          { p: "**Fichiers liés** (trombone en bas de la barre latérale) liste tous les fichiers joints : recherche, ouverture, **Enregistrer sous…**, suppression et accès à la note." },
+          { p: "Les fichiers sont rangés avec vos notes, chiffrés si un mot de passe est actif, et inclus dans les exports, sauvegardes et la synchronisation. Supprimer définitivement une note supprime ses fichiers." },
+        ],
+      },
+      {
         title: "Interroger toutes ses notes",
         blocks: [
           { steps: [
@@ -494,6 +505,20 @@ export const MANUAL: ManualChapter[] = [
           ] } },
           { links: [{ label: "Télécharger 7-Zip", url: "https://www.7-zip.org/" }] },
           { tip: "Activez le rappel hebdomadaire (Paramètres → Données) pour ne pas oublier." },
+        ],
+      },
+      {
+        title: "Synchroniser plusieurs PC",
+        blocks: [
+          { steps: [
+            "Sur le premier PC : Paramètres → Données → **Synchronisation entre plusieurs PC** : activez l'interrupteur.",
+            "Cliquez sur **OneDrive**, **Dropbox** ou **Google Drive** (l'application doit être installée et connectée à votre compte) : NATIA crée un dossier « NATIA-sync » dedans. Ou **Choisir…** un autre dossier, par exemple sur une clé USB.",
+            "Choisissez un **mot de passe de synchronisation** (8 caractères minimum), puis **Enregistrer**.",
+            "Sur l'autre PC : même application cloud (même compte) ou même dossier, et même mot de passe.",
+          ] },
+          { p: "NATIA synchronise à l'ouverture, toutes les 5 minutes et quand vous revenez sur la fenêtre (**Synchroniser maintenant** pour forcer). Notes, dossiers, tags, corbeille et fichiers joints suivent." },
+          { tip: "Si une note a été modifiée sur les deux PC entre deux synchronisations, la version la plus récente est gardée et l'autre devient une note « (conflit …) ». Rien n'est perdu ; chaque note reçue garde aussi une version dans l'historique." },
+          { warn: "Tout le dossier partagé est chiffré avec le mot de passe de synchronisation : sans lui, ses notes sont illisibles, même pour vous. Notez-le." },
         ],
       },
       {

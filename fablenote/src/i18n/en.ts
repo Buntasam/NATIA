@@ -1242,6 +1242,61 @@ const en: Record<string, string> = {
   "PIN : 6 à 8 chiffres requis": "PIN: 6 to 8 digits required",
   "Nouveau PIN (6–8 chiffres)": "New PIN (6–8 digits)",
   "Code PIN (6–8 chiffres)": "PIN code (6–8 digits)",
+
+  // ── Fichiers liés
+  "Enregistrer le fichier": "Save the file",
+  "Fichiers liés": "Linked files",
+  "Chercher un fichier ou une note…": "Search a file or a note…",
+  "Aucun fichier joint pour l'instant": "No attached file yet",
+  "Dans une note, le trombone de la barre d'outils joint un PDF, un document ou tout autre fichier. Il est rangé (et chiffré si un mot de passe est actif) avec vos notes.": "In a note, the paperclip in the toolbar attaches a PDF, a document or any other file. It is stored (and encrypted if a password is set) with your notes.",
+  "Ouvrir": "Open",
+  "dans la corbeille": "in the trash",
+  "note supprimée": "note deleted",
+  "Enregistrer sous…": "Save as…",
+  "Joindre un fichier": "Attach a file",
+  "{n} o": "{n} B",
+  "{n} Ko": "{n} KB",
+  "Enregistrez la note avant d'y joindre un fichier": "Save the note before attaching a file",
+  "Fichier joint introuvable": "Attached file not found",
+  "Fichier chiffré : déverrouillez NATIA": "Encrypted file: unlock NATIA",
+  "Fichier chiffré illisible": "Unreadable encrypted file",
+
+  // ── Synchronisation
+  "Dossier partagé entre vos PC": "Folder shared between your PCs",
+  "{sent} envoyée(s), {received} reçue(s), {conflicts} conflit(s), {deleted} suppression(s)": "{sent} sent, {received} received, {conflicts} conflict(s), {deleted} deletion(s)",
+  "tout était déjà à jour": "everything was already up to date",
+  "Synchronisation entre plusieurs PC": "Sync between several PCs",
+  "Synchroniser mes notes": "Sync my notes",
+  "Choisissez le même dossier partagé (OneDrive, Dropbox, clé USB…) et le même mot de passe sur chaque PC. Tout y est chiffré : le dossier ne contient rien de lisible.": "Choose the same shared folder (OneDrive, Dropbox, USB stick…) and the same password on each PC. Everything in it is encrypted: the folder contains nothing readable.",
+  "Dossier partagé": "Shared folder",
+  "Mot de passe de synchronisation": "Sync password",
+  "Le même sur chaque PC. Il chiffre le dossier partagé (AES-256) et ne remplace pas le mot de passe de NATIA. Sans lui, les notes du dossier sont illisibles : notez-le.": "The same on each PC. It encrypts the shared folder (AES-256) and doesn't replace NATIA's password. Without it, the notes in the folder are unreadable: write it down.",
+  "Synchronisation à l'ouverture, toutes les 5 minutes et en revenant sur NATIA. Si une note a été modifiée sur les deux PC, la version la plus récente est gardée et l'autre devient une note « (conflit …) » : rien n'est perdu.": "Syncs at startup, every 5 minutes and when you come back to NATIA. If a note was changed on both PCs, the most recent version is kept and the other becomes a “(conflict …)” note: nothing is lost.",
+  "Échec de la dernière synchronisation : {e}": "Last sync failed: {e}",
+  "Dernière synchronisation : {date} · {summary}": "Last sync: {date} · {summary}",
+  "Synchroniser maintenant": "Sync now",
+  "Export, sauvegarde automatique, synchronisation, import, désinstallation": "Export, automatic backup, sync, import, uninstall",
+  "export zip sauvegarde donnees dossier desinstaller backup archive import synchronisation sync onedrive dropbox obsidian notion restaurer": "export zip backup data folder uninstall archive import sync onedrive dropbox obsidian notion restore",
+  "Mot de passe de synchronisation : 8 caractères minimum": "Sync password: 8 characters minimum",
+  "Mot de passe de synchronisation incorrect : il doit être le même sur chaque PC": "Wrong sync password: it must be the same on each PC",
+  "Dossier de synchronisation illisible": "Unreadable sync folder",
+  "Choisissez le dossier de synchronisation": "Choose the sync folder",
+  "Dossier de synchronisation introuvable (disque ou clé USB débranché ?)": "Sync folder not found (drive or USB stick unplugged?)",
+
+  // ── Erreurs fichiers joints
+  "{0} : fichier trop gros (100 Mo maximum)": "{0}: file too large (100 MB maximum)",
+
+  // ── Synchronisation cloud en un clic
+  "En un clic, avec votre application cloud": "In one click, with your cloud app",
+  "{name} n'est pas installé sur ce PC : télécharger l'application": "{name} isn't installed on this PC: download the app",
+  "NATIA range ses fichiers chiffrés dans un dossier « NATIA-sync » de l'application ; c'est elle qui les copie dans le cloud. Sur l'autre PC, choisissez la même application et le même compte.": "NATIA puts its encrypted files in a “NATIA-sync” folder of the app, which copies them to the cloud. On the other PC, choose the same app and the same account.",
+  "personnel": "personal",
+  "professionnel": "work",
+  "Dossier cloud introuvable sur ce PC": "Cloud folder not found on this PC",
+
+  // ── Liaison cloud
+  "Lié à {name} ✓": "Linked to {name} ✓",
+  "Dernière étape : choisissez le mot de passe de synchronisation ci-dessous, puis Enregistrer. La liaison avec {name} se fait aussitôt.": "Last step: choose the sync password below, then Save. The link with {name} is made right away.",
 };
 
 export default en;

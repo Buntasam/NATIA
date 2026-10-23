@@ -11,6 +11,7 @@ import Editor from "./Editor";
 import ReminderDaemon from "./ReminderDaemon";
 import BackupReminder from "./BackupReminder";
 import AutoBackupDaemon from "./AutoBackupDaemon";
+import SyncDaemon from "./SyncDaemon";
 import ResizeHandle from "./ResizeHandle";
 import Sidebar from "./Sidebar";
 import SplitPane from "./SplitPane";
@@ -18,11 +19,12 @@ import SplitPane from "./SplitPane";
 const Settings = lazy(() => import("./Settings"));
 const ShortcutsOverlay = lazy(() => import("./ShortcutsOverlay"));
 const TrashPanel = lazy(() => import("./TrashPanel"));
+const AttachmentsPanel = lazy(() => import("./AttachmentsPanel"));
 const VersionTree = lazy(() => import("./VersionTree"));
 
 export default function Layout() {
   const {
-    showAiPanel, showVersionPanel, showSettings, showTrash,
+    showAiPanel, showVersionPanel, showSettings, showTrash, showAttachments,
     createNote, toggleSettings, toggleAiPanel, toggleVersionPanel,
     focusMode, toggleFocusMode, toggleGraph, notes, selectNote, recentNoteIds,
     settings, isLocked,
@@ -165,12 +167,14 @@ export default function Layout() {
       <Suspense fallback={null}>
         {showSettings && <Settings />}
         {showTrash && <TrashPanel />}
+        {showAttachments && <AttachmentsPanel />}
         {shortcutsOpen && <ShortcutsOverlay onClose={() => setShortcutsOpen(false)} />}
       </Suspense>
       <D20Roller />
       <ReminderDaemon />
       <BackupReminder />
       <AutoBackupDaemon />
+      <SyncDaemon />
 
 
       {/* Quick open modal */}
@@ -231,6 +235,7 @@ function QuickOpen({
       { id: "versions", label: t("Historique des versions"), run: () => st.toggleVersionPanel() },
       { id: "settings", label: t("Paramètres"), run: () => st.toggleSettings() },
       { id: "trash", label: t("Corbeille"), run: () => st.toggleTrash() },
+      { id: "attachments", label: t("Fichiers liés"), run: () => st.toggleAttachments() },
       { id: "theme", label: t("Basculer le thème clair/sombre"), run: () => st.toggleTheme() },
       { id: "shortcuts", label: t("Raccourcis clavier"), run: onShowShortcuts },
     ];

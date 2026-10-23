@@ -70,6 +70,8 @@ L'installeur n'est pas signé : Windows SmartScreen affiche « Windows a protég
 - **Export / import** — ZIP classique, protégé AES-256 (7-Zip) ou compatible Windows ; rappel de sauvegarde chaque semaine
 - **Sauvegarde automatique** — chaque jour ou chaque semaine, dans le dossier de votre choix, en gardant les N dernières ; restauration en un clic
 - **Import Obsidian et Notion** — dossiers, tags, tâches, images et liens `[[…]]` conservés
+- **Fichiers joints** — PDF, documents… dans les notes, chiffrés avec elles ; vue « Fichiers liés »
+- **Synchronisation entre PC** — par un dossier partagé (OneDrive, Dropbox, clé USB), entièrement chiffré ; conflits gardés en copie
 - **Clé de récupération** — rouvre les notes en cas d'oubli du mot de passe, de réinstallation de Windows ou de changement de PC
 - **Indicateur de solidité** du mot de passe
 - **Réinitialisation** — pour repartir de zéro, depuis l'écran de verrouillage

@@ -450,6 +450,7 @@ pub fn remove_password(password: String, state: State<AppState>) -> Result<(), S
 #[tauri::command]
 pub fn lock_app(state: State<AppState>) -> Result<(), String> {
     crate::notes::clear_search_cache(&state);
+    crate::attachments::clear_open_copies();
     *state.lock_request.lock().map_err(|e| e.to_string())? = None;
     let mut guard = state.enc_key.lock().map_err(|e| e.to_string())?;
     if let Some(ref mut key) = *guard {

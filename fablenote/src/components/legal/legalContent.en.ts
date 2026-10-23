@@ -100,9 +100,9 @@ export const LEGAL_EN: ManualChapter[] = [
       {
         title: "2. What is stored on your computer",
         blocks: [
-          { p: "In `%APPDATA%\\com.natia.app`: notes (titles, content, tags, folders, colours), their version history, the AI memory, AI conversation history, settings and the built-in AI models. Display preferences (language, theme…) are kept by the app window." },
+          { p: "In `%APPDATA%\\com.natia.app`: notes (titles, content, tags, folders, colours), their attached files, their version history, the AI memory, AI conversation history, settings and the built-in AI models. Display preferences (language, theme…) are kept by the app window." },
           { list: [
-            "With a password, notes, titles, tags and API keys are encrypted (AES-256-GCM, key derived with Argon2id). Sticky notes stay in clear text.",
+            "With a password, notes, titles, tags, attached files and API keys are encrypted (AES-256-GCM, key derived with Argon2id). Sticky notes stay in clear text. To open an attached file, a decrypted copy is placed in the Windows temporary folder, erased when locking and closing.",
             "Without a password, API keys are stored in the Windows Credential Manager and everything else is in clear text in the local database.",
             "The debug log, if enabled, stays on your computer.",
           ] },
@@ -119,7 +119,8 @@ export const LEGAL_EN: ManualChapter[] = [
             ["Update check", "GitHub", "Technical connection data", "At startup or on request; can be turned off (Settings → Application)"],
             ["Voice dictation", "Microsoft, if Windows / Edge speech recognition uses its online services", "Microphone audio during dictation", "Only while dictating"],
             ["External links", "The site opened in your browser", "Depends on that site", "When you click a link"],
-            ["Automatic backup", "The folder you choose (and the service that syncs it, such as OneDrive)", "An archive of all notes, password-protected if you set one", "At the chosen frequency, if you turn it on"],
+            ["Automatic backup", "The folder you choose (and the service that syncs it, such as OneDrive)", "An archive of all notes and attached files, password-protected if you set one", "At the chosen frequency, if you turn it on"],
+            ["Sync between PCs", "The shared folder you choose (and the service that syncs it)", "Notes and attached files, always encrypted with the sync password", "Every 5 minutes, if you turn it on"],
           ] } },
           { p: "These third parties process data under their own privacy policy, sometimes outside the European Union:" },
           { links: [

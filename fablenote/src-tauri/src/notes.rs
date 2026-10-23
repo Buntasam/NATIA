@@ -558,14 +558,14 @@ fn restore_from_trash_in(db: &rusqlite::Connection, key: &Key, id: &str, item_ty
     Ok(())
 }
 
-fn purge_note(db: &rusqlite::Connection, notes_dir: &std::path::Path, key: &Key, id: &str) -> Result<(), String> {
+pub(crate) fn purge_note(db: &rusqlite::Connection, notes_dir: &std::path::Path, key: &Key, id: &str) -> Result<(), String> {
     db.execute("DELETE FROM notes WHERE id=?1", [id]).map_err(|e| e.to_string())?;
     db.execute("DELETE FROM note_versions WHERE note_id=?1", [id]).map_err(|e| e.to_string())?;
     let color_key = format!("note:{}", id);
     delete_color_where(db, key, |k| k == color_key)?;
     let fp = notes_dir.join(format!("{}.html", id));
     if fp.exists() { let _ = std::fs::remove_file(&fp); }
-    Ok(())
+    crate::attachments::delete_note_attachments(db, notes_dir, id)
 }
 
 fn permanent_delete_in(db: &rusqlite::Connection, notes_dir: &std::path::Path, key: &Key, id: &str, item_type: &str) -> Result<(), String> {
@@ -658,6 +658,9 @@ fn collect_notes_export(db: &rusqlite::Connection) -> Result<Vec<(String, String
 /// Nom de l'unique fichier visible dans un export protégé.
 pub(crate) const PROTECTED_INNER_NAME: &str = "NATIA-notes.zip";
 
+const ATTACHMENTS_PREFIX: &str = "attachments/";
+const ATTACHMENTS_INDEX: &str = "attachments.json";
+
 pub(crate) fn build_notes_zip(db: &rusqlite::Connection, notes_dir: &std::path::Path, key: &Key) -> Result<Vec<u8>, String> {
     use std::io::Write;
     use zip::write::SimpleFileOptions;
@@ -690,6 +693,20 @@ pub(crate) fn build_notes_zip(db: &rusqlite::Connection, notes_dir: &std::path::
     zip.start_file("metadata.json", options).map_err(|e| e.to_string())?;
     let meta_str = serde_json::to_string_pretty(&metadata_entries).map_err(|e| e.to_string())?;
     zip.write_all(meta_str.as_bytes()).map_err(|e| e.to_string())?;
+
+    // Fichiers joints, après metadata.json : `attachments/<id>` et leur index.
+    let attachments = crate::attachments::load_attachments(db, key, None)?;
+    let mut kept = Vec::new();
+    for a in attachments {
+        let Ok(bytes) = crate::attachments::read_attachment(notes_dir, key, &a.id) else { continue };
+        zip.start_file(format!("{ATTACHMENTS_PREFIX}{}", a.id), options).map_err(|e| e.to_string())?;
+        zip.write_all(&bytes).map_err(|e| e.to_string())?;
+        kept.push(a);
+    }
+    if !kept.is_empty() {
+        zip.start_file(ATTACHMENTS_INDEX, options).map_err(|e| e.to_string())?;
+        zip.write_all(serde_json::to_string_pretty(&kept).map_err(|e| e.to_string())?.as_bytes()).map_err(|e| e.to_string())?;
+    }
     Ok(zip.finish().map_err(|e| e.to_string())?.into_inner())
 }
 
@@ -843,7 +860,7 @@ pub(crate) fn import_notes_in(
     let mut contents: Vec<String> = Vec::new();
     for i in 0..archive.len() {
         let f = archive.by_index(i).map_err(|e| e.to_string())?;
-        if f.is_dir() || f.name() == "metadata.json" { continue; }
+        if f.is_dir() || f.name() == "metadata.json" || f.name() == ATTACHMENTS_INDEX || f.name().starts_with(ATTACHMENTS_PREFIX) { continue; }
         contents.push(String::from_utf8_lossy(&read_limited(f)?).into_owned());
     }
     if contents.len() != meta.len() {
@@ -885,6 +902,20 @@ pub(crate) fn import_notes_in(
             }
         }
         report.imported += 1;
+    }
+    // Fichiers joints : rendus à leur note si elle existe, sans doublon.
+    let index: Vec<crate::attachments::Attachment> = match archive.by_name(ATTACHMENTS_INDEX) {
+        Ok(f) => serde_json::from_slice(&read_limited(f)?).unwrap_or_default(),
+        Err(_) => vec![],
+    };
+    for a in index {
+        if !is_valid_uuid(&a.id) || !is_valid_uuid(&a.note_id) { continue; }
+        let note_exists = tx.query_row("SELECT 1 FROM notes WHERE id=?1", [&a.note_id], |_| Ok(())).is_ok();
+        let already = tx.query_row("SELECT 1 FROM attachments WHERE id=?1", [&a.id], |_| Ok(())).is_ok();
+        if !note_exists || already { continue; }
+        let Ok(f) = archive.by_name(&format!("{ATTACHMENTS_PREFIX}{}", a.id)) else { continue };
+        let bytes = read_limited(f)?;
+        crate::attachments::store_attachment(&tx, notes_dir, key, &a.id, &a.note_id, &a.name, &bytes, &a.created_at)?;
     }
     tx.commit().map_err(|e| e.to_string())?;
     Ok(report)

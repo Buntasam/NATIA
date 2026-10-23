@@ -20,9 +20,13 @@ import {
   StickyNote,
   Strikethrough,
   Table,
+  Paperclip,
   Underline,
 } from "lucide-react";
-import { msg, useT } from "../i18n";
+import { invoke } from "@tauri-apps/api/core";
+import { open as openDialog } from "@tauri-apps/plugin-dialog";
+import { useStore } from "../store";
+import { msg, trError, useT } from "../i18n";
 
 const HIGHLIGHT_COLORS = [
   { hex: "#fef08a", label: msg("Jaune") },
@@ -174,6 +178,7 @@ export default function Toolbar({ editor }: { editor: Editor | null }) {
   const linkButtonRef = useRef<HTMLDivElement>(null);
   const t = useT();
   const [tablePicker, setTablePicker] = useState<{ top: number; left: number } | null>(null);
+  const [attachError, setAttachError] = useState("");
   const tableButtonRef = useRef<HTMLDivElement>(null);
   const imageInputRef = useRef<HTMLInputElement>(null);
 
@@ -183,6 +188,25 @@ export default function Toolbar({ editor }: { editor: Editor | null }) {
     setHighlightColor(color);
     editor.chain().focus().toggleHighlight({ color }).run();
     setShowColorPicker(false);
+  };
+
+  /** Joint des fichiers à la note ouverte et insère une pastille par fichier. */
+  const attachFiles = async () => {
+    const note = useStore.getState().activeNote;
+    if (!note || !editor) return;
+    const picked = await openDialog({ multiple: true, title: t("Joindre un fichier") });
+    const paths = Array.isArray(picked) ? picked : typeof picked === "string" ? [picked] : [];
+    if (paths.length === 0) return;
+    try {
+      const added = await invoke<{ id: string; name: string; size: number }[]>("add_attachments", { noteId: note.id, paths });
+      const chain = editor.chain().focus();
+      added.forEach((a) => chain.insertAttachment({ id: a.id, name: a.name, size: a.size }));
+      chain.run();
+    } catch (err) {
+      // Pas de window.alert dans Tauri : message court à côté du bouton.
+      setAttachError(trError(err));
+      setTimeout(() => setAttachError(""), 5000);
+    }
   };
 
   const insertImage = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -412,6 +436,12 @@ export default function Toolbar({ editor }: { editor: Editor | null }) {
         <Image size={15} />
       </Btn>
       <input ref={imageInputRef} type="file" accept="image/*" className="hidden" onChange={insertImage} />
+
+      {/* Fichier joint */}
+      <Btn title={t("Joindre un fichier")} onClick={attachFiles}>
+        <Paperclip size={15} />
+      </Btn>
+      {attachError && <span role="alert" className="text-[10px] text-red-400 max-w-[220px] truncate" title={attachError}>{attachError}</span>}
 
       {/* Table — grid picker */}
       <div ref={tableButtonRef}>

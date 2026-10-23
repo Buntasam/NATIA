@@ -87,6 +87,7 @@ const ERROR_PATTERNS: { re: RegExp; key: string }[] = [
   { re: /^Erreur (Claude API|Gemini API|Mistral API|Ollama|OpenAI) : (.*)$/s, key: "Erreur {0} : {1}" },
   { re: /^Impossible de lancer claude CLI : (.*)$/s, key: "Impossible de lancer claude CLI : {0}" },
   { re: /^Impossible de trouver claude CLI : (.*)$/s, key: "Impossible de trouver claude CLI : {0}" },
+  { re: /^(.+) : fichier trop gros \(100 Mo maximum\)$/s, key: "{0} : fichier trop gros (100 Mo maximum)" },
 ];
 
 export function trError(e: unknown): string {
