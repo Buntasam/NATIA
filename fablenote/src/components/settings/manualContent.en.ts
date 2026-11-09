@@ -454,7 +454,7 @@ export const MANUAL_EN: ManualChapter[] = [
         blocks: [
           { list: [
             "**Automatic** after inactivity (configurable), when Windows locks (`Windows+L`) or when the PC wakes from sleep.",
-            "**Manual**: padlock button in the sidebar, or “Lock” in the menu of the icon next to the clock.",
+            "**Manual**: padlock at the top of the sidebar, `Ctrl+L`, or “Lock” in the menu of the icon next to the clock.",
             "**Mistakes**: after 4 failed attempts, the app locks for longer and longer (30 s, 1 min… up to 24 h), even after a restart.",
           ] },
         ],

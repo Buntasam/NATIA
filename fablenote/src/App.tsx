@@ -12,6 +12,7 @@ import TermsGate from "./components/legal/TermsGate";
 import { LEGAL_VERSION } from "./components/legal/legalContent";
 import LockScreen from "./components/LockScreen";
 import CloseOverlay, { waitForCloseConfirm, callSaveNow } from "./components/CloseOverlay";
+import SplashScreen from "./components/SplashScreen";
 
 export default function App() {
   const { loadNotes, loadSettings, loadFolders, loadColors, loadMemoryNodes, theme, setTheme, isDark, checkSecurity, isLocked, hasPassword } = useStore();
@@ -112,6 +113,7 @@ export default function App() {
 
   return (
     <>
+      <SplashScreen />
       <CloseOverlay />
       {/* Une fois les conditions acceptées : rien n'est demandé au réseau avant. */}
       {terms === "ok" && <UpdatePrompt />}

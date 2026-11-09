@@ -18,3 +18,11 @@ export async function lockSafely(): Promise<void> {
   });
   await useStore.getState().lock();
 }
+
+/** Verrouille ; sans mot de passe, ouvre Paramètres → Sécurité pour en créer un. */
+export function lockOrSetup() {
+  const st = useStore.getState();
+  if (st.hasPassword) { lockSafely(); return; }
+  localStorage.setItem("natia_settings_cat", "security");
+  if (!st.showSettings) st.toggleSettings();
+}

@@ -1301,6 +1301,9 @@ const en: Record<string, string> = {
   // ── Conditions à chaque version
   "NATIA a été mise à jour": "NATIA has been updated",
   "Relisez et acceptez les conditions de cette version pour continuer.": "Read and accept the terms for this version to continue.",
+
+  // ── Bouton verrouiller
+  "Verrouiller : activez d'abord un mot de passe": "Lock: set a password first",
 };
 
 export default en;

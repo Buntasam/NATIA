@@ -474,7 +474,7 @@ export const MANUAL: ManualChapter[] = [
         blocks: [
           { list: [
             "**Automatique** après inactivité (réglable), quand Windows se verrouille (`Windows+L`) ou quand le PC sort de veille.",
-            "**Manuel** : bouton cadenas de la barre latérale, ou « Verrouiller » dans le menu de l'icône près de l'horloge.",
+            "**Manuel** : cadenas en haut de la barre latérale, `Ctrl+L`, ou « Verrouiller » dans le menu de l'icône près de l'horloge.",
             "**Erreurs** : après 4 essais ratés, l'app bloque de plus en plus longtemps (30 s, 1 min… jusqu'à 24 h), même après un redémarrage.",
           ] },
         ],

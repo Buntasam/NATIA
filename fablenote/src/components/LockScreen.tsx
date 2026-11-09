@@ -7,6 +7,7 @@ import ResetConfirmDialog from "./ResetConfirmDialog";
 import RecoveryUnlock from "./RecoveryUnlock";
 import { LockPostIt, POSTIT_COLORS, arePostItsHidden, loadPostIts, newPostIt, savePostIts, setPostItsHidden } from "../lib/lockPostIts";
 import { trError, useT } from "../i18n";
+import { NatiaSymbol } from "./Brand";
 
 const PIN_DOTS = 8;
 // Ancien compteur côté navigateur, contournable : le blocage est désormais géré en Rust.
@@ -233,7 +234,7 @@ export default function LockScreen() {
   if (passwordType === "pin") {
     return (
       <div className="fixed inset-0 z-[200] flex flex-col items-center justify-center bg-panel">
-        <span className="text-accent font-bold text-3xl tracking-tight mb-2 select-none">NATIA</span>
+        <NatiaSymbol size={64} className="text-primary mb-3 select-none" />
         <div className="flex items-center gap-2 mb-10 text-muted text-sm">
           <Lock size={13} />
           <span>{t("Application verrouillée")}</span>
@@ -305,7 +306,7 @@ export default function LockScreen() {
 
   return (
     <div className="fixed inset-0 z-[200] flex flex-col items-center justify-center bg-panel">
-      <span className="text-accent font-bold text-3xl tracking-tight mb-2 select-none">NATIA</span>
+      <NatiaSymbol size={64} className="text-primary mb-3 select-none" />
       <div className="flex items-center gap-2 mb-10 text-muted text-sm">
         <Lock size={13} />
         <span>{t("Application verrouillée")}</span>

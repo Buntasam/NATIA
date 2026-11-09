@@ -2,7 +2,7 @@ import { lazy, Suspense, useEffect, useRef, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { FileText, Search, Terminal, X } from "lucide-react";
 import { useStore } from "../store";
-import { lockSafely } from "../lib/lockSafely";
+import { lockOrSetup, lockSafely } from "../lib/lockSafely";
 import { useT } from "../i18n";
 import AiPanel from "./AiPanel";
 import { ConvHistory, ConvPanel } from "./ConversationPanel";
@@ -71,6 +71,9 @@ export default function Layout() {
         if (st.focusMode) { e.preventDefault(); toggleFocusMode(); return; }
         return;
       }
+
+      // Ctrl+L : verrouiller (ou créer un mot de passe s'il n'y en a pas)
+      if (ctrl && !e.shiftKey && !e.altKey && e.key.toLowerCase() === "l") { e.preventDefault(); lockOrSetup(); return; }
 
       // Alt+← / Alt+→ : navigation entre notes
       if (e.altKey && !ctrl) {

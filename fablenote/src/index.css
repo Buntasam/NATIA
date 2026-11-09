@@ -497,6 +497,30 @@ body,
 .attachment-chip:hover { border-color: #d97757; }
 .ProseMirror-selectednode.attachment-chip { outline: 2px solid rgba(217, 119, 87, 0.5); }
 
+/* ─── Logo animé (Brand.tsx) ─────────────────────────────────────────────────── */
+/* Intro : l'anneau se trace, « A » puis « i » s'écrivent, le satellite fait le tour. */
+.natia-intro .natia-orbit { stroke-dasharray: 100 100; stroke-dashoffset: 100; opacity: 0; animation: natia-draw 1.4s cubic-bezier(.22,1,.36,1) .1s forwards; }
+.natia-intro .natia-a { stroke-dasharray: 100 100; stroke-dashoffset: 100; opacity: 0; animation: natia-draw .7s cubic-bezier(.65,0,.35,1) .45s forwards; }
+.natia-intro .natia-i { stroke-dasharray: 100 100; stroke-dashoffset: 100; opacity: 0; animation: natia-draw .45s cubic-bezier(.65,0,.35,1) .75s forwards; }
+.natia-intro .natia-sat { transform-origin: 60px 60px; transform: rotate(-405deg); animation: natia-orbit 1.4s cubic-bezier(.22,1,.36,1) .1s forwards; }
+.natia-intro .natia-dot { transform-box: fill-box; transform-origin: center; transform: scale(0); animation: natia-pop .35s cubic-bezier(.34,1.56,.64,1) .1s forwards; }
+/* Chargement : le satellite tourne en continu. */
+.natia-loader .natia-sat { transform-origin: 60px 60px; animation: natia-spin 1.6s linear infinite; }
+@keyframes natia-draw { 0% { stroke-dashoffset: 100; opacity: 0 } 1% { opacity: 1 } 100% { stroke-dashoffset: 0; opacity: 1 } }
+@keyframes natia-orbit { to { transform: rotate(-45deg) } }
+@keyframes natia-pop { to { transform: scale(1) } }
+@keyframes natia-spin { from { transform: rotate(-45deg) } to { transform: rotate(315deg) } }
+/* Écran de démarrage : le nom apparaît sous le symbole, puis tout s'efface. */
+@keyframes natia-rise { from { opacity: 0; transform: translateY(6px) } to { opacity: 1; transform: none } }
+.natia-splash-name { opacity: 0; animation: natia-rise .5s ease-out .95s forwards; }
+.natia-splash-out { opacity: 0; transition: opacity .35s ease; }
+@media (prefers-reduced-motion: reduce) {
+  .natia-intro .natia-orbit, .natia-intro .natia-a, .natia-intro .natia-i, .natia-intro .natia-sat, .natia-intro .natia-dot,
+  .natia-loader .natia-sat, .natia-splash-name { animation: none; stroke-dashoffset: 0; opacity: 1; }
+  .natia-intro .natia-sat, .natia-loader .natia-sat { transform: rotate(-45deg); }
+  .natia-intro .natia-dot { transform: none; }
+}
+
 /* ─── D20 animations ─────────────────────────────────────────────────────────── */
 
 @keyframes d20-shake {

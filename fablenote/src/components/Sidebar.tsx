@@ -36,7 +36,7 @@ const GraphPanel = lazy(() => import("./GraphPanel"));
 import ResizeHandle from "./ResizeHandle";
 import Tip from "./Tooltip";
 import { useStore } from "../store";
-import { lockSafely } from "../lib/lockSafely";
+import { lockOrSetup } from "../lib/lockSafely";
 import { NoteMetadata } from "../types";
 import { locale, msg, useT } from "../i18n";
 
@@ -348,8 +348,20 @@ export default function Sidebar() {
         />
         {/* Header */}
         <div className="px-4 py-3 flex items-center gap-2 border-b border-border">
-          <span className="text-accent font-bold text-lg tracking-tight select-none">NATIA</span>
+          <NatiaLockup height={22} className="text-primary select-none" />
           <div className="ml-auto flex items-center gap-0.5">
+            <Tip
+              label={hasPassword ? t("Verrouiller l'application") : t("Verrouiller : activez d'abord un mot de passe")}
+              shortcut={hasPassword ? "Ctrl+L" : undefined}
+            >
+              <button
+                onClick={lockOrSetup}
+                aria-label={t("Verrouiller l'application")}
+                className={`p-1 rounded transition-colors hover:bg-hover ${hasPassword ? "text-muted hover:text-primary" : "text-muted/40 hover:text-muted"}`}
+              >
+                <Lock size={14} />
+              </button>
+            </Tip>
             <Tip label={t("Arborescence")}>
               <button
                 onClick={() => setShowTreeMap(true)}
@@ -677,17 +689,6 @@ export default function Sidebar() {
               <Trash2 size={15} />
             </button>
           </Tip>
-          {hasPassword && (
-            <Tip label={t("Verrouiller l'application")} side="top">
-              <button
-                onClick={() => { lockSafely(); }}
-                aria-label={t("Verrouiller l'application")}
-                className="p-1.5 rounded text-muted hover:text-primary hover:bg-hover transition-colors"
-              >
-                <Lock size={15} />
-              </button>
-            </Tip>
-          )}
           <Tip label={t("Thème : {name}", { name: t(THEME_NAMES[theme] ?? theme) })} side="top">
             <button
               onClick={toggleTheme}
@@ -1168,6 +1169,7 @@ function NoteItem({
 // ─── New folder input ─────────────────────────────────────────────────────────
 
 import React from "react";
+import { NatiaLockup } from "./Brand";
 
 const NewFolderInput = React.forwardRef<
   HTMLInputElement,

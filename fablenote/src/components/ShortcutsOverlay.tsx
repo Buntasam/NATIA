@@ -30,6 +30,7 @@ const GROUPS: { title: string; items: { keys: string; label: string }[] }[] = [
       { keys: "Ctrl+Shift+H", label: msg("Historique des versions") },
       { keys: "Ctrl+G", label: msg("Mémoire IA (graphe)") },
       { keys: "Ctrl+,", label: msg("Paramètres") },
+      { keys: "Ctrl+L", label: msg("Verrouiller l'application") },
       { keys: "Ctrl+/", label: msg("Cette fiche") },
     ],
   },

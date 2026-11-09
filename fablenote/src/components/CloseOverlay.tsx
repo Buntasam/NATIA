@@ -1,7 +1,8 @@
 import { useEffect, useState } from "react";
-import { CheckCircle2, Loader2, LogOut, X } from "lucide-react";
+import { CheckCircle2, LogOut, X } from "lucide-react";
 import { useStore } from "../store";
 import { useT } from "../i18n";
+import { NatiaAnimated, NatiaWordmark } from "./Brand";
 
 let _resolveConfirm: ((v: boolean) => void) | null = null;
 let _saveNow: (() => void) | null = null;
@@ -49,12 +50,12 @@ export default function CloseOverlay() {
     return (
       <div className="fixed inset-0 z-[500] flex items-center justify-center bg-background/80 backdrop-blur-md">
         <div className="flex flex-col items-center gap-5 bg-panel border border-border rounded-2xl shadow-2xl px-12 py-9">
-          <p className="text-xs font-bold tracking-[0.2em] uppercase text-muted/70">NATIA</p>
+          <NatiaWordmark height={12} className="text-muted/70" />
           <div className="flex items-center justify-center w-14 h-14">
             {closeOverlayDone ? (
               <CheckCircle2 size={52} className="text-accent" strokeWidth={1.5} />
             ) : (
-              <Loader2 size={52} className="text-accent animate-spin" strokeWidth={1.5} />
+              <NatiaAnimated size={52} mode="loader" className="text-primary" />
             )}
           </div>
           <p className="text-sm text-secondary">
