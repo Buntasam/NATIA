@@ -25,6 +25,9 @@ const ENGINE_VERSION: &str = "b11476";
 const ENGINE_URL: &str = "https://github.com/ggml-org/llama.cpp/releases/download/b11476/llama-b11476-bin-win-vulkan-x64.zip";
 const ENGINE_SHA256: &str = "5c71e7b749697da4a8d46e9ee55486845cbba27c9dfbecb4007f31ba6610d523";
 const ENGINE_SIZE: u64 = 33_380_424;
+/// Même fichier par l'API de GitHub (identifiant de l'asset) : sert de secours quand
+/// l'adresse de téléchargement habituelle répond 5xx (panne passagère vue le 2026-11-09).
+const ENGINE_API_URL: &str = "https://api.github.com/repos/ggml-org/llama.cpp/releases/assets/619015069";
 const SERVER_EXE: &str = "llama-server.exe";
 
 pub const PROGRESS_EVENT: &str = "llm-download";
@@ -287,20 +290,40 @@ fn hex(bytes: &[u8]) -> String {
 
 /// Télécharge `url` vers `dest` en vérifiant la taille et l'empreinte SHA-256.
 /// Le fichier n'apparaît à `dest` qu'une fois vérifié.
+/// Demande le fichier aux adresses `urls` dans l'ordre, en réessayant les erreurs
+/// passagères (réseau, 5xx, 429) avec une attente croissante. Une 404 ou 403 est définitive.
+async fn open_download(client: &reqwest::Client, state: &LlmState, urls: &[&str]) -> Result<reqwest::Response, String> {
+    let mut last = String::new();
+    for (i, url) in urls.iter().enumerate() {
+        for attempt in 0..3u64 {
+            if state.cancel.load(Ordering::SeqCst) { return Err("Téléchargement annulé".to_string()); }
+            if attempt > 0 || i > 0 { tokio::time::sleep(Duration::from_secs(2 * attempt + 1)).await; }
+            match client.get(*url).header(reqwest::header::ACCEPT, "application/octet-stream").send().await {
+                Ok(r) if r.status().is_success() => return Ok(r),
+                Ok(r) => {
+                    let status = r.status();
+                    last = status.to_string();
+                    if !(status.is_server_error() || status == reqwest::StatusCode::TOO_MANY_REQUESTS) { break; }
+                }
+                Err(e) => last = e.to_string(),
+            }
+        }
+    }
+    Err(format!("Téléchargement impossible : {}", last))
+}
+
 async fn download_verified(
-    app: &AppHandle, state: &LlmState, url: &str, dest: &Path,
+    app: &AppHandle, state: &LlmState, urls: &[&str], dest: &Path,
     sha256: &str, size: u64, kind: &str, id: &str,
 ) -> Result<(), String> {
     if let Some(parent) = dest.parent() { std::fs::create_dir_all(parent).map_err(|e| e.to_string())?; }
     let part = dest.with_extension("part");
     let client = reqwest::Client::builder()
         .connect_timeout(Duration::from_secs(30))
+        .user_agent("NATIA")
         .build()
         .map_err(|e| e.to_string())?;
-    let mut resp = client.get(url).send().await.map_err(|e| format!("Téléchargement impossible : {}", e))?;
-    if !resp.status().is_success() {
-        return Err(format!("Téléchargement impossible : {}", resp.status()));
-    }
+    let mut resp = open_download(&client, state, urls).await?;
 
     let result = async {
         let mut file = std::fs::File::create(&part).map_err(|e| e.to_string())?;
@@ -383,7 +406,7 @@ pub async fn llm_install_engine(app: AppHandle, state: State<'_, LlmState>) -> R
     if engine_installed(&app) { return Ok(()); }
     let _guard = DownloadGuard::take(&state)?;
     let zip_path = llm_dir(&app)?.join(format!("engine-{}.zip", ENGINE_VERSION));
-    download_verified(&app, &state, ENGINE_URL, &zip_path, ENGINE_SHA256, ENGINE_SIZE, "engine", ENGINE_VERSION).await?;
+    download_verified(&app, &state, &[ENGINE_URL, ENGINE_API_URL], &zip_path, ENGINE_SHA256, ENGINE_SIZE, "engine", ENGINE_VERSION).await?;
     let dest = engine_dir(&app)?;
     let res = tokio::task::spawn_blocking({
         let zip_path = zip_path.clone();
@@ -402,7 +425,7 @@ pub async fn llm_download_model(app: AppHandle, state: State<'_, LlmState>, id: 
     let dest = model_path(&app, m)?;
     if dest.is_file() { return Ok(()); }
     let _guard = DownloadGuard::take(&state)?;
-    download_verified(&app, &state, &m.url(), &dest, m.sha256, m.size, "model", m.id).await
+    download_verified(&app, &state, &[&m.url()], &dest, m.sha256, m.size, "model", m.id).await
 }
 
 #[tauri::command]
@@ -695,6 +718,7 @@ mod tests {
         }
         assert_eq!(ENGINE_SHA256.len(), 64);
         assert!(ENGINE_URL.starts_with("https://github.com/ggml-org/llama.cpp/releases/download/"));
+        assert!(ENGINE_API_URL.starts_with("https://api.github.com/repos/ggml-org/llama.cpp/releases/assets/"));
         for id in ["gemma3-1b", "gemma3-4b", "mistral-7b", "gemma3-12b", "bge-m3"] { assert!(catalog_model(id).is_ok()); }
         assert_eq!(EMBED_MODEL.sha256.len(), 64);
         assert!(!CATALOG.iter().any(|m| m.id == EMBED_MODEL.id), "le modèle d'embeddings n'est pas un modèle de chat");

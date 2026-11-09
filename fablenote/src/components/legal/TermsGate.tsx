@@ -40,11 +40,11 @@ export default function TermsGate({ updated, onAccepted }: { updated: boolean; o
           </div>
           <div className="flex-1 min-w-0">
             <h2 className="text-base font-semibold text-primary leading-snug">
-              {updated ? t("Les conditions de NATIA ont changé") : t("Bienvenue dans NATIA")}
+              {updated ? t("NATIA a été mise à jour") : t("Bienvenue dans NATIA")}
             </h2>
             <p className="text-xs text-muted mt-0.5">
               {updated
-                ? t("Lisez et acceptez la nouvelle version pour continuer.")
+                ? t("Relisez et acceptez les conditions de cette version pour continuer.")
                 : t("Avant de commencer, lisez et acceptez les conditions d'utilisation et la politique de confidentialité.")}
             </p>
           </div>

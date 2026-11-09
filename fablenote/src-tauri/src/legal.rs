@@ -1,4 +1,5 @@
-// Acceptation des conditions d'utilisation et de la politique de confidentialité.
+// Acceptation des conditions d'utilisation et de la politique de confidentialité,
+// redemandée à chaque nouvelle version de NATIA (et quand les textes changent).
 // Gardée dans un fichier du dossier de données, hors de la base : lisible avant le
 // déverrouillage, et effacée avec le dossier de données (réinitialisation), ce qui
 // redemande l'acceptation.
@@ -15,6 +16,9 @@ pub struct TermsAcceptance {
     pub version: String,
     /// Date d'acceptation, RFC 3339.
     pub accepted_at: String,
+    /// Version de NATIA au moment de l'acceptation.
+    #[serde(default)]
+    pub app_version: String,
 }
 
 fn terms_path(app: &AppHandle) -> Result<PathBuf, String> {
@@ -25,7 +29,7 @@ fn read_in(path: &Path) -> Option<TermsAcceptance> {
     serde_json::from_str(&std::fs::read_to_string(path).ok()?).ok()
 }
 
-fn write_in(path: &Path, version: &str) -> Result<TermsAcceptance, String> {
+fn write_in(path: &Path, version: &str, app_version: &str) -> Result<TermsAcceptance, String> {
     let version = version.trim();
     if version.is_empty() || version.len() > 32 {
         return Err("Version des conditions invalide".to_string());
@@ -33,6 +37,7 @@ fn write_in(path: &Path, version: &str) -> Result<TermsAcceptance, String> {
     let acceptance = TermsAcceptance {
         version: version.to_string(),
         accepted_at: chrono::Local::now().to_rfc3339(),
+        app_version: app_version.to_string(),
     };
     if let Some(parent) = path.parent() { std::fs::create_dir_all(parent).map_err(|e| e.to_string())?; }
     let json = serde_json::to_string_pretty(&acceptance).map_err(|e| e.to_string())?;
@@ -47,7 +52,7 @@ pub fn get_terms_acceptance(app: AppHandle) -> Result<Option<TermsAcceptance>, S
 
 #[tauri::command]
 pub fn accept_terms(app: AppHandle, version: String) -> Result<TermsAcceptance, String> {
-    write_in(&terms_path(&app)?, &version)
+    write_in(&terms_path(&app)?, &version, &app.package_info().version.to_string())
 }
 
 #[cfg(test)]
@@ -59,9 +64,13 @@ mod tests {
         let dir = std::env::temp_dir().join(format!("natia-terms-{}", std::process::id()));
         let path = dir.join(TERMS_FILE);
         assert_eq!(read_in(&path), None);
-        let written = write_in(&path, "2026-10-23").unwrap();
+        let written = write_in(&path, "2026-10-23", "6.2.4").unwrap();
+        assert_eq!(written.app_version, "6.2.4");
         assert_eq!(read_in(&path), Some(written));
-        assert!(write_in(&path, "  ").is_err());
+        assert!(write_in(&path, "  ", "6.2.4").is_err());
+        // Ancien fichier, sans version de l'app : relu, version vide (acceptation redemandée).
+        std::fs::write(&path, r#"{"version":"2026-10-23","accepted_at":"x"}"#).unwrap();
+        assert_eq!(read_in(&path).unwrap().app_version, "");
         std::fs::write(&path, "pas du json").unwrap();
         assert_eq!(read_in(&path), None);
         let _ = std::fs::remove_dir_all(&dir);

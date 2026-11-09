@@ -1297,6 +1297,10 @@ const en: Record<string, string> = {
   // ── Liaison cloud
   "Lié à {name} ✓": "Linked to {name} ✓",
   "Dernière étape : choisissez le mot de passe de synchronisation ci-dessous, puis Enregistrer. La liaison avec {name} se fait aussitôt.": "Last step: choose the sync password below, then Save. The link with {name} is made right away.",
+
+  // ── Conditions à chaque version
+  "NATIA a été mise à jour": "NATIA has been updated",
+  "Relisez et acceptez les conditions de cette version pour continuer.": "Read and accept the terms for this version to continue.",
 };
 
 export default en;

@@ -11,7 +11,7 @@ export const LEGAL_EN: ManualChapter[] = [
       {
         title: "1. Purpose and acceptance",
         blocks: [
-          { p: "These terms govern the use of NATIA, a note-taking app that runs on your computer. They must be accepted on first launch, after the app is reset, and whenever their content changes. If you don't accept them, don't use NATIA." },
+          { p: "These terms govern the use of NATIA, a note-taking app that runs on your computer. They must be accepted on first launch, after the app is reset, and with every new version of NATIA. If you don't accept them, don't use NATIA." },
           { p: "Last updated: October 23, 2026." },
         ],
       },
@@ -69,7 +69,7 @@ export const LEGAL_EN: ManualChapter[] = [
       {
         title: "9. Updates and changes to the terms",
         blocks: [
-          { p: "NATIA may offer updates; installing them is your choice. These terms may change: the new version will be shown at the next launch and must be accepted to keep using the app." },
+          { p: "NATIA may offer updates; installing them is your choice. These terms may change: they are shown with every new version of NATIA and must be accepted to keep using the app." },
         ],
       },
       {

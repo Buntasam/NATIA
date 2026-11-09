@@ -19,7 +19,7 @@ export const LEGAL: ManualChapter[] = [
       {
         title: "1. Objet et acceptation",
         blocks: [
-          { p: "Ces conditions encadrent l'utilisation de NATIA, une application de prise de notes qui fonctionne sur votre ordinateur. Elles doivent être acceptées au premier lancement, après une réinitialisation de l'application et à chaque modification de leur contenu. Si vous ne les acceptez pas, n'utilisez pas NATIA." },
+          { p: "Ces conditions encadrent l'utilisation de NATIA, une application de prise de notes qui fonctionne sur votre ordinateur. Elles doivent être acceptées au premier lancement, après une réinitialisation de l'application et à chaque nouvelle version de NATIA. Si vous ne les acceptez pas, n'utilisez pas NATIA." },
           { p: "Dernière mise à jour : 23 octobre 2026." },
         ],
       },
@@ -77,7 +77,7 @@ export const LEGAL: ManualChapter[] = [
       {
         title: "9. Mises à jour et modification des conditions",
         blocks: [
-          { p: "NATIA peut proposer des mises à jour ; leur installation reste votre choix. Ces conditions peuvent évoluer : la nouvelle version vous sera présentée au lancement suivant et devra être acceptée pour continuer à utiliser l'application." },
+          { p: "NATIA peut proposer des mises à jour ; leur installation reste votre choix. Ces conditions peuvent évoluer : elles vous sont présentées à chaque nouvelle version de NATIA et doivent être acceptées pour continuer à utiliser l'application." },
         ],
       },
       {

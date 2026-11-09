@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
+import { getVersion } from "@tauri-apps/api/app";
 import { listen } from "@tauri-apps/api/event";
 import { lockSafely } from "./lib/lockSafely";
 import { isCloseToTray } from "./lib/windowPrefs";
@@ -19,11 +20,12 @@ export default function App() {
     setTheme(theme);
   }, []);
 
-  // Conditions acceptées ? null = pas encore lu, "old" = une version précédente a été acceptée.
+  // Conditions acceptées ? null = pas encore lu, "old" = acceptées pour une version
+  // précédente de NATIA ou des textes : elles sont redemandées à chaque nouvelle version.
   const [terms, setTerms] = useState<"ok" | "missing" | "old" | null>(null);
   useEffect(() => {
-    invoke<{ version: string } | null>("get_terms_acceptance")
-      .then((a) => setTerms(!a ? "missing" : a.version === LEGAL_VERSION ? "ok" : "old"))
+    Promise.all([invoke<{ version: string; app_version: string } | null>("get_terms_acceptance"), getVersion()])
+      .then(([a, appVersion]) => setTerms(!a ? "missing" : a.version === LEGAL_VERSION && a.app_version === appVersion ? "ok" : "old"))
       .catch(() => setTerms("missing"));
   }, []);
 
