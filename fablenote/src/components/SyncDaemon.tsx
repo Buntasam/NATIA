@@ -1,12 +1,13 @@
 import { useEffect } from "react";
-import { syncNow } from "../lib/sync";
+import { refreshSyncState, syncNow, useSyncState } from "../lib/sync";
 
 const INTERVAL_MS = 5 * 60 * 1000;
 
 /** Monté avec l'app déverrouillée : synchronise à l'ouverture, toutes les 5 min et en revenant sur la fenêtre. */
 export default function SyncDaemon() {
   useEffect(() => {
-    const tick = () => { syncNow().catch(() => {}); };
+    refreshSyncState();
+    const tick = () => { if (useSyncState.getState().enabled) syncNow().catch(() => {}); };
     const first = setTimeout(tick, 5000);
     const id = setInterval(tick, INTERVAL_MS);
     let lastFocus = 0;

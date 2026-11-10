@@ -1,0 +1,55 @@
+name: Signaler un bug
+description: Quelque chose ne marche pas comme prévu dans NATIA.
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Merci de prendre le temps de signaler ce problème.
+        **Ne collez jamais le contenu de vos notes, vos mots de passe ni vos clés API.**
+  - type: input
+    id: version
+    attributes:
+      label: Version de NATIA
+      description: Paramètres → À propos (ou le nom du fichier d'installation).
+      placeholder: "6.2.6"
+    validations:
+      required: true
+  - type: input
+    id: windows
+    attributes:
+      label: Version de Windows
+      placeholder: "Windows 11 23H2"
+  - type: textarea
+    id: what
+    attributes:
+      label: Ce qui se passe
+      description: Ce que vous avez fait, ce que vous attendiez, ce qui s'est passé à la place.
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Pour reproduire
+      placeholder: |
+        1. Ouvrir…
+        2. Cliquer sur…
+        3. …
+  - type: dropdown
+    id: area
+    attributes:
+      label: Partie concernée
+      options:
+        - Éditeur / notes
+        - IA (intégrée, Ollama ou clé API)
+        - Synchronisation entre PC
+        - Sauvegardes / import / export
+        - Mot de passe / verrouillage
+        - Installation / mise à jour
+        - Autre
+  - type: textarea
+    id: logs
+    attributes:
+      label: Message d'erreur
+      description: Le message affiché, ou un extrait de la console de débogage (Paramètres → mode debug).
+      render: text

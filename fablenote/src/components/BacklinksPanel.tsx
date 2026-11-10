@@ -3,6 +3,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { Link2, X } from "lucide-react";
 import { useStore } from "../store";
 import { useT } from "../i18n";
+import { RelatedNote, relatedNotes } from "../lib/related";
 
 interface SearchResult {
   id: string;
@@ -21,6 +22,20 @@ export default function BacklinksPanel({ onClose }: Props) {
   const [backlinks, setBacklinks] = useState<SearchResult[]>([]);
   const [loading, setLoading] = useState(false);
   const t = useT();
+
+  // Notes qui parlent de la même chose, même sans lien [[…]] entre elles.
+  const [related, setRelated] = useState<RelatedNote[]>([]);
+  const [relatedLoading, setRelatedLoading] = useState(false);
+  useEffect(() => {
+    if (!activeNote) return;
+    let cancelled = false;
+    setRelatedLoading(true);
+    relatedNotes(activeNote.id, 6)
+      .then((r) => { if (!cancelled) setRelated(r); })
+      .catch(() => { if (!cancelled) setRelated([]); })
+      .finally(() => { if (!cancelled) setRelatedLoading(false); });
+    return () => { cancelled = true; };
+  }, [activeNote?.id]);
 
   useEffect(() => {
     if (!activeNote) return;
@@ -65,6 +80,33 @@ export default function BacklinksPanel({ onClose }: Props) {
       </div>
 
       <div className="flex-1 overflow-y-auto p-3 space-y-4">
+        <section>
+          <p className="text-xs font-semibold text-muted uppercase tracking-wider mb-2">
+            {t("Notes liées")}
+          </p>
+          {relatedLoading && <p className="text-xs text-muted px-3">{t("Recherche…")}</p>}
+          {!relatedLoading && related.length === 0 && (
+            <p className="text-xs text-muted px-3">{t("Aucune note proche pour l'instant")}</p>
+          )}
+          <div className="space-y-1">
+            {!relatedLoading && related.map((n) => (
+              <button
+                key={n.id}
+                onClick={() => selectNote(n.id)}
+                className="w-full flex items-center gap-2 text-left px-3 py-2 rounded-lg hover:bg-hover transition-colors"
+              >
+                <span className="flex-1 min-w-0 text-sm text-primary truncate">{n.title || t("Sans titre")}</span>
+                <span
+                  className="shrink-0 h-1.5 w-10 rounded-full bg-hover overflow-hidden"
+                  title={t("Proximité : {n} %", { n: Math.round(n.score * 100) })}
+                >
+                  <span className="block h-full bg-accent/70" style={{ width: `${Math.round(n.score * 100)}%` }} />
+                </span>
+              </button>
+            ))}
+          </div>
+        </section>
+
         {/* Outgoing links */}
         {outLinks.length > 0 && (
           <section>

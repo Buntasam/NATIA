@@ -1,9 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
-import { getVersion } from "@tauri-apps/api/app";
 import {
-  Activity,
   AlertTriangle,
   ArrowRight,
   Bug,
@@ -11,7 +9,6 @@ import {
   BrainCircuit,
   CheckCheck,
   ChevronDown,
-  Clipboard,
   Download,
   FileText,
   Languages,
@@ -31,120 +28,19 @@ import CloudAiNotice, { onlineProviderLabel } from "./CloudAiNotice";
 import { fetchModels } from "../hooks/useOllama";
 import { CorrectionModal } from "./ai/CorrectionModal";
 import { OpButton } from "./ai/OpButton";
-import { TraceRow } from "./ai/TraceRow";
 import { aiChat, aiStream, activeModel } from "../lib/aiInvoke";
 import { buildMemoryContext } from "../lib/memoryContext";
 import { locale, msg, tr, trError, useT } from "../i18n";
 import { useStore } from "../store";
 import PromptLangPicker from "./PromptLangPicker";
 import Tip from "./Tooltip";
-import DebugConsole from "./DebugConsole";
 import { addAiLog } from "../debug/logger";
-
-interface PullProgress {
-  status: string;
-  total: number;
-  completed: number;
-  percent: number;
-}
-
-interface TraceEntry {
-  operation: string;
-  model: string;
-  system: string;
-  user: string;
-  response: string;
-  elapsed: number;
-  status: "running" | "done" | "error";
-  error: string;
-}
-
-type Tab = "ops" | "trace";
-
-interface SortProposal {
-  id: string;
-  title: string;
-  currentFolder: string | null;
-  suggestedFolder: string | null;
-  accepted: boolean;
-}
-
-interface ApiKey {
-  id: string;
-  name: string;
-  provider: string;
-  key_value: string;
-  color: string;
-  model: string;
-}
-
-const COLORS = ["#6366f1","#10b981","#f59e0b","#ef4444","#8b5cf6","#06b6d4","#f97316","#ec4899"];
-
-const PROVIDER_MODELS: Record<string, { value: string; label: string }[]> = {
-  Anthropic: [
-    { value: "claude-haiku-4-5-20251001", label: "Haiku 4.5" },
-    { value: "claude-sonnet-4-6", label: "Sonnet 4.6" },
-    { value: "claude-opus-4-8", label: "Opus 4.8" },
-  ],
-  OpenAI: [
-    { value: "gpt-4o-mini", label: "GPT-4o Mini" },
-    { value: "gpt-4o", label: "GPT-4o" },
-    { value: "gpt-4-turbo", label: "GPT-4 Turbo" },
-    { value: "o1-mini", label: "o1 Mini" },
-  ],
-  Gemini: [
-    { value: "gemini-2.0-flash", label: "2.0 Flash" },
-    { value: "gemini-1.5-flash", label: "1.5 Flash" },
-    { value: "gemini-1.5-pro", label: "1.5 Pro" },
-  ],
-  Mistral: [
-    { value: "mistral-small-latest", label: "Small" },
-    { value: "mistral-medium-latest", label: "Medium" },
-    { value: "mistral-large-latest", label: "Large" },
-  ],
-  Groq: [
-    { value: "llama-3.1-8b-instant", label: "Llama 3.1 8B" },
-    { value: "llama-3.1-70b-versatile", label: "Llama 3.1 70B" },
-    { value: "mixtral-8x7b-32768", label: "Mixtral 8x7B" },
-  ],
-};
-
-function defaultModelForProvider(provider: string): string {
-  return PROVIDER_MODELS[provider]?.[0]?.value ?? "";
-}
-
-// Niveaux de longueur des réponses — jauge signal compacte
-const INTENSITY: { key: "eco" | "low" | "medium" | "high" | "max"; label: string; color: string; desc: string }[] = [
-  { key: "eco",    label: msg("Éco"),      color: "#22c55e", desc: msg("Ultra-court — 1 à 2 phrases") },
-  { key: "low",    label: msg("Concis"),   color: "#2dd4bf", desc: msg("Court — 3 à 5 phrases") },
-  { key: "medium", label: msg("Normal"),   color: "#d97757", desc: msg("Longueur standard") },
-  { key: "high",   label: msg("Détaillé"), color: "#fb923c", desc: msg("Développé avec contexte") },
-  { key: "max",    label: msg("Complet"),  color: "#f87171", desc: msg("Exhaustif et structuré") },
-];
-
-// Langues proposées pour « Traduire » (noms français = identifiants, traduits à l'affichage).
-const TRANSLATE_LANGS = [
-  msg("français"), msg("anglais"), msg("espagnol"), msg("allemand"), msg("italien"),
-  msg("portugais"), msg("japonais"), msg("chinois"), msg("arabe"), msg("russe"),
-];
-
-const capitalize = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
-
-/** Libellé affiché d'une opération (identifiants internes en français). */
-const OP_LABELS: Record<string, string> = {
-  Résumer: msg("Résumer"), Corriger: msg("Corriger"), Renommer: msg("Renommer"), Trier: msg("Trier"),
-  Formaliser: msg("Formaliser"), Traduire: msg("Traduire"), Continuer: msg("Continuer"),
-  "Appliquer tri": msg("Appliquer tri"), "Chat debug": msg("Chat debug"),
-};
-
-function detectProvider(key: string): string {
-  if (key.startsWith("sk-ant-")) return "Anthropic";
-  if (key.startsWith("AIza")) return "Gemini";
-  if (key.startsWith("gsk_")) return "Groq";
-  if (/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(key)) return "Mistral";
-  if (key.startsWith("sk-")) return "OpenAI";
-  return "";
-}
+import { AddKeyForm } from "./ai/AddKeyForm";
+import { AiDebugTab } from "./ai/AiDebugTab";
+import {
+  ApiKey, INTENSITY, OP_LABELS, PullProgress, SortProposal, Tab, TraceEntry,
+  TRANSLATE_LANGS, capitalize,
+} from "./ai/shared";
 
 export default function AiPanel({ onOpenConv }: { onOpenConv: () => void }) {
   const { activeNote, settings, saveSettings, folders, toggleAiPanel, updateNote, renameNote, moveNote, createFolder, loadNotes, loadFolders, memoryEnabled, memoryNodes } = useStore();
@@ -163,8 +59,6 @@ export default function AiPanel({ onOpenConv }: { onOpenConv: () => void }) {
   const [activeConnectionId, setActiveConnectionId] = useState<string | null>(null);
   const [showAddKey, setShowAddKey] = useState(false);
   const [providerMenuOpen, setProviderMenuOpen] = useState(false);
-  const [addKeyForm, setAddKeyForm] = useState({ name: "", provider: "", key_value: "", color: COLORS[0], model: "" });
-  const [addKeySaving, setAddKeySaving] = useState(false);
 
   // Connection test
   const [connTestStatus, setConnTestStatus] = useState<"idle" | "testing" | "ok" | "error">("idle");
@@ -172,10 +66,6 @@ export default function AiPanel({ onOpenConv }: { onOpenConv: () => void }) {
 
   // Debug mode
   const [errorLog, setErrorLog] = useState<{ time: string; op: string; msg: string }[]>([]);
-  const [appVersion, setAppVersion] = useState("");
-  const sessionStartRef = useRef(Date.now());
-
-  useEffect(() => { getVersion().then(setAppVersion).catch(() => {}); }, []);
 
   // Auto-switch back to ops if debug mode is disabled while on trace tab
   useEffect(() => {
@@ -343,27 +233,19 @@ export default function AiPanel({ onOpenConv }: { onOpenConv: () => void }) {
   const [isRefreshing, setIsRefreshing] = useState(false);
 
   // Trace tab state
-  const [traceInput, setTraceInput] = useState("");
-  const [traceResponse, setTraceResponse] = useState("");
-  const [isTracing, setIsTracing] = useState(false);
   const [lastTrace, setLastTrace] = useState<TraceEntry | null>(null);
   const [traceHistory, setTraceHistory] = useState<TraceEntry[]>([]);
   const lastFinalizedRef = useRef<TraceEntry | null>(null);
 
   const responseRef = useRef<HTMLDivElement>(null);
-  const traceResponseRef = useRef<HTMLDivElement>(null);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const startTimeRef = useRef<number>(0);
   const pullUnlistenRef = useRef<(() => void) | null>(null);
-  const traceTokenRef = useRef<(() => void) | null>(null);
-  const traceDoneRef = useRef<(() => void) | null>(null);
 
   useEffect(() => {
     return () => {
       if (timerRef.current) clearInterval(timerRef.current);
       if (pullUnlistenRef.current) { pullUnlistenRef.current(); pullUnlistenRef.current = null; }
-      if (traceTokenRef.current) { traceTokenRef.current(); traceTokenRef.current = null; }
-      if (traceDoneRef.current) { traceDoneRef.current(); traceDoneRef.current = null; }
     };
   }, []);
 
@@ -388,12 +270,6 @@ export default function AiPanel({ onOpenConv }: { onOpenConv: () => void }) {
       responseRef.current.scrollTop = responseRef.current.scrollHeight;
     }
   }, [response]);
-
-  useEffect(() => {
-    if (traceResponseRef.current) {
-      traceResponseRef.current.scrollTop = traceResponseRef.current.scrollHeight;
-    }
-  }, [traceResponse]);
 
   // Feed AI operation lifecycle into the global debug logger
   useEffect(() => {
@@ -849,40 +725,6 @@ export default function AiPanel({ onOpenConv }: { onOpenConv: () => void }) {
     }
   };
 
-  // ─── Trace tab: direct streaming chat ────────────────────────────────────────
-
-  const runTrace = async () => {
-    const msg = traceInput.trim();
-    if (!msg || isTracing) return;
-    setTraceResponse("");
-    setIsTracing(true);
-
-    if (traceTokenRef.current) { traceTokenRef.current(); traceTokenRef.current = null; }
-    if (traceDoneRef.current) { traceDoneRef.current(); traceDoneRef.current = null; }
-
-    const acc = { value: "" };
-
-    traceTokenRef.current = await listen<string>("ollama-token", (ev) => {
-      acc.value += ev.payload;
-      setTraceResponse(acc.value);
-    });
-
-    traceDoneRef.current = await listen<string>("ollama-done", () => {
-      setIsTracing(false);
-      if (traceTokenRef.current) { traceTokenRef.current(); traceTokenRef.current = null; }
-      if (traceDoneRef.current) { traceDoneRef.current(); traceDoneRef.current = null; }
-    });
-
-    try {
-      await doStream(shadowPrompt, msg, []);
-    } catch (e: unknown) {
-      const errMsg = e instanceof Error ? e.message : trError(e);
-      setTraceResponse(t("Erreur : {e}", { e: errMsg }));
-      setIsTracing(false);
-      logError("Chat debug", errMsg);
-    }
-  };
-
   return (
     <>
     {pendingCorrection && (
@@ -1063,7 +905,7 @@ export default function AiPanel({ onOpenConv }: { onOpenConv: () => void }) {
                       ))}
                       <div className="my-1 border-t border-border" />
                       <button
-                        onClick={() => pick(() => { setShowAddKey(true); setAddKeyForm({ name: "", provider: "", key_value: "", color: COLORS[0], model: "" }); })}
+                        onClick={() => pick(() => setShowAddKey(true))}
                         className="w-full flex items-center gap-2 px-3 py-2 text-left hover:bg-hover transition-colors text-accent"
                       >
                         <Plus size={12} className="shrink-0" />
@@ -1108,77 +950,15 @@ export default function AiPanel({ onOpenConv }: { onOpenConv: () => void }) {
 
         {/* Inline add-key form */}
         {activeTab === "ops" && showAddKey && (
-          <div className="mx-3 mb-2 flex flex-col gap-2 p-3 rounded-lg border border-accent/30 bg-accent/5">
-            <div className="relative">
-              <input
-                type="password"
-                value={addKeyForm.key_value}
-                onChange={(e) => {
-                  const key = e.target.value;
-                  const detected = detectProvider(key);
-                  setAddKeyForm((f) => ({
-                    ...f, key_value: key,
-                    ...(detected ? { provider: detected, model: defaultModelForProvider(detected) } : {}),
-                    ...(detected && !f.name ? { name: detected } : {}),
-                  }));
-                }}
-                placeholder={t("Colle ta clé API (sk-ant-..., sk-..., AIza...)")}
-                className="w-full bg-hover border border-border rounded-lg px-2.5 py-1.5 text-xs text-primary outline-none focus:border-accent/50 placeholder-muted font-mono"
-              />
-              {addKeyForm.provider && (
-                <span className="absolute right-2.5 top-1/2 -translate-y-1/2 text-[10px] text-accent font-medium">{addKeyForm.provider}</span>
-              )}
-            </div>
-            <div className="flex gap-2">
-              <input
-                value={addKeyForm.name}
-                onChange={(e) => setAddKeyForm((f) => ({ ...f, name: e.target.value }))}
-                placeholder={t("Nom de la connexion")}
-                className="flex-1 bg-hover border border-border rounded-lg px-2.5 py-1.5 text-xs text-primary outline-none focus:border-accent/50 placeholder-muted"
-              />
-              <div className="flex gap-1 items-center">
-                {COLORS.map((c) => (
-                  <button key={c} onClick={() => setAddKeyForm((f) => ({ ...f, color: c }))}
-                    className="w-4 h-4 rounded-full transition-transform hover:scale-110 shrink-0"
-                    style={{ backgroundColor: c, outline: c === addKeyForm.color ? `2px solid ${c}` : "none", outlineOffset: "2px" }}
-                  />
-                ))}
-              </div>
-            </div>
-            {PROVIDER_MODELS[addKeyForm.provider] && (
-              <select
-                value={addKeyForm.model}
-                onChange={(e) => setAddKeyForm((f) => ({ ...f, model: e.target.value }))}
-                className="w-full bg-hover border border-border rounded-lg px-2.5 py-1.5 text-xs text-primary outline-none"
-              >
-                {PROVIDER_MODELS[addKeyForm.provider].map((m) => (
-                  <option key={m.value} value={m.value}>{m.label}</option>
-                ))}
-              </select>
-            )}
-            <div className="flex gap-2">
-              <button
-                disabled={!addKeyForm.key_value.trim() || !addKeyForm.name.trim() || addKeySaving}
-                onClick={async () => {
-                  if (!addKeyForm.key_value.trim() || !addKeyForm.name.trim()) return;
-                  setAddKeySaving(true);
-                  try {
-                    const id = crypto.randomUUID();
-                    await invoke("upsert_api_key", { key: { id, ...addKeyForm } });
-                    await loadConnections();
-                    setActiveConnectionId(id);
-                    setLocalProvider("ollama");
-                    setShowAddKey(false);
-                  } finally { setAddKeySaving(false); }
-                }}
-                className="flex items-center gap-1 px-3 py-1.5 rounded-lg bg-accent hover:bg-accent-hover disabled:opacity-40 text-white text-xs transition-colors"
-              >
-                {addKeySaving ? <Loader2 size={11} className="animate-spin" /> : <Plus size={11} />}
-                {t("Ajouter")}
-              </button>
-              <button onClick={() => setShowAddKey(false)} className="px-3 py-1.5 rounded-lg bg-hover text-muted text-xs transition-colors">{t("Annuler")}</button>
-            </div>
-          </div>
+          <AddKeyForm
+            onAdded={async (id) => {
+              await loadConnections();
+              setActiveConnectionId(id);
+              setLocalProvider("ollama");
+              setShowAddKey(false);
+            }}
+            onCancel={() => setShowAddKey(false)}
+          />
         )}
       </div>
 
@@ -1644,221 +1424,28 @@ export default function AiPanel({ onOpenConv }: { onOpenConv: () => void }) {
           </>
         )}
 
-        {/* ── DEBUG TAB ────────────────────────────────────────────── */}
+        {/* ── DEBUG TAB ──────────────────────────────────────────────── */}
         {activeTab === "trace" && (
-          <>
-            {/* App info */}
-            <div className="bg-panel rounded-lg p-3 flex flex-col gap-1.5 border border-amber-500/20">
-              <div className="flex items-center gap-1.5 mb-0.5">
-                <Bug size={11} className="text-amber-400" />
-                <span className="text-xs font-medium text-amber-400">{t("Info session")}</span>
-              </div>
-              <TraceRow label={t("version")} value={appVersion || "…"} />
-              <TraceRow label={t("durée")} value={(() => {
-                const s = Math.floor((Date.now() - sessionStartRef.current) / 1000);
-                if (s < 60) return `${s}s`;
-                if (s < 3600) return `${Math.floor(s/60)}m ${s%60}s`;
-                return `${Math.floor(s/3600)}h ${Math.floor((s%3600)/60)}m`;
-              })()} />
-              <TraceRow label={t("fournisseur")} value={isConnectionActive
-                ? (apiConnections.find(c => c.id === activeConnectionId)?.name ?? t("connexion"))
-                : localProvider} />
-              <TraceRow label={t("modèle")} value={isConnectionActive
-                ? (apiConnections.find(c => c.id === activeConnectionId)?.model || "auto")
-                : activeModel(effectiveSettings, selectedModel)} />
-              <TraceRow label={t("température")} value={String(settings.temperature)} />
-              <TraceRow label={t("contexte")} value={settings.context_messages === 0 ? t("illimité") : t("{n} messages", { n: settings.context_messages })} />
-              <TraceRow label={t("erreurs de la session")} value={String(errorLog.length)} dim={errorLog.length === 0} />
-            </div>
-
-            {/* Debug console — logs temps réel */}
-            <DebugConsole />
-
-            {/* Connection info */}
-            <div className="bg-panel rounded-lg p-3 flex flex-col gap-1.5 border border-border">
-              <div className="flex items-center gap-1.5 mb-0.5">
-                <Activity size={11} className="text-accent" />
-                <span className="text-xs font-medium text-secondary">{t("Connexion")}</span>
-                {localProvider === "ollama" && (
-                  <button
-                    onClick={refreshModels}
-                    disabled={isRefreshing}
-                    className="ml-auto p-0.5 rounded text-muted hover:text-primary transition-colors disabled:opacity-40"
-                  >
-                    <RefreshCw size={10} className={isRefreshing ? "animate-spin" : ""} />
-                  </button>
-                )}
-              </div>
-              <TraceRow label={t("fournisseur")} value={
-                localProvider === "ollama" ? t("Ollama (local)")
-                : localProvider === "claude" ? "Claude API"
-                : localProvider === "claude_cli" ? "Claude Code CLI"
-                : localProvider === "openai" ? "OpenAI"
-                : localProvider === "gemini" ? "Google Gemini"
-                : "Mistral"
-              } />
-              <TraceRow label={t("modèle")} value={activeModel(effectiveSettings, selectedModel)} />
-              {localProvider === "ollama" && (
-                <TraceRow
-                  label={t("modèles")}
-                  value={
-                    isRefreshing
-                      ? t("rafraîchissement…")
-                      : models.length > 0
-                      ? `${t("{n} disponible(s) :", { n: models.length })} ${models.slice(0, 3).join(", ")}${models.length > 3 ? "…" : ""}`
-                      : t("aucun — Ollama est-il lancé ?")
-                  }
-                  dim={models.length === 0 && !isRefreshing}
-                />
-              )}
-              {localProvider === "ollama" && (
-                <TraceRow label="url" value={settings.ollama_url} />
-              )}
-            </div>
-
-            {/* Direct streaming chat */}
-            <div className="flex flex-col gap-1.5">
-              <p className="text-xs text-muted">{t("Chat direct — streaming")}</p>
-              <div className="flex gap-1.5">
-                <input
-                  value={traceInput}
-                  onChange={(e) => setTraceInput(e.target.value)}
-                  onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); runTrace(); } }}
-                  placeholder={t("Message à l'IA…")}
-                  disabled={isTracing}
-                  className="flex-1 bg-hover border border-border rounded-lg px-2.5 py-1.5 text-xs text-primary outline-none focus:border-accent/50 placeholder-muted"
-                />
-                <button
-                  onClick={runTrace}
-                  disabled={isTracing || !traceInput.trim()}
-                  className="flex items-center justify-center w-8 rounded-lg bg-accent hover:bg-accent-hover disabled:opacity-40 text-white transition-colors shrink-0"
-                >
-                  {isTracing ? <Loader2 size={11} className="animate-spin" /> : <Send size={11} />}
-                </button>
-              </div>
-              {(traceResponse || isTracing) && (
-                <div
-                  ref={traceResponseRef}
-                  className="bg-hover border border-border rounded-lg px-3 py-2 text-xs text-secondary max-h-40 overflow-y-auto font-mono whitespace-pre-wrap leading-relaxed"
-                >
-                  {traceResponse}
-                  {isTracing && <span className="animate-pulse text-accent ml-0.5">▋</span>}
-                </div>
-              )}
-            </div>
-
-            {/* Last operation log */}
-            {lastTrace && (
-              <div className="flex flex-col gap-1.5">
-                <div className="flex items-center gap-2">
-                  <p className="text-xs text-muted">{t("Dernière opération")}</p>
-                  {lastTrace.status === "running" && (
-                    <Loader2 size={10} className="text-accent animate-spin" />
-                  )}
-                  {lastTrace.status === "done" && (
-                    <span className="text-[10px] text-accent">✓ {lastTrace.elapsed}s</span>
-                  )}
-                  {lastTrace.status === "error" && (
-                    <span className="text-[10px] text-red-400">✗ {t("erreur")}</span>
-                  )}
-                  <span className="text-[9px] text-muted/60 ml-auto">
-                    ~{Math.round((lastTrace.system.length + lastTrace.user.length) / 4)} tokens
-                  </span>
-                </div>
-                <div className="bg-panel border border-border rounded-lg p-3 font-mono text-[10px] flex flex-col gap-2 leading-relaxed">
-                  <div className="flex gap-2 items-center">
-                    <span className="text-muted w-12 shrink-0">op</span>
-                    <span className="text-accent font-semibold">{opLabel(lastTrace.operation)}</span>
-                  </div>
-                  <div className="flex gap-2 items-center">
-                    <span className="text-muted w-12 shrink-0">{t("modèle")}</span>
-                    <span className="text-secondary">{lastTrace.model}</span>
-                  </div>
-                  {lastTrace.elapsed > 0 && (
-                    <div className="flex gap-2 items-center">
-                      <span className="text-muted w-12 shrink-0">{t("temps")}</span>
-                      <span className="text-accent">{lastTrace.elapsed}s</span>
-                    </div>
-                  )}
-                  <div className="border-t border-border/40 pt-2">
-                    <p className="text-muted mb-1">// {t("prompt système")}</p>
-                    <p className="text-secondary/70 line-clamp-2 break-words">{lastTrace.system}</p>
-                  </div>
-                  <div>
-                    <p className="text-muted mb-1">// {t("message envoyé")}</p>
-                    <p className="text-secondary/70 line-clamp-3 break-words">{lastTrace.user}</p>
-                  </div>
-                  {lastTrace.response && (
-                    <div>
-                      <p className="text-muted mb-1">// {t("réponse")}</p>
-                      <p className="text-secondary/80 line-clamp-4 break-words">{lastTrace.response}</p>
-                    </div>
-                  )}
-                  {lastTrace.error && (
-                    <p className="text-red-400 bg-red-400/10 rounded px-2 py-1 break-all">{lastTrace.error}</p>
-                  )}
-                </div>
-              </div>
-            )}
-
-            {!lastTrace && traceHistory.length === 0 && (
-              <div className="text-center py-6">
-                <Zap size={20} className="text-muted mx-auto mb-2" />
-                <p className="text-xs text-muted">{t("Lance une opération pour voir la trace")}</p>
-              </div>
-            )}
-
-            {/* Trace history */}
-            {traceHistory.length > 0 && (
-              <div className="flex flex-col gap-1.5">
-                <div className="flex items-center justify-between">
-                  <p className="text-xs text-muted">{t("Historique")}</p>
-                  <button
-                    onClick={() => { setTraceHistory([]); lastFinalizedRef.current = null; }}
-                    className="text-[10px] text-muted hover:text-primary transition-colors"
-                  >
-                    {t("Effacer")}
-                  </button>
-                </div>
-                <div className="flex flex-col gap-1">
-                  {traceHistory.map((entry, i) => {
-                    const tokens = Math.round((entry.system.length + entry.user.length) / 4);
-                    return (
-                      <div key={i} className="flex items-center gap-2 px-2.5 py-1.5 bg-panel rounded-lg border border-border/50 text-[10px] group">
-                        <span className={entry.status === "done" ? "text-accent shrink-0" : "text-red-400 shrink-0"}>
-                          {entry.status === "done" ? "✓" : "✗"}
-                        </span>
-                        <span className="text-secondary font-mono flex-1 min-w-0 truncate">
-                          {opLabel(entry.operation)} · {entry.model.split(":")[0]} · {entry.elapsed}s · ~{tokens}tk
-                        </span>
-                        <button
-                          onClick={() => {
-                            const text = [
-                              `op: ${opLabel(entry.operation)}`,
-                              `${t("modèle")}: ${entry.model}`,
-                              `${t("statut")}: ${entry.status} (${entry.elapsed}s)`,
-                              `~${tokens} tokens`,
-                              entry.error ? `${t("erreur")}: ${entry.error}` : null,
-                              `\n--- ${t("prompt système")} ---`,
-                              entry.system,
-                              `\n--- ${t("message envoyé")} ---`,
-                              entry.user,
-                              entry.response ? `\n--- ${t("réponse")} ---\n${entry.response}` : null,
-                            ].filter(Boolean).join("\n");
-                            navigator.clipboard.writeText(text).catch(() => {});
-                          }}
-                          className="text-muted hover:text-primary transition-colors opacity-0 group-hover:opacity-100 shrink-0"
-                          title={t("Copier la trace")}
-                        >
-                          <Clipboard size={10} />
-                        </button>
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-            )}
-          </>
+          <AiDebugTab
+            providerLabel={isConnectionActive
+              ? (apiConnections.find(c => c.id === activeConnectionId)?.name ?? t("connexion"))
+              : localProvider}
+            sessionModel={isConnectionActive
+              ? (apiConnections.find(c => c.id === activeConnectionId)?.model || "auto")
+              : activeModel(effectiveSettings, selectedModel)}
+            model={activeModel(effectiveSettings, selectedModel)}
+            localProvider={localProvider}
+            errorCount={errorLog.length}
+            models={models}
+            isRefreshing={isRefreshing}
+            refreshModels={refreshModels}
+            lastTrace={lastTrace}
+            traceHistory={traceHistory}
+            clearHistory={() => { setTraceHistory([]); lastFinalizedRef.current = null; }}
+            opLabel={opLabel}
+            stream={(msg) => doStream(shadowPrompt, msg, [])}
+            logError={logError}
+          />
         )}
       </div>
     </div>

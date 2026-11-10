@@ -32,7 +32,8 @@ L'installeur n'est pas signé : Windows SmartScreen affiche « Windows a protég
 - **Post-its** — blocs colorés repositionnables dans la note
 - **Wikilinks** — liens `[[Titre de note]]` avec navigation directe
 - **Rappels** — blocs de rappel avec date/heure, notification Windows à l'échéance
-- **Mode focus** — éditeur plein écran sans barre latérale (`Échap` pour quitter)
+- **Onglets** — une note ouverte = un onglet ; `Ctrl+Tab`, `Ctrl+W`, `Ctrl+1…9`, glisser pour réordonner
+- **Mode focus** — plein écran sans barre latérale ni barre d'outils (`F11`, `Échap` pour quitter)
 - **Enregistrement automatique** — trois modes : automatique (1,5 s), équilibré (5 s) ou manuel
 - **Confirmation de fermeture** — la note en cours est enregistrée avant de quitter
 
@@ -40,6 +41,8 @@ L'installeur n'est pas signé : Windows SmartScreen affiche « Windows a protég
 - **Dossiers imbriqués** — arborescence avec glisser-déposer
 - **Vues** — arborescence, graphe des wikilinks, calendrier
 - **Backlinks** — notes qui pointent vers la note active
+- **Notes liées** — notes qui parlent de la même chose, même sans lien (par le sens avec la recherche intelligente, sinon par les mots)
+- **Tags suggérés** — ceux des notes proches et les tags existants présents dans le texte
 - **Tags**, **corbeille** avec restauration, **modèles de notes**
 
 ### IA multi-fournisseur
@@ -56,8 +59,8 @@ L'installeur n'est pas signé : Windows SmartScreen affiche « Windows a protég
 - **Indicateur « IA en ligne »** — rappelle quand le texte est envoyé à un fournisseur extérieur
 
 ### Recherche et navigation
-- **Recherche plein texte** — titres et contenus, sans tenir compte des majuscules ni des accents (« reunion » trouve « Réunion »)
-- **Quick open** — `Ctrl+P` pour ouvrir une note par son nom
+- **Recherche plein texte** — titres, contenus et texte des PDF joints, sans tenir compte des majuscules ni des accents (« reunion » trouve « Réunion »)
+- **Palette** — `Ctrl+P` pour ouvrir une note ou lancer une commande, `Ctrl+Shift+P` pour les commandes seules
 
 ### Historique
 - **Versions** — enregistrements automatiques regroupés par tranches de 5 minutes, 200 versions par note ; comparaison et restauration
@@ -70,8 +73,8 @@ L'installeur n'est pas signé : Windows SmartScreen affiche « Windows a protég
 - **Export / import** — ZIP classique, protégé AES-256 (7-Zip) ou compatible Windows ; rappel de sauvegarde chaque semaine
 - **Sauvegarde automatique** — chaque jour ou chaque semaine, dans le dossier de votre choix, en gardant les N dernières ; restauration en un clic
 - **Import Obsidian et Notion** — dossiers, tags, tâches, images et liens `[[…]]` conservés
-- **Fichiers joints** — PDF, documents… dans les notes, chiffrés avec elles ; vue « Fichiers liés »
-- **Synchronisation entre PC** — par un dossier partagé (OneDrive, Dropbox, clé USB), entièrement chiffré ; conflits gardés en copie
+- **Fichiers joints** — PDF, documents… par le trombone ou en les glissant dans la note, chiffrés avec elles ; vue « Fichiers liés »
+- **Synchronisation entre PC** — par un dossier partagé (OneDrive, Dropbox, clé USB), entièrement chiffré ; conflits gardés en copie ; état visible dans la barre latérale
 - **Clé de récupération** — rouvre les notes en cas d'oubli du mot de passe, de réinstallation de Windows ou de changement de PC
 - **Indicateur de solidité** du mot de passe
 - **Réinitialisation** — pour repartir de zéro, depuis l'écran de verrouillage
@@ -83,6 +86,7 @@ L'installeur n'est pas signé : Windows SmartScreen affiche « Windows a protég
 - **Manuel intégré** (Paramètres → Manuel) — installer Ollama, une clé API ou Claude Code CLI, et utiliser l'app pas à pas
 - **Icône près de l'horloge** — fermer la fenêtre garde NATIA active pour les rappels ; lancement avec Windows en option
 - **Export d'une note** en Markdown, texte, HTML ou PDF
+- **Partage sécurisé** — une note en page HTML chiffrée par mot de passe, lisible dans n'importe quel navigateur
 - **Statistiques**, **thèmes**, **dé à 20 faces**
 - **Mises à jour automatiques**
 
@@ -95,7 +99,11 @@ L'installeur n'est pas signé : Windows SmartScreen affiche « Windows a protég
 | `Ctrl+N` | Nouvelle note |
 | `Ctrl+F` | Rechercher dans la note |
 | `Ctrl+Shift+F` | Recherche globale |
-| `Ctrl+P` | Quick open |
+| `Ctrl+P` | Palette (notes et commandes) |
+| `Ctrl+Shift+P` | Commandes |
+| `Ctrl+Tab` / `Ctrl+W` | Onglet suivant / fermer l'onglet |
+| `F11` | Mode focus (plein écran) |
+| `Ctrl+L` | Verrouiller |
 | `Ctrl+,` | Paramètres |
 | `Ctrl+G` | Vue graphe |
 | `Ctrl+Shift+A` | Panneau IA |
@@ -119,6 +127,7 @@ L'installeur n'est pas signé : Windows SmartScreen affiche « Windows a protég
 | Base de données | SQLite |
 | IA | llama.cpp intégré · Ollama · Claude API · OpenAI · Gemini · Mistral · Claude CLI |
 | Plugins Tauri | notification, dialog, opener, updater, single-instance, autostart |
+| Tests | Vitest (interface), cargo test (Rust) |
 | Build | Vite 5, GitHub Actions |
 
 ---
@@ -139,10 +148,13 @@ Le frontend tourne sur `http://localhost:1420` et Tauri ouvre la fenêtre de l'a
 Pour vérifier une modification :
 
 ```bash
-npx tsc --noEmit
+npm run i18n:check
+npm test
 npm run build
 cd src-tauri && cargo test --no-default-features --lib
 ```
+
+Les mêmes vérifications tournent sur GitHub à chaque push et pull request (`.github/workflows/ci.yml`). Un audit des dépendances passe chaque semaine (`audit.yml`) et Dependabot propose les mises à jour.
 
 Pour compiler l'app sans installeur : `npm run tauri build -- --no-bundle`. Les installeurs officiels sont compilés et signés par GitHub Actions à chaque tag `vX.Y.Z` (voir [docs/CONTRIBUTING.md](docs/CONTRIBUTING.md)).
 
@@ -154,7 +166,9 @@ Pour compiler l'app sans installeur : `npm run tauri build -- --no-bundle`. Les 
 fablenote/
 ├── src/                              # Frontend React
 │   ├── components/
-│   │   ├── Layout.tsx                # Orchestrateur, raccourcis, Quick open, conversation
+│   │   ├── Layout.tsx                # Orchestrateur, raccourcis, conversation
+│   │   ├── CommandPalette.tsx        # Palette Ctrl+P (notes et commandes)
+│   │   ├── NoteTabs.tsx              # Onglets des notes ouvertes
 │   │   ├── Sidebar.tsx               # Navigation, recherche, dossiers, vues
 │   │   ├── Editor.tsx · Toolbar.tsx  # Éditeur TipTap
 │   │   ├── AiPanel.tsx               # Panneau IA
@@ -164,15 +178,16 @@ fablenote/
 │   │   ├── TreeMapPanel.tsx · GraphPanel.tsx · CalendarPanel.tsx
 │   │   ├── VersionTree.tsx · TrashPanel.tsx · StatsPanel.tsx
 │   │   ├── PostItsPanel.tsx · BackupReminder.tsx · CloudAiNotice.tsx
-│   │   └── ai/                       # Modale de correction, boutons, trace de debug
+│   │   └── ai/                       # Formulaire de clé API, onglet debug, modale de correction, constantes
 │   ├── extensions/                   # Extensions TipTap (post-it, wikilink, rappel)
-│   ├── lib/                          # aiInvoke, lockSafely, updater, backupReminder…
+│   ├── lib/                          # aiInvoke, sync, attachments, related, secureShare… (+ tests *.test.ts)
 │   ├── store/index.ts                # État global Zustand
 │   └── types/index.ts                # Types TypeScript
 ├── src-tauri/
 │   ├── src/
 │   │   ├── lib.rs                    # Point d'entrée Tauri, AppState, réinitialisation
-│   │   ├── notes.rs                  # Notes, dossiers, versions, corbeille, export/import, recherche
+│   │   ├── notes.rs                  # Notes, dossiers, versions, corbeille, export/import
+│   │   ├── search.rs                 # Recherche, notes utiles à une question, notes liées
 │   │   ├── settings.rs               # Paramètres, clés API, mot de passe, blocage
 │   │   ├── ai.rs                     # Fournisseurs IA
 │   │   ├── crypto.rs                 # AES-256-GCM, Argon2id

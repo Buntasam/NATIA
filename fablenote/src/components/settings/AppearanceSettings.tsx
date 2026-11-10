@@ -6,7 +6,7 @@ import { msg, useT } from "../../i18n";
 import LanguagePicker from "../LanguagePicker";
 
 export default function AppearanceSettings({ form, set }: Pick<SettingsFormProps, "form" | "set">) {
-  const { theme, setTheme } = useStore();
+  const { theme, setTheme, showTabs, setShowTabs } = useStore();
   const t = useT();
   const [diceEnabled, setDiceEnabled] = useState(() => localStorage.getItem("natia_dice_enabled") === "1");
   return (
@@ -97,6 +97,21 @@ export default function AppearanceSettings({ form, set }: Pick<SettingsFormProps
             <option value="wide">{t("Large (960px)")}</option>
             <option value="full">{t("Pleine largeur")}</option>
           </select>
+        </div>
+
+        <div className="flex items-center justify-between">
+          <div>
+            <p className="text-sm text-secondary">{t("Onglets des notes ouvertes")}</p>
+            <p className="text-[10px] text-muted mt-0.5">{t("Ctrl+Tab pour passer d'une note à l'autre, Ctrl+W pour fermer")}</p>
+          </div>
+          <button
+            role="switch"
+            aria-checked={showTabs}
+            onClick={() => setShowTabs(!showTabs)}
+            className={`relative w-9 h-5 rounded-full transition-colors shrink-0 ${showTabs ? "bg-accent" : "bg-border"}`}
+          >
+            <span className={`absolute top-0.5 w-4 h-4 rounded-full bg-white shadow-sm transition-transform ${showTabs ? "left-[18px]" : "left-0.5"}`} />
+          </button>
         </div>
 
         <div className="flex items-center justify-between">

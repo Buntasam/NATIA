@@ -36,10 +36,11 @@ jobs:
 
       # Vérifications rapides avant la longue compilation Rust : une traduction manquante,
       # une erreur de type ou un build d'interface cassé arrêtent la release tout de suite.
-      - name: Frontend checks (translations, types, build)
+      - name: Frontend checks (translations, tests, types, build)
         working-directory: fablenote
         run: |
           npm run i18n:check
+          npm test
           npm run build
 
       - name: Rust tests
@@ -75,6 +76,8 @@ jobs:
             Téléchargez `NATIA_${{ steps.version.outputs.value }}_x64-setup.exe` et lancez-le. La mise à jour conserve vos notes et vos paramètres.
 
             Déjà installée ? NATIA propose elle-même la mise à jour au démarrage.
+
+            Nouveautés : voir le [CHANGELOG](https://github.com/Buntasam/NATIA/blob/main/CHANGELOG.md).
           # Brouillon à vérifier puis publier à la main. Pas en « pre-release » :
           # le système de mise à jour ne lit que la dernière release publiée.
           releaseDraft: true

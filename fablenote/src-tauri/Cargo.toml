@@ -17,7 +17,7 @@ tauri-build = { version = "2", features = [] }
 tauri = { version = "2", features = ["tray-icon"] }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
-rusqlite = { version = "0.31", features = ["bundled"] }
+rusqlite = { version = "0.41", features = ["bundled"] }
 chrono = { version = "0.4", features = ["serde"] }
 uuid = { version = "1", features = ["v4"] }
 reqwest = { version = "0.12", features = ["json"] }
@@ -29,7 +29,9 @@ rand = "0.8"
 base64 = "0.22"
 zip = { version = "=2.6.1", default-features = false, features = ["deflate", "aes-crypto"] }
 ammonia = "~4.1.8"
-pulldown-cmark = { version = "=0.13.0", default-features = false, features = ["html"] }
+pulldown-cmark = { version = "=0.13.6", default-features = false, features = ["html"] }
+# Texte des PDF joints, pour la recherche.
+pdf-extract = "=0.12.1"
 keyring = { version = "3", features = ["windows-native", "apple-native"] }
 tauri-plugin-dialog = "2"
 tauri-plugin-notification = "2"

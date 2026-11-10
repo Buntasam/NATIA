@@ -102,6 +102,12 @@ pub(crate) fn maybe_dec_bytes(key: &Option<[u8; 32]>, data: &[u8]) -> Result<Vec
 /// Noms et contenus des fichiers joints, chiffrés (`Some`) ou déchiffrés (`None`).
 fn convert_attachments(db: &Connection, notes_dir: &PathBuf, key: &[u8; 32], encrypt: bool) -> Result<(), String> {
     let dir = crate::attachments::attachments_dir(notes_dir);
+    for (id, text) in collect_rows2(db, "SELECT id, text FROM attachments WHERE text IS NOT NULL AND text != ''")? {
+        let new_text = if encrypt {
+            if text.starts_with(ENC_PREFIX) { text } else { encrypt_value(key, &text) }
+        } else if text.starts_with(ENC_PREFIX) { decrypt_value(key, &text)? } else { text };
+        db.execute("UPDATE attachments SET text=?1 WHERE id=?2", params![new_text, id]).map_err(|e| e.to_string())?;
+    }
     for (id, name) in collect_rows2(db, "SELECT id, name FROM attachments")? {
         let new_name = if encrypt {
             if name.starts_with(ENC_PREFIX) { name } else { encrypt_value(key, &name) }

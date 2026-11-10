@@ -383,7 +383,7 @@ pub async fn import_markdown(path: String, state: State<'_, AppState>) -> Result
     let key = *state.enc_key.lock().map_err(|e| e.to_string())?;
     let db = state.db.lock().map_err(|e| e.to_string())?;
     let report = import_files(&db, &state.notes_dir, &key, &root_name, files)?;
-    crate::notes::clear_search_cache(&state);
+    crate::search::clear_search_cache(&state);
     Ok(report)
 }
 

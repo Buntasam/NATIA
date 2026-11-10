@@ -105,6 +105,70 @@ pub(crate) fn delete_note_attachments(db: &Connection, notes_dir: &Path, note_id
     Ok(())
 }
 
+// ─── Texte des fichiers joints (recherche) ────────────────────────────────────
+
+/// Au-delà, le texte d'un fichier n'est pas gardé en entier : la recherche n'en a pas besoin.
+const MAX_TEXT_CHARS: usize = 300_000;
+
+/// Texte lisible d'un fichier joint : PDF, ou fichier texte. Vide si rien à lire.
+pub(crate) fn extract_text(name: &str, bytes: &[u8]) -> String {
+    let ext = Path::new(name).extension().map(|e| e.to_string_lossy().to_ascii_lowercase()).unwrap_or_default();
+    let text = match ext.as_str() {
+        // pdf-extract peut paniquer sur un PDF mal formé : on l'isole.
+        "pdf" => std::panic::catch_unwind(|| pdf_extract::extract_text_from_mem(bytes).ok())
+            .ok()
+            .flatten()
+            .unwrap_or_default(),
+        "txt" | "md" | "csv" | "json" | "log" | "xml" | "html" | "htm" => String::from_utf8_lossy(bytes).into_owned(),
+        _ => String::new(),
+    };
+    let clean = text.split_whitespace().collect::<Vec<_>>().join(" ");
+    match clean.char_indices().nth(MAX_TEXT_CHARS) {
+        Some((i, _)) => clean[..i].to_string(),
+        None => clean,
+    }
+}
+
+static INDEXING: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+
+/// Lit le texte des fichiers joints qui ne l'ont pas encore été (ajoutés, synchronisés,
+/// importés). La base n'est verrouillée que pour lire la liste et enregistrer chaque texte.
+pub(crate) fn index_pending(state: &AppState) -> Result<(), String> {
+    use std::sync::atomic::Ordering;
+    if INDEXING.swap(true, Ordering::SeqCst) { return Ok(()); }
+    let result = (|| {
+        let key = key_of(state)?;
+        let pending: Vec<(String, String)> = {
+            let db = state.db.lock().map_err(|e| e.to_string())?;
+            let mut stmt = db.prepare("SELECT id, name FROM attachments WHERE text IS NULL").map_err(|e| e.to_string())?;
+            let rows = stmt.query_map([], |r| Ok((r.get::<_, String>(0)?, r.get::<_, String>(1)?))).map_err(|e| e.to_string())?;
+            rows.filter_map(|r| r.ok()).collect()
+        };
+        for (id, enc_name) in pending {
+            let name = maybe_dec(&key, &enc_name);
+            let text = read_attachment(&state.notes_dir, &key, &id).map(|b| extract_text(&name, &b)).unwrap_or_default();
+            let stored = if text.is_empty() { String::new() } else { maybe_enc(&key, &text) };
+            let db = state.db.lock().map_err(|e| e.to_string())?;
+            db.execute("UPDATE attachments SET text=?1 WHERE id=?2", params![stored, id]).map_err(|e| e.to_string())?;
+        }
+        Ok(())
+    })();
+    INDEXING.store(false, Ordering::SeqCst);
+    result
+}
+
+/// Fichiers joints (de notes hors corbeille) dont le texte contient `matches`.
+/// Renvoie (id de la note, nom du fichier, texte).
+pub(crate) fn searchable_texts(db: &Connection, key: &Key) -> Result<Vec<(String, String, String)>, String> {
+    let mut stmt = db.prepare(
+        "SELECT a.note_id, a.name, a.text FROM attachments a JOIN notes n ON n.id = a.note_id \
+         WHERE n.deleted_at IS NULL AND a.text IS NOT NULL AND a.text != ''",
+    ).map_err(|e| e.to_string())?;
+    let rows = stmt.query_map([], |r| Ok((r.get::<_, String>(0)?, r.get::<_, String>(1)?, r.get::<_, String>(2)?)))
+        .map_err(|e| e.to_string())?;
+    Ok(rows.filter_map(|r| r.ok()).map(|(n, name, text)| (n, maybe_dec(key, &name), maybe_dec(key, &text))).collect())
+}
+
 /// Nom d'origine du fichier, sans chemin et sans caractère interdit sous Windows.
 fn clean_file_name(path: &Path) -> String {
     let name = path.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
@@ -116,18 +180,51 @@ fn key_of(state: &AppState) -> Result<Key, String> {
     Ok(*state.enc_key.lock().map_err(|e| e.to_string())?)
 }
 
+/// `%C3%A9` → « é » : le nom du fichier déposé arrive encodé dans un en-tête.
+fn percent_decode(s: &str) -> String {
+    let b = s.as_bytes();
+    let mut out = Vec::with_capacity(b.len());
+    let mut i = 0;
+    while i < b.len() {
+        let hex = |c: u8| (c as char).to_digit(16).map(|d| d as u8);
+        if b[i] == b'%' && i + 2 < b.len() {
+            if let (Some(h), Some(l)) = (hex(b[i + 1]), hex(b[i + 2])) { out.push(h * 16 + l); i += 3; continue; }
+        }
+        out.push(b[i]);
+        i += 1;
+    }
+    String::from_utf8_lossy(&out).into_owned()
+}
+
+fn check_note(db: &Connection, note_id: &str) -> Result<(), String> {
+    if !is_valid_uuid(note_id) { return Err("ID invalide".to_string()); }
+    if db.query_row("SELECT 1 FROM notes WHERE id=?1", [note_id], |_| Ok(())).is_err() {
+        return Err("Enregistrez la note avant d'y joindre un fichier".to_string());
+    }
+    Ok(())
+}
+
+fn add_one(db: &Connection, state: &AppState, key: &Key, note_id: &str, name: String, bytes: &[u8]) -> Result<Attachment, String> {
+    if bytes.len() as u64 > MAX_ATTACHMENT_BYTES {
+        return Err(format!("{name} : fichier trop gros (100 Mo maximum)"));
+    }
+    let a = Attachment {
+        id: Uuid::new_v4().to_string(), note_id: note_id.to_string(), name,
+        size: bytes.len() as u64, created_at: Utc::now().to_rfc3339(),
+    };
+    store_attachment(db, &state.notes_dir, key, &a.id, &a.note_id, &a.name, bytes, &a.created_at)?;
+    Ok(a)
+}
+
 // ─── Commandes ────────────────────────────────────────────────────────────────
 
 /// Joint des fichiers (chemins choisis dans la fenêtre de sélection) à une note.
 #[tauri::command]
 pub fn add_attachments(note_id: String, paths: Vec<String>, state: State<AppState>) -> Result<Vec<Attachment>, String> {
     crate::require_unlocked(&state)?;
-    if !is_valid_uuid(&note_id) { return Err("ID invalide".to_string()); }
     let key = key_of(&state)?;
     let db = state.db.lock().map_err(|e| e.to_string())?;
-    if db.query_row("SELECT 1 FROM notes WHERE id=?1", [&note_id], |_| Ok(())).is_err() {
-        return Err("Enregistrez la note avant d'y joindre un fichier".to_string());
-    }
+    check_note(&db, &note_id)?;
     let mut added = Vec::new();
     for p in paths {
         let path = Path::new(&p);
@@ -136,14 +233,33 @@ pub fn add_attachments(note_id: String, paths: Vec<String>, state: State<AppStat
             return Err(format!("{} : fichier trop gros (100 Mo maximum)", clean_file_name(path)));
         }
         let bytes = std::fs::read(path).map_err(|e| e.to_string())?;
-        let a = Attachment {
-            id: Uuid::new_v4().to_string(), note_id: note_id.clone(), name: clean_file_name(path),
-            size: bytes.len() as u64, created_at: Utc::now().to_rfc3339(),
-        };
-        store_attachment(&db, &state.notes_dir, &key, &a.id, &a.note_id, &a.name, &bytes, &a.created_at)?;
-        added.push(a);
+        added.push(add_one(&db, &state, &key, &note_id, clean_file_name(path), &bytes)?);
     }
     Ok(added)
+}
+
+/// Joint un fichier glissé dans la note : son contenu arrive brut (pas en JSON),
+/// l'id de la note et le nom du fichier dans les en-têtes `x-note-id` et `x-file-name`.
+#[tauri::command]
+pub fn add_attachment_data(request: tauri::ipc::Request<'_>, state: State<AppState>) -> Result<Attachment, String> {
+    crate::require_unlocked(&state)?;
+    let tauri::ipc::InvokeBody::Raw(bytes) = request.body() else {
+        return Err("Contenu du fichier manquant".to_string());
+    };
+    let header = |name: &str| request.headers().get(name).and_then(|v| v.to_str().ok()).map(str::to_string);
+    let note_id = header("x-note-id").ok_or("ID invalide")?;
+    let name = clean_file_name(Path::new(&percent_decode(&header("x-file-name").unwrap_or_default())));
+    let key = key_of(&state)?;
+    let db = state.db.lock().map_err(|e| e.to_string())?;
+    check_note(&db, &note_id)?;
+    add_one(&db, &state, &key, &note_id, name, bytes)
+}
+
+/// Lit le texte des fichiers joints pas encore indexés (PDF…), hors du fil de l'interface.
+#[tauri::command]
+pub async fn index_attachments(state: State<'_, AppState>) -> Result<(), String> {
+    crate::require_unlocked(&state)?;
+    index_pending(&state)
 }
 
 /// Tous les fichiers joints (ou ceux d'une note), avec le titre de leur note.
@@ -283,6 +399,21 @@ mod tests {
         assert_eq!(std::fs::read(file_path(&notes_dir, &id)).unwrap(), b"JPEGDATA");
         assert_eq!(load_attachments(&db, &None, None).unwrap()[0].name, "photo.jpg");
         let _ = std::fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn text_is_extracted_from_plain_files_only() {
+        assert_eq!(extract_text("notes.txt", "Bonjour\n\n  le   monde".as_bytes()), "Bonjour le monde");
+        assert_eq!(extract_text("photo.jpg", b"\xff\xd8binaire"), "");
+        // Un PDF illisible ne fait pas planter l'application.
+        assert_eq!(extract_text("casse.pdf", b"%PDF-1.4 pas vraiment un pdf"), "");
+    }
+
+    #[test]
+    fn dropped_file_names_are_decoded() {
+        assert_eq!(percent_decode("devis%20%C3%A9t%C3%A9.pdf"), "devis été.pdf");
+        assert_eq!(percent_decode("100%"), "100%");
+        assert_eq!(percent_decode("a%2"), "a%2");
     }
 
     #[test]

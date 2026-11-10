@@ -1,0 +1,21 @@
+name: Proposer une idée
+description: Une fonctionnalité ou une amélioration pour NATIA.
+labels: [idée]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: Le besoin
+      description: Qu'aimeriez-vous pouvoir faire, et pourquoi ?
+    validations:
+      required: true
+  - type: textarea
+    id: idea
+    attributes:
+      label: Votre idée
+      description: Comment vous l'imaginez (facultatif).
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Comment vous faites aujourd'hui
+      description: Contournement actuel, autre outil… (facultatif)

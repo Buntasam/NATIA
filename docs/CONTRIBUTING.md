@@ -47,9 +47,12 @@ Le frontend se recharge à chaud (Vite, port 1420). Tauri recompile automatiquem
 cd NATIA/fablenote
 npx tsc --noEmit                                     # types TypeScript
 npm run i18n:check                                   # textes sans traduction anglaise
+npm test                                             # tests de l'interface (Vitest, fichiers *.test.ts)
 npm run build                                        # compilation du frontend
 cd src-tauri && cargo test --no-default-features --lib   # tests Rust
 ```
+
+Ces vérifications tournent aussi sur GitHub à chaque push et pull request (`.github/workflows/ci.yml`) : une PR doit être verte avant d'être fusionnée. Les PR de Dependabot (mises à jour de dépendances) passent par la même CI.
 
 Pour compiler l'application complète sans créer d'installeur :
 

@@ -60,6 +60,13 @@ interface AppStore {
   recentNoteIds: string[];
   togglePinNote: (id: string) => void;
 
+  // Onglets : notes ouvertes, dans l'ordre affiché (persistés)
+  openTabs: string[];
+  showTabs: boolean;
+  setShowTabs: (v: boolean) => void;
+  closeTab: (id: string) => Promise<void>;
+  moveTab: (id: string, toIndex: number) => void;
+
   // Panel widths (resizable, persisted)
   sidebarWidth: number;
   setSidebarWidth: (w: number) => void;
@@ -185,6 +192,27 @@ export const isNewNoteTitle = (title: string) => title === NEW_NOTE_TITLE || tit
 
 const MEMORY_KEY = "memory_nodes";
 
+/** Au-delà, ouvrir une note referme le plus ancien onglet (hors note active). */
+export const MAX_TABS = 12;
+
+function saveTabs(tabs: string[]) {
+  try { localStorage.setItem("natia_tabs", JSON.stringify(tabs)); } catch { /* stockage indisponible */ }
+}
+
+/** Ajoute `id` aux onglets, juste après l'onglet `after` (ou à la fin). */
+export function withTab(tabs: string[], id: string, after: string | null, max = MAX_TABS): string[] {
+  if (tabs.includes(id)) return tabs;
+  const next = [...tabs];
+  const at = after ? next.indexOf(after) : -1;
+  next.splice(at >= 0 ? at + 1 : next.length, 0, id);
+  while (next.length > max) {
+    const drop = next.findIndex((t) => t !== id);
+    if (drop < 0) break;
+    next.splice(drop, 1);
+  }
+  return next;
+}
+
 function persistMemory(nodes: MemoryNode[]): Promise<void> {
   return invoke<void>("set_user_data", { name: MEMORY_KEY, value: JSON.stringify(nodes) })
     .catch((e) => console.error("persistMemory:", e));
@@ -287,6 +315,35 @@ export const useStore = create<AppStore>((set, get) => ({
       localStorage.setItem("natia_pinned", JSON.stringify(pinned));
       return { pinnedNoteIds: pinned };
     });
+  },
+
+  openTabs: (() => {
+    try { return JSON.parse(localStorage.getItem("natia_tabs") ?? "[]") as string[]; }
+    catch { return []; }
+  })(),
+  showTabs: localStorage.getItem("natia_show_tabs") !== "0",
+  setShowTabs: (v) => {
+    localStorage.setItem("natia_show_tabs", v ? "1" : "0");
+    set({ showTabs: v });
+  },
+  closeTab: async (id) => {
+    const s = get();
+    const idx = s.openTabs.indexOf(id);
+    if (idx < 0) return;
+    const tabs = s.openTabs.filter((t) => t !== id);
+    saveTabs(tabs);
+    set({ openTabs: tabs });
+    if (s.activeNote?.id !== id) return;
+    // Onglet actif fermé : on passe à son voisin de droite, sinon de gauche.
+    const next = tabs[idx] ?? tabs[idx - 1];
+    if (next) await get().selectNote(next);
+    else set({ activeNote: null });
+  },
+  moveTab: (id, toIndex) => {
+    const tabs = get().openTabs.filter((t) => t !== id);
+    tabs.splice(Math.max(0, Math.min(toIndex, tabs.length)), 0, id);
+    saveTabs(tabs);
+    set({ openTabs: tabs });
   },
 
   sidebarWidth: (() => {
@@ -468,6 +525,7 @@ export const useStore = create<AppStore>((set, get) => ({
   deleteNote: async (id) => {
     await invoke("delete_note", { id });
     set((state) => ({
+      openTabs: state.openTabs.filter((t) => t !== id),
       notes: state.notes.filter((n) => n.id !== id),
       activeNote: state.activeNote?.id === id ? null : state.activeNote,
       navBackIds: state.navBackIds.filter((n) => n !== id),
@@ -627,6 +685,15 @@ export const useStore = create<AppStore>((set, get) => ({
   setActiveNoteContent: (content) =>
     set((s) => (s.activeNote ? { activeNote: { ...s.activeNote, content } } : {})),
 }));
+
+// Toute note ouverte (clic, création, Alt+←, lien…) prend un onglet, à droite de la précédente.
+useStore.subscribe((state, prev) => {
+  const id = state.activeNote?.id;
+  if (!id || id === prev.activeNote?.id || state.openTabs.includes(id)) return;
+  const tabs = withTab(state.openTabs, id, prev.activeNote?.id ?? null);
+  saveTabs(tabs);
+  useStore.setState({ openTabs: tabs });
+});
 
 // Langue des prompts changée (interface ou choix explicite) : les prompts par défaut
 // suivent. Rien à enregistrer : la conversion est refaite à chaque chargement.

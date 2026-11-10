@@ -1304,6 +1304,51 @@ const en: Record<string, string> = {
 
   // ── Bouton verrouiller
   "Verrouiller : activez d'abord un mot de passe": "Lock: set a password first",
+
+  // ── Indicateur de synchronisation
+  "Synchronisation en cours…": "Syncing…",
+  "Échec de la synchronisation : {error}": "Sync failed: {error}",
+  "Synchronisé {ago} — cliquer pour synchroniser": "Synced {ago} — click to sync",
+  "Pas encore synchronisé — cliquer pour synchroniser": "Not synced yet — click to sync",
+  "à l'instant": "just now",
+
+  // ── Notes liées et tags suggérés
+  "Notes liées": "Related notes",
+  "Aucune note proche pour l'instant": "No related notes yet",
+  "Proximité : {n} %": "Similarity: {n}%",
+  "Liens & notes liées": "Links & related notes",
+  "Tags suggérés": "Suggested tags",
+  "Suggestions :": "Suggestions:",
+  "Ajouter le tag {tag}": "Add tag {tag}",
+
+  // ── Partage sécurisé
+  "Partager (protégé par mot de passe)…": "Share (password-protected)…",
+  "Partager la note (protégée par mot de passe)": "Share note (password-protected)",
+  "protégé": "protected",
+  "Partager la note": "Share note",
+  "Fichier enregistré :": "File saved:",
+  "Envoyez le fichier par mail ou messagerie, et le mot de passe par un autre moyen (SMS, appel). Il s'ouvre dans n'importe quel navigateur, sans NATIA.": "Send the file by email or chat, and the password another way (text message, call). It opens in any browser, without NATIA.",
+  "Terminé": "Done",
+  "La note devient une page HTML chiffrée. Sans le mot de passe, personne ne peut la lire, pas même son titre. Les fichiers joints ne sont pas inclus.": "The note becomes an encrypted HTML page. Without the password nobody can read it, not even its title. Attached files are not included.",
+  "Mot de passe ({n} caractères minimum)": "Password ({n} characters minimum)",
+  "Note protégée": "Protected note",
+  "Cette note a été partagée depuis NATIA. Entrez le mot de passe qu'on vous a donné pour la lire.": "This note was shared from NATIA. Enter the password you were given to read it.",
+  "Ouverture…": "Opening…",
+
+  // ── Onglets, palette, mode focus
+  "Mode focus (plein écran)": "Focus mode (full screen)",
+  "Masquer les onglets": "Hide tabs",
+  "Afficher les onglets": "Show tabs",
+  "Fermer l'onglet": "Close tab",
+  "Fermer les autres onglets": "Close other tabs",
+  "Ouvrir une note ou lancer une commande…": "Open a note or run a command…",
+  "Commandes": "Commands",
+  "Notes ouvertes": "Open notes",
+  "Fermer l'onglet {title}": "Close tab {title}",
+  "Onglets des notes ouvertes": "Open note tabs",
+  "Ctrl+Tab pour passer d'une note à l'autre, Ctrl+W pour fermer": "Ctrl+Tab to switch notes, Ctrl+W to close",
+  "Onglet suivant (Maj : précédent)": "Next tab (Shift: previous)",
+  "Aller à l'onglet n": "Go to tab n",
 };
 
 export default en;

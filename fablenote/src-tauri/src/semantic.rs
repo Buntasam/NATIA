@@ -88,6 +88,49 @@ pub(crate) async fn semantic_rank(
     app: &AppHandle, llm: &LlmState, state: &AppState,
     notes: &[NoteText], question: &str, limit: usize,
 ) -> Result<Vec<SemanticHit>, String> {
+    let index = refresh_index(app, llm, state, notes).await?;
+    let q = normalize(embed(app, llm, &[question.to_string()]).await?.remove(0));
+    Ok(best_notes(&index, &q, limit))
+}
+
+/// Notes les plus proches par le sens de la note `id` : (id, similarité), la plus proche d'abord.
+pub(crate) async fn similar_notes(
+    app: &AppHandle, llm: &LlmState, state: &AppState,
+    notes: &[NoteText], id: &str, limit: usize,
+) -> Result<Vec<(String, f32)>, String> {
+    let index = refresh_index(app, llm, state, notes).await?;
+    Ok(closest_to(&index, id, limit))
+}
+
+/// Vecteur moyen d'une note (tous ses passages), normalisé.
+fn note_vector(e: &IndexEntry) -> Option<Vec<f32>> {
+    let vectors: Vec<Vec<f32>> = e.c.iter().map(|(_, _, v)| decode(v)).filter(|v| !v.is_empty()).collect();
+    let dim = vectors.first()?.len();
+    let mut sum = vec![0f32; dim];
+    for v in vectors.iter().filter(|v| v.len() == dim) {
+        for (s, x) in sum.iter_mut().zip(v) { *s += x; }
+    }
+    Some(normalize(sum))
+}
+
+fn closest_to(index: &HashMap<String, IndexEntry>, id: &str, limit: usize) -> Vec<(String, f32)> {
+    // Seuil plus haut que pour une question : deux notes quelconques se ressemblent toujours un peu.
+    const MIN_SIMILARITY: f32 = 0.5;
+    let Some(target) = index.get(id).and_then(note_vector) else { return vec![] };
+    let mut scored: Vec<(String, f32)> = index.iter()
+        .filter(|(other, _)| other.as_str() != id)
+        .filter_map(|(other, e)| Some((other.clone(), dot(&target, &note_vector(e)?))))
+        .filter(|(_, s)| *s >= MIN_SIMILARITY)
+        .collect();
+    scored.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap_or(std::cmp::Ordering::Equal).then(a.0.cmp(&b.0)));
+    scored.truncate(limit);
+    scored
+}
+
+/// Met l'index à jour : notes nouvelles ou modifiées recalculées, notes supprimées retirées.
+async fn refresh_index(
+    app: &AppHandle, llm: &LlmState, state: &AppState, notes: &[NoteText],
+) -> Result<HashMap<String, IndexEntry>, String> {
     let model = crate::llm::EMBED_MODEL.id;
     let key = *state.enc_key.lock().map_err(|e| e.to_string())?;
 
@@ -148,9 +191,7 @@ pub(crate) async fn semantic_rank(
             index.insert(n.id.clone(), entry);
         }
     }
-
-    let q = normalize(embed(app, llm, &[question.to_string()]).await?.remove(0));
-    Ok(best_notes(&index, &q, limit))
+    Ok(index)
 }
 
 /// Notes classées par leur passage le plus proche de la question (similarité cosinus).
@@ -215,6 +256,22 @@ mod tests {
         let ids: Vec<&str> = hits.iter().map(|h| h.id.as_str()).collect();
         assert_eq!(ids, vec!["proche", "moyen"]);
         assert_eq!(hits[0].chunk_start, 100);
+    }
+
+    #[test]
+    fn closest_notes_by_mean_vector() {
+        let entry = |vs: &[[f32; 2]]| IndexEntry {
+            m: "m".into(), s: (0, 0),
+            c: vs.iter().map(|v| (0, 0, encode(&normalize(v.to_vec())))).collect(),
+        };
+        let mut index = HashMap::new();
+        index.insert("a".to_string(), entry(&[[1.0, 0.0], [0.9, 0.1]]));
+        index.insert("b".to_string(), entry(&[[1.0, 0.05]]));
+        index.insert("c".to_string(), entry(&[[0.0, 1.0]]));
+        let near = closest_to(&index, "a", 5);
+        assert_eq!(near.len(), 1, "c est trop loin : {near:?}");
+        assert_eq!(near[0].0, "b");
+        assert!(closest_to(&index, "inconnue", 5).is_empty());
     }
 
     #[test]

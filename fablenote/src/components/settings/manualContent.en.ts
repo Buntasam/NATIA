@@ -96,7 +96,7 @@ export const MANUAL_EN: ManualChapter[] = [
         title: "Focus mode and find in note",
         blocks: [
           { list: [
-            "**Focus mode**: button at the top of the note, hides the sidebar. `Esc` to leave.",
+            "**Focus mode** (`F11`): button at the top of the note, full screen without the sidebar or toolbar. `Esc` or `F11` to leave.",
             "**Find / replace** in the note: `Ctrl+F`.",
           ] },
         ],
@@ -105,6 +105,18 @@ export const MANUAL_EN: ManualChapter[] = [
         title: "Export a note",
         blocks: [
           { p: "“More actions” menu (⋯) at the top of the note: export as Markdown, plain text, HTML or PDF. For PDF, choose “Microsoft Print to PDF” in the print window." },
+        ],
+      },
+      {
+        title: "Share a password-protected note",
+        blocks: [
+          { steps: [
+            "“More actions” menu (⋯) → **Share (password-protected)…** (or `Ctrl+Shift+P` then “Share”).",
+            "Choose a password (8 characters minimum), then **Save file**.",
+            "Send the `.html` file by email or chat, and the password another way (text message, call).",
+          ] },
+          { p: "The recipient opens the file in any browser, without NATIA, and types the password. Without it the file contains nothing readable, not even the title (AES-256 encryption)." },
+          { tip: "Attached files are not included; the note's images are." },
         ],
       },
     ],
@@ -119,8 +131,9 @@ export const MANUAL_EN: ManualChapter[] = [
         title: "Find a note",
         blocks: [
           { list: [
-            "**Quick open** `Ctrl+P`: type a few letters of the title, then `Enter`. Type `>` to run a command (theme, trash, lock…).",
-            "**Global search** `Ctrl+Shift+F`: searches titles and content, ignoring case and accents.",
+            "**Palette** `Ctrl+P`: type a few letters of the title or content, then `Enter`. Matching commands show below the notes (theme, trash, lock, sync, share…); `Ctrl+Shift+P` (or `>`) shows commands only.",
+            "**Tabs**: every opened note gets a tab above the editor. `Ctrl+Tab` / `Ctrl+Shift+Tab` to switch, `Ctrl+1…9` to jump to a tab, `Ctrl+W` or middle-click to close; drag a tab to move it. Settings → Appearance to hide them.",
+            "**Global search** `Ctrl+Shift+F`: searches titles, content and the text of attached PDFs, ignoring case and accents.",
             "`Alt+←` / `Alt+→`: previous / next note.",
           ] },
         ],
@@ -136,6 +149,13 @@ export const MANUAL_EN: ManualChapter[] = [
         ],
       },
       {
+        title: "Related notes and suggested tags",
+        blocks: [
+          { p: "The **Links** button (top of the note) shows **related notes**: those about the same thing, even without a `[[…]]` link. With smart search installed NATIA finds them by meaning; otherwise by shared words." },
+          { p: "Below the note, next to the tags, NATIA **suggests tags**: those of related notes and existing tags whose name appears in the note. Click “+ tag” to add it." },
+        ],
+      },
+      {
         title: "Version history",
         blocks: [
           { p: "`Ctrl+Shift+H` opens the history: compare two versions or restore one. Automatic saves are grouped into 5-minute slots, and each note keeps up to 200 versions." },
@@ -146,7 +166,12 @@ export const MANUAL_EN: ManualChapter[] = [
         blocks: [
           { table: { head: ["Shortcut", "Action"], rows: [
             ["Ctrl+N", "New note"],
-            ["Ctrl+P", "Quick open"],
+            ["Ctrl+P", "Palette (notes and commands)"],
+            ["Ctrl+Shift+P", "Commands"],
+            ["Ctrl+Tab", "Next tab"],
+            ["Ctrl+W", "Close tab"],
+            ["F11", "Focus mode (full screen)"],
+            ["Ctrl+L", "Lock"],
             ["Ctrl+F", "Find in note"],
             ["Ctrl+Shift+F", "Global search"],
             ["Ctrl+,", "Settings"],
@@ -381,10 +406,11 @@ export const MANUAL_EN: ManualChapter[] = [
         title: "Attach files",
         blocks: [
           { steps: [
-            "In a note, click the **paperclip** in the toolbar and choose one or more files (100 MB maximum each).",
+            "In a note, click the **paperclip** in the toolbar and choose one or more files (100 MB maximum each), or **drag them** straight into the note. A dragged image is shown in the note.",
             "A “📎 file name” chip appears in the note: click it to open the file with its app.",
           ] },
           { p: "**Linked files** (paperclip at the bottom of the sidebar) lists every attached file: search, open, **Save as…**, delete and go to the note." },
+          { p: "NATIA reads the text of attached **PDFs** (and text files): search finds the note that holds the file, with a “📎 file name” excerpt." },
           { p: "Files are stored with your notes, encrypted if a password is set, and included in exports, backups and sync. Permanently deleting a note deletes its files." },
         ],
       },
@@ -497,6 +523,7 @@ export const MANUAL_EN: ManualChapter[] = [
             "On the other PC: same cloud app (same account) or same folder, and same password.",
           ] },
           { p: "NATIA syncs at startup, every 5 minutes and when you come back to the window (**Sync now** to force it). Notes, folders, tags, trash and attached files follow." },
+          { p: "The **cloud** at the top of the sidebar shows the state: green = up to date (hover for the last sync time), spinning arrows = syncing, red = error. Click it to sync." },
           { tip: "If a note was changed on both PCs between two syncs, the most recent version is kept and the other becomes a “(conflict …)” note. Nothing is lost; each received note also keeps a version in its history." },
           { warn: "The whole shared folder is encrypted with the sync password: without it, its notes are unreadable, even for you. Write it down." },
         ],

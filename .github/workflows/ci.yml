@@ -1,0 +1,73 @@
+name: CI
+
+# Vérifie chaque push sur main et chaque pull request : une erreur est vue tout de suite,
+# pas seulement au moment de la release.
+on:
+  push:
+    branches: [main]
+    paths-ignore: ["**.md", "docs/**", "brand/**", "LICENSE"]
+  pull_request:
+    paths-ignore: ["**.md", "docs/**", "brand/**", "LICENSE"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+# Un nouveau push annule la vérification encore en cours du précédent.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  frontend:
+    name: Interface (traductions, tests, build)
+    runs-on: ubuntu-latest
+    steps:
+      # Mêmes actions épinglées que release.yml.
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+
+      - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5.0.0
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: fablenote/package-lock.json
+
+      - name: Install dependencies
+        working-directory: fablenote
+        run: npm ci
+
+      - name: Translations
+        working-directory: fablenote
+        run: npm run i18n:check
+
+      - name: Unit tests
+        working-directory: fablenote
+        run: npm test
+
+      - name: Type check and build
+        working-directory: fablenote
+        run: npm run build
+
+  rust:
+    name: Backend Rust (tests)
+    # Windows comme l'application (trousseau Windows, chemins, installeur).
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+
+      - uses: dtolnay/rust-toolchain@e2a55d2ffb04f378e9626c28d38b36d230d1e12f # 2026-10-09
+        with:
+          toolchain: stable
+
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+        with:
+          workspaces: fablenote/src-tauri
+
+      # Le build Rust attend le dossier de l'interface compilée (frontendDist).
+      - name: Placeholder frontend
+        shell: bash
+        run: mkdir -p fablenote/dist && echo "<!doctype html>" > fablenote/dist/index.html
+
+      - name: Rust tests
+        working-directory: fablenote/src-tauri
+        run: cargo test --no-default-features --lib

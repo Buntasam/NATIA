@@ -14,6 +14,7 @@ mod md_import;
 mod semantic;
 mod sync;
 mod notes;
+mod search;
 mod settings;
 mod llm;
 mod system_lock;
@@ -28,7 +29,7 @@ pub struct AppState {
     /// Verrouillage demandé par system_lock, en attente de l'interface.
     pub lock_request: Mutex<Option<std::time::Instant>>,
     /// Texte déchiffré des notes pour la recherche, vidé au verrouillage.
-    pub search_cache: Mutex<notes::SearchCache>,
+    pub search_cache: Mutex<search::SearchCache>,
 }
 
 // ─── Data types ───────────────────────────────────────────────────────────────
@@ -256,6 +257,8 @@ pub fn run() {
         })
         .invoke_handler(tauri::generate_handler![
             attachments::add_attachments,
+            attachments::add_attachment_data,
+            attachments::index_attachments,
             attachments::list_attachments,
             attachments::open_attachment,
             attachments::save_attachment_as,
@@ -293,7 +296,8 @@ pub fn run() {
             notes::empty_trash,
             notes::reveal_data_dir,
             notes::save_zip_to_path,
-            notes::relevant_notes,
+            search::relevant_notes,
+            search::related_notes,
             md_import::import_markdown,
             notes::inspect_import,
             notes::import_zip,
@@ -311,7 +315,7 @@ pub fn run() {
             llm::llm_chat,
             llm::llm_stream,
             llm::llm_stop,
-            notes::search_notes,
+            search::search_notes,
             notes::get_global_stats,
             notes::get_all_reminders,
             settings::get_settings,
@@ -394,7 +398,7 @@ async fn reset_app(app_handle: tauri::AppHandle) -> Result<(), String> {
     }
 
     *state.enc_key.lock().map_err(|e| e.to_string())? = None;
-    notes::clear_search_cache(&state);
+    search::clear_search_cache(&state);
     attachments::clear_open_copies();
 
     // Les clés API sans mot de passe vivent dans le keychain OS, hors du dossier de données.

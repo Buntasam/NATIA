@@ -1,0 +1,29 @@
+# Dependabot ouvre une pull request quand une dépendance a une mise à jour.
+# Chaque PR passe par la CI (ci.yml) : il suffit de la fusionner si elle est verte.
+version: 2
+updates:
+  - package-ecosystem: npm
+    directory: /fablenote
+    schedule: { interval: weekly, day: monday }
+    open-pull-requests-limit: 5
+    # Mises à jour mineures et correctives regroupées en une seule PR.
+    groups:
+      npm-minor:
+        update-types: [minor, patch]
+    ignore:
+      # TipTap reste en v2 (passage en v3 à part : l'éditeur change beaucoup).
+      - dependency-name: "@tiptap/*"
+        update-types: [version-update:semver-major]
+
+  - package-ecosystem: cargo
+    directory: /fablenote/src-tauri
+    schedule: { interval: weekly, day: monday }
+    open-pull-requests-limit: 5
+    groups:
+      cargo-minor:
+        update-types: [minor, patch]
+
+  # Les actions sont épinglées par commit : Dependabot propose le commit de la nouvelle version.
+  - package-ecosystem: github-actions
+    directory: /
+    schedule: { interval: monthly }

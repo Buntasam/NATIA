@@ -35,6 +35,7 @@ const PostItsPanel = lazy(() => import("./PostItsPanel"));
 const GraphPanel = lazy(() => import("./GraphPanel"));
 import ResizeHandle from "./ResizeHandle";
 import Tip from "./Tooltip";
+import SyncIndicator from "./SyncIndicator";
 import { useStore } from "../store";
 import { lockOrSetup } from "../lib/lockSafely";
 import { NoteMetadata } from "../types";
@@ -350,6 +351,7 @@ export default function Sidebar() {
         <div className="px-4 py-3 flex items-center gap-2 border-b border-border">
           <NatiaLockup height={22} className="text-primary select-none" />
           <div className="ml-auto flex items-center gap-0.5">
+            <SyncIndicator />
             <Tip
               label={hasPassword ? t("Verrouiller l'application") : t("Verrouiller : activez d'abord un mot de passe")}
               shortcut={hasPassword ? "Ctrl+L" : undefined}

@@ -135,7 +135,8 @@ Les actions sur les notes, dossiers, paramètres et la sécurité passent par le
 ```
 src-tauri/src/
 ├── lib.rs          ← types, AppState, setup, invoke_handler, reset_app, exit_app
-├── notes.rs        ← notes, dossiers, versions, corbeille, export/import, recherche, rappels
+├── notes.rs        ← notes, dossiers, versions, corbeille, export/import, rappels
+├── search.rs       ← recherche (cache du texte déchiffré), notes utiles à une question, notes liées
 ├── settings.rs     ← paramètres, clés API, couleurs, données utilisateur, mot de passe, blocage
 ├── ai.rs           ← fournisseurs IA (chat + streaming)
 ├── crypto.rs       ← AES-256-GCM, Argon2id, chiffrement/déchiffrement de toute la base
@@ -167,10 +168,16 @@ Les commandes de dossiers, corbeille, export et recherche délèguent à des fon
 | `save_zip_to_path`, `export_note_to_path`, `reveal_data_dir` | Export |
 | `write_export_file` | Écrit une note exportée (`.md`, `.txt`, `.html` uniquement) à l'emplacement choisi |
 | `inspect_import`, `import_zip` | Import des trois formats d'export |
-| `search_notes` | Recherche plein texte (asynchrone, avec cache) |
-| `relevant_notes` | Notes les plus utiles à une question, avec un extrait (mode « Toutes mes notes ») : mots de la question pondérés par leur rareté, bonus dans le titre ; fusionné (rang réciproque) avec la recherche par le sens si le modèle BGE-M3 est installé |
 | `import_markdown` | Importe un coffre Obsidian (dossier) ou un export Notion (.zip) sous un dossier racine ; une note déjà présente (même titre, même dossier) est ignorée |
 | `get_global_stats`, `get_all_reminders` | Statistiques, rappels |
+
+### Commandes — `search.rs`
+
+| Commande | Description |
+|---|---|
+| `search_notes` | Recherche plein texte (asynchrone, avec cache) dans les titres, les notes et le texte des fichiers joints |
+| `relevant_notes` | Notes les plus utiles à une question, avec un extrait (mode « Toutes mes notes ») : mots de la question pondérés par leur rareté, bonus dans le titre ; fusionné (rang réciproque) avec la recherche par le sens si le modèle BGE-M3 est installé |
+| `related_notes` | Notes proches d'une note (panneau Liens, tags suggérés) : vecteur moyen de ses passages comparé aux autres (cosinus ≥ 0,5) si BGE-M3 est installé, sinon TF-IDF sur les mots ; `semantic: false` force les mots (les tags suggérés ne démarrent pas le modèle) |
 
 ### Commandes — `settings.rs`
 
@@ -220,6 +227,8 @@ Le serveur (`llama-server`) écoute sur `127.0.0.1` uniquement, sur un port libr
 | Commande | Description |
 |---|---|
 | `add_attachments` | Joint des fichiers (100 Mo max chacun) à une note |
+| `add_attachment_data` | Joint un fichier glissé dans la note : contenu brut (pas de JSON), id de la note et nom du fichier dans les en-têtes `x-note-id` / `x-file-name` |
+| `index_attachments` | Lit le texte des fichiers pas encore indexés (PDF via pdf-extract, isolé par `catch_unwind` ; fichiers texte), rangé chiffré dans `attachments.text` |
 | `list_attachments`, `open_attachment`, `save_attachment_as`, `delete_attachment` | Vue « Fichiers liés », ouverture avec l'application associée, copie, suppression |
 
 Les fichiers sont dans `attachments/<id>` (chiffrés par `encrypt_bytes` avec un mot de passe NATIA, nom chiffré dans la table `attachments`). `encrypt_all_data` / `decrypt_all_data` les convertissent avec le reste. Les copies ouvertes sont dans `%TEMP%\natia-fichiers-ouverts`, effacé au verrouillage, au démarrage et à la fermeture. L'export ZIP les ajoute après `metadata.json` (`attachments/<id>` + `attachments.json`) ; l'import les rend à leur note.

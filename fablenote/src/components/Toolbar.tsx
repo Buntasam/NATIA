@@ -23,7 +23,7 @@ import {
   Paperclip,
   Underline,
 } from "lucide-react";
-import { invoke } from "@tauri-apps/api/core";
+import { attachPaths } from "../lib/attachments";
 import { open as openDialog } from "@tauri-apps/plugin-dialog";
 import { useStore } from "../store";
 import { msg, trError, useT } from "../i18n";
@@ -198,7 +198,7 @@ export default function Toolbar({ editor }: { editor: Editor | null }) {
     const paths = Array.isArray(picked) ? picked : typeof picked === "string" ? [picked] : [];
     if (paths.length === 0) return;
     try {
-      const added = await invoke<{ id: string; name: string; size: number }[]>("add_attachments", { noteId: note.id, paths });
+      const added = await attachPaths(note.id, paths);
       const chain = editor.chain().focus();
       added.forEach((a) => chain.insertAttachment({ id: a.id, name: a.name, size: a.size }));
       chain.run();

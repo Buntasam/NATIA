@@ -116,7 +116,7 @@ export const MANUAL: ManualChapter[] = [
         title: "Mode focus et recherche dans la note",
         blocks: [
           { list: [
-            "**Mode focus** : bouton en haut de la note, masque la barre latérale. `Échap` pour quitter.",
+            "**Mode focus** (`F11`) : bouton en haut de la note, plein écran sans barre latérale ni barre d'outils. `Échap` ou `F11` pour quitter.",
             "**Chercher / remplacer** dans la note : `Ctrl+F`.",
           ] },
         ],
@@ -125,6 +125,18 @@ export const MANUAL: ManualChapter[] = [
         title: "Exporter une note",
         blocks: [
           { p: "Menu « Plus d'actions » (⋯) en haut de la note : export en Markdown, texte brut, HTML ou PDF. Pour le PDF, choisissez « Microsoft Print to PDF » dans la fenêtre d'impression." },
+        ],
+      },
+      {
+        title: "Partager une note protégée par mot de passe",
+        blocks: [
+          { steps: [
+            "Menu « Plus d'actions » (⋯) → **Partager (protégé par mot de passe)…** (ou `Ctrl+Shift+P` puis « Partager »).",
+            "Choisissez un mot de passe (8 caractères minimum), puis **Enregistrer le fichier**.",
+            "Envoyez le fichier `.html` par mail ou messagerie, et le mot de passe par un autre moyen (SMS, appel).",
+          ] },
+          { p: "Le destinataire ouvre le fichier dans n'importe quel navigateur, sans NATIA, et tape le mot de passe. Sans lui, le fichier ne contient rien de lisible, pas même le titre (chiffrement AES-256)." },
+          { tip: "Les fichiers joints ne sont pas inclus ; les images de la note, oui." },
         ],
       },
     ],
@@ -139,8 +151,9 @@ export const MANUAL: ManualChapter[] = [
         title: "Trouver une note",
         blocks: [
           { list: [
-            "**Quick open** `Ctrl+P` : tapez quelques lettres du titre, puis `Entrée`. Tapez `>` pour lancer une commande (thème, corbeille, verrouillage…).",
-            "**Recherche globale** `Ctrl+Shift+F` : cherche dans les titres et le contenu, sans tenir compte des majuscules ni des accents.",
+            "**Palette** `Ctrl+P` : tapez quelques lettres du titre ou du contenu, puis `Entrée`. Les commandes qui correspondent s'affichent sous les notes (thème, corbeille, verrouillage, synchroniser, partager…) ; `Ctrl+Shift+P` (ou `>`) n'affiche que les commandes.",
+            "**Onglets** : chaque note ouverte prend un onglet au-dessus de l'éditeur. `Ctrl+Tab` / `Ctrl+Shift+Tab` pour passer de l'un à l'autre, `Ctrl+1…9` pour aller à un onglet, `Ctrl+W` ou clic du milieu pour fermer ; glissez un onglet pour le déplacer. Paramètres → Apparence pour les masquer.",
+            "**Recherche globale** `Ctrl+Shift+F` : cherche dans les titres, le contenu et le texte des PDF joints, sans tenir compte des majuscules ni des accents.",
             "`Alt+←` / `Alt+→` : note précédente / suivante.",
           ] },
         ],
@@ -156,6 +169,13 @@ export const MANUAL: ManualChapter[] = [
         ],
       },
       {
+        title: "Notes liées et tags suggérés",
+        blocks: [
+          { p: "Le bouton **Liens** (en haut de la note) affiche les **notes liées** : celles qui parlent de la même chose, même sans lien `[[…]]`. Avec la recherche intelligente installée, NATIA les trouve par le sens ; sinon par les mots en commun." },
+          { p: "Sous la note, à côté des tags, NATIA **suggère des tags** : ceux des notes proches et les tags déjà utilisés dont le nom apparaît dans la note. Cliquez sur « + tag » pour l'ajouter." },
+        ],
+      },
+      {
         title: "Historique des versions",
         blocks: [
           { p: "`Ctrl+Shift+H` ouvre l'historique : comparez deux versions ou restaurez-en une. Les enregistrements automatiques sont regroupés par tranches de 5 minutes, et chaque note garde jusqu'à 200 versions." },
@@ -166,7 +186,12 @@ export const MANUAL: ManualChapter[] = [
         blocks: [
           { table: { head: ["Raccourci", "Action"], rows: [
             ["Ctrl+N", "Nouvelle note"],
-            ["Ctrl+P", "Quick open"],
+            ["Ctrl+P", "Palette (notes et commandes)"],
+            ["Ctrl+Shift+P", "Commandes"],
+            ["Ctrl+Tab", "Onglet suivant"],
+            ["Ctrl+W", "Fermer l'onglet"],
+            ["F11", "Mode focus (plein écran)"],
+            ["Ctrl+L", "Verrouiller"],
             ["Ctrl+F", "Chercher dans la note"],
             ["Ctrl+Shift+F", "Recherche globale"],
             ["Ctrl+,", "Paramètres"],
@@ -401,10 +426,11 @@ export const MANUAL: ManualChapter[] = [
         title: "Joindre des fichiers",
         blocks: [
           { steps: [
-            "Dans une note, cliquez sur le **trombone** de la barre d'outils et choisissez un ou plusieurs fichiers (100 Mo maximum chacun).",
+            "Dans une note, cliquez sur le **trombone** de la barre d'outils et choisissez un ou plusieurs fichiers (100 Mo maximum chacun), ou **glissez-les** directement dans la note. Une image glissée s'affiche dans la note.",
             "Une pastille « 📎 nom du fichier » apparaît dans la note : cliquez dessus pour l'ouvrir avec son application.",
           ] },
           { p: "**Fichiers liés** (trombone en bas de la barre latérale) liste tous les fichiers joints : recherche, ouverture, **Enregistrer sous…**, suppression et accès à la note." },
+          { p: "Le texte des **PDF** (et des fichiers texte) joints est lu par NATIA : la recherche trouve la note qui contient le fichier, avec un extrait « 📎 nom du fichier »." },
           { p: "Les fichiers sont rangés avec vos notes, chiffrés si un mot de passe est actif, et inclus dans les exports, sauvegardes et la synchronisation. Supprimer définitivement une note supprime ses fichiers." },
         ],
       },
@@ -517,6 +543,7 @@ export const MANUAL: ManualChapter[] = [
             "Sur l'autre PC : même application cloud (même compte) ou même dossier, et même mot de passe.",
           ] },
           { p: "NATIA synchronise à l'ouverture, toutes les 5 minutes et quand vous revenez sur la fenêtre (**Synchroniser maintenant** pour forcer). Notes, dossiers, tags, corbeille et fichiers joints suivent." },
+          { p: "Le **nuage** en haut de la barre latérale montre l'état : vert = à jour (survolez-le pour l'heure de la dernière synchro), flèches qui tournent = en cours, rouge = erreur. Cliquez dessus pour synchroniser." },
           { tip: "Si une note a été modifiée sur les deux PC entre deux synchronisations, la version la plus récente est gardée et l'autre devient une note « (conflit …) ». Rien n'est perdu ; chaque note reçue garde aussi une version dans l'historique." },
           { warn: "Tout le dossier partagé est chiffré avec le mot de passe de synchronisation : sans lui, ses notes sont illisibles, même pour vous. Notez-le." },
         ],

@@ -46,12 +46,15 @@ import {
   Quote,
   Save,
   Search,
+  ShieldCheck,
   StickyNote,
   Table as TableIcon,
   X,
 } from "lucide-react";
 import TemplatesPanel from "./TemplatesPanel";
 import BacklinksPanel from "./BacklinksPanel";
+import ShareDialog from "./ShareDialog";
+import { SHARE_EVENT } from "./CommandPalette";
 import Tip from "./Tooltip";
 import { registerSaveNow } from "./CloseOverlay";
 import { markdownToHtml } from "../lib/markdown";
@@ -61,7 +64,9 @@ import { useStore, isNewNoteTitle } from "../store";
 import { imageToDataUrl } from "../lib/imageToDataUrl";
 import { save } from "@tauri-apps/plugin-dialog";
 import { invoke } from "@tauri-apps/api/core";
-import { msg, tr, useLocale, useT } from "../i18n";
+import { msg, tr, trError, useLocale, useT } from "../i18n";
+import { attachFiles } from "../lib/attachments";
+import { relatedNotes, suggestTags } from "../lib/related";
 import Toolbar from "./Toolbar";
 import VoiceRecorder from "./VoiceRecorder";
 
@@ -482,6 +487,19 @@ export default function Editor() {
   const [showFindReplace, setShowFindReplace] = useState(false);
   const [wordCount, setWordCount] = useState(0);
   const [copied, setCopied] = useState(false);
+  const [dropError, setDropError] = useState("");
+  const [showShare, setShowShare] = useState(false);
+  // Commande « Partager la note » de la palette.
+  useEffect(() => {
+    const open = () => setShowShare(true);
+    window.addEventListener(SHARE_EVENT, open);
+    return () => window.removeEventListener(SHARE_EVENT, open);
+  }, []);
+  useEffect(() => {
+    if (!dropError) return;
+    const id = setTimeout(() => setDropError(""), 6000);
+    return () => clearTimeout(id);
+  }, [dropError]);
   const [lastSavedAt, setLastSavedAt] = useState<Date | null>(null);
   const wasSavingRef = useRef(false);
 
@@ -554,15 +572,35 @@ export default function Editor() {
           return true;
         }
 
-        // Image file drop
-        const files = event.dataTransfer?.files;
-        if (!files?.length) return false;
-        const file = files[0];
-        if (!file.type.startsWith("image/")) return false;
-        imageToDataUrl(file).then((src) => {
-          const node = view.state.schema.nodes.image.create({ src });
-          view.dispatch(view.state.tr.replaceSelectionWith(node));
-        }).catch((err) => console.error("Image :", err));
+        // Fichiers déposés : les images s'affichent dans la note, les autres deviennent des fichiers joints.
+        const files = Array.from(event.dataTransfer?.files ?? []);
+        if (files.length === 0) return false;
+        event.preventDefault();
+        const at = view.posAtCoords({ left: event.clientX, top: event.clientY })?.pos ?? view.state.selection.from;
+        const images = files.filter((f) => f.type.startsWith("image/"));
+        const others = files.filter((f) => !f.type.startsWith("image/"));
+        images.forEach((file) => {
+          imageToDataUrl(file).then((src) => {
+            const node = view.state.schema.nodes.image.create({ src });
+            view.dispatch(view.state.tr.insert(Math.min(at, view.state.doc.content.size), node));
+          }).catch((err) => console.error("Image :", err));
+        });
+        const noteId = useStore.getState().activeNote?.id;
+        if (others.length && noteId) {
+          attachFiles(noteId, others).then((added) => {
+            const nodes = added.flatMap((a) => [
+              view.state.schema.nodes.attachment.create({ id: a.id, name: a.name, size: a.size }),
+              view.state.schema.text(" "),
+            ]);
+            const pos = Math.min(at, view.state.doc.content.size);
+            // Hors d'un paragraphe (entre deux blocs), on en crée un pour accueillir les pastilles.
+            const $pos = view.state.doc.resolve(pos);
+            const tr = $pos.parent.inlineContent
+              ? view.state.tr.insert(pos, nodes)
+              : view.state.tr.insert(pos, view.state.schema.nodes.paragraph.create(null, nodes));
+            view.dispatch(tr);
+          }).catch((err) => setDropError(trError(err)));
+        }
         return true;
       },
       handlePaste: (view, event) => {
@@ -1035,7 +1073,7 @@ ${editor.getHTML()}
                 </button>
               </Tip>
             )}
-            <Tip label={t("Liens & backlinks")}>
+            <Tip label={t("Liens & notes liées")}>
               <button
                 onClick={() => setShowBacklinks((s) => !s)}
                 aria-label={t("Liens et backlinks")}
@@ -1057,7 +1095,7 @@ ${editor.getHTML()}
                 <Clock size={17} />
               </button>
             </Tip>
-            <Tip label={focusMode ? t("Quitter le mode focus") : t("Mode focus")}>
+            <Tip label={focusMode ? t("Quitter le mode focus") : t("Mode focus (plein écran)")} shortcut="F11">
               <button
                 onClick={toggleFocusMode}
                 aria-label={focusMode ? t("Quitter le mode focus") : t("Mode focus")}
@@ -1142,6 +1180,14 @@ ${editor.getHTML()}
                       <FileOutput size={14} className="text-muted" />
                       {t("Exporter en PDF (impression)")}
                     </button>
+                    <div className="border-t border-border my-1" />
+                    <button
+                      onClick={() => { setShowMoreMenu(false); setShowShare(true); }}
+                      className="w-full flex items-center gap-2 px-3 py-2 text-sm text-secondary hover:text-primary hover:bg-hover transition-colors"
+                    >
+                      <ShieldCheck size={14} className="text-muted" />
+                      {t("Partager (protégé par mot de passe)…")}
+                    </button>
                   </div>
                 </>
               )}
@@ -1150,6 +1196,20 @@ ${editor.getHTML()}
           </div>
         </div>
       </div>
+
+      {showShare && editor && activeNote && (
+        <ShareDialog
+          title={localTitle || activeNote.title}
+          html={editor.getHTML()}
+          onClose={() => setShowShare(false)}
+        />
+      )}
+
+      {dropError && (
+        <div role="alert" className="fixed bottom-4 left-1/2 -translate-x-1/2 z-[400] px-3 py-2 rounded-lg border border-red-500/40 bg-panel text-xs text-red-500 shadow-lg">
+          {dropError}
+        </div>
+      )}
 
       {/* Toolbar — hidden in focus mode */}
       {!focusMode && <Toolbar editor={editor} />}
@@ -1345,16 +1405,38 @@ function TagsBar({
   tags: string[];
   folder: string | null;
 }) {
-  const { activeNote, updateNote, setSearchQuery } = useStore();
+  const { activeNote, updateNote, setSearchQuery, notes } = useStore();
   const [input, setInput] = useState("");
+  const [suggested, setSuggested] = useState<string[]>([]);
   const t = useT();
 
-  const addTag = () => {
-    const tag = input.trim();
+  // Tags suggérés : ceux des notes proches et ceux déjà utilisés dont le nom apparaît dans
+  // la note. Recalculés après chaque enregistrement, par les mots seulement (instantané).
+  const updatedAt = activeNote?.updated_at;
+  useEffect(() => {
+    let cancelled = false;
+    const timer = setTimeout(() => {
+      const st = useStore.getState();
+      const note = st.activeNote;
+      if (!note || note.id !== noteId) return;
+      relatedNotes(noteId, 6, false)
+        .then((rel) => {
+          if (cancelled) return;
+          const text = `${note.title} ${note.content.replace(/<[^>]+>/g, " ")}`;
+          setSuggested(suggestTags(text, note.tags, rel, st.notes));
+        })
+        .catch(() => { if (!cancelled) setSuggested([]); });
+    }, 800);
+    return () => { cancelled = true; clearTimeout(timer); };
+  }, [noteId, updatedAt, notes.length]);
+
+  const addTag = (raw = input) => {
+    const tag = raw.trim();
     if (!tag || tags.includes(tag) || !activeNote) return;
     const newTags = [...tags, tag];
     updateNote(noteId, activeNote.title, activeNote.content, newTags, folder);
-    setInput("");
+    setSuggested((s) => s.filter((x) => x !== tag));
+    if (raw === input) setInput("");
   };
 
   const removeTag = (tag: string) => {
@@ -1389,12 +1471,27 @@ function TagsBar({
         onKeyDown={(e) => {
           if (e.key === "Enter" || e.key === ",") {
             e.preventDefault();
-            addTag();
+            addTag(input);
           }
         }}
         placeholder={t("+ ajouter un tag")}
         className="bg-transparent text-xs text-muted placeholder-muted outline-none min-w-24"
       />
+      {suggested.length > 0 && (
+        <div className="flex items-center gap-1.5 ml-auto" aria-label={t("Tags suggérés")}>
+          <span className="text-[10px] text-muted">{t("Suggestions :")}</span>
+          {suggested.map((tag) => (
+            <button
+              key={tag}
+              onClick={() => addTag(tag)}
+              title={t("Ajouter le tag {tag}", { tag })}
+              className="text-xs px-2 py-0.5 rounded-full border border-dashed border-border text-muted hover:text-accent hover:border-accent transition-colors"
+            >
+              + {tag}
+            </button>
+          ))}
+        </div>
+      )}
     </div>
   );
 }

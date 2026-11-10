@@ -106,6 +106,8 @@ pub(crate) fn init_db(db: &Connection) -> SqlResult<()> {
     let _ = db.execute("ALTER TABLE api_keys ADD COLUMN model TEXT NOT NULL DEFAULT ''", []);
     // Début de la « session » d'une version automatique (NULL pour une version nommée).
     let _ = db.execute("ALTER TABLE note_versions ADD COLUMN session_start TEXT", []);
+    // Texte d'un fichier joint (PDF…) pour la recherche ; NULL = pas encore lu, '' = rien à lire.
+    let _ = db.execute("ALTER TABLE attachments ADD COLUMN text TEXT", []);
     Ok(())
 }
 
