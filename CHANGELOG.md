@@ -3,7 +3,7 @@
 Les nouveautés de chaque version de NATIA. Les fichiers d'installation sont sur la page
 [Releases](https://github.com/Buntasam/NATIA/releases).
 
-## [Non publié]
+## [6.3.0] — 2026-11-10
 
 ### Nouveautés
 - **Onglets** : chaque note ouverte prend un onglet au-dessus de l'éditeur. `Ctrl+Tab` pour passer de l'une à l'autre, `Ctrl+W` pour fermer, `Ctrl+1…9` pour aller à un onglet ; glisser un onglet pour le déplacer. Peut se masquer (Paramètres → Apparence).
@@ -59,7 +59,7 @@ Les nouveautés de chaque version de NATIA. Les fichiers d'installation sont sur
 ## Versions précédentes
 Voir la page [Releases](https://github.com/Buntasam/NATIA/releases).
 
-[Non publié]: https://github.com/Buntasam/NATIA/compare/v6.2.6...HEAD
+[6.3.0]: https://github.com/Buntasam/NATIA/releases/tag/v6.3.0
 [6.2.6]: https://github.com/Buntasam/NATIA/releases/tag/v6.2.6
 [6.2.5]: https://github.com/Buntasam/NATIA/releases/tag/v6.2.5
 [6.2.4]: https://github.com/Buntasam/NATIA/releases/tag/v6.2.4
