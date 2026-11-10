@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useLang } from "../../i18n";
-import { Topic } from "../settings/ManualSettings";
+import { Topic } from "../settings/ManualBlocks";
 import { LEGAL as LEGAL_FR } from "./legalContent";
 import { LEGAL_EN } from "./legalContent.en";
 

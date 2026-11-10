@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { Suspense, lazy, useEffect, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { getVersion } from "@tauri-apps/api/app";
 import { listen } from "@tauri-apps/api/event";
@@ -8,8 +8,9 @@ import { useStore } from "./store";
 import Layout from "./components/Layout";
 import SetupGuide, { openSetupGuide } from "./components/SetupGuide";
 import UpdatePrompt from "./components/UpdatePrompt";
-import TermsGate from "./components/legal/TermsGate";
-import { LEGAL_VERSION } from "./components/legal/legalContent";
+import { LEGAL_VERSION } from "./components/legal/legalVersion";
+// Montré au premier lancement et après une mise à jour : chargé seulement à ce moment-là.
+const TermsGate = lazy(() => import("./components/legal/TermsGate"));
 import LockScreen from "./components/LockScreen";
 import CloseOverlay, { waitForCloseConfirm, callSaveNow } from "./components/CloseOverlay";
 import SplashScreen from "./components/SplashScreen";
@@ -118,7 +119,9 @@ export default function App() {
       {/* Une fois les conditions acceptées : rien n'est demandé au réseau avant. */}
       {terms === "ok" && <UpdatePrompt />}
       {terms === null ? null : terms !== "ok" ? (
-        <TermsGate updated={terms === "old"} onAccepted={() => { setTerms("ok"); if (terms === "missing") openSetupGuide(); }} />
+        <Suspense fallback={null}>
+          <TermsGate updated={terms === "old"} onAccepted={() => { setTerms("ok"); if (terms === "missing") openSetupGuide(); }} />
+        </Suspense>
       ) : hasPassword && isLocked ? (
         <LockScreen />
       ) : (

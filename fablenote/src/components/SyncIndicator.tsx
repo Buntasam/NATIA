@@ -3,6 +3,8 @@ import { Cloud, CloudAlert, RefreshCw } from "lucide-react";
 import Tip from "./Tooltip";
 import { syncNow, useSyncState } from "../lib/sync";
 import { useLocale, useT } from "../i18n";
+import { useStore } from "../store";
+import { parseConflictTitle } from "../lib/conflicts";
 
 /**
  * Nuage de la barre latérale, visible quand la synchronisation est activée :
@@ -19,7 +21,20 @@ export default function SyncIndicator() {
     return () => clearInterval(id);
   }, []);
 
-  if (!enabled) return null;
+  const conflictCount = useStore((st) => st.notes.filter((n) => parseConflictTitle(n.title)).length);
+  const conflictBadge = conflictCount > 0 && (
+    <Tip label={t("{n} conflit(s) de synchronisation à régler", { n: conflictCount })}>
+      <button
+        onClick={() => useStore.getState().toggleConflicts()}
+        aria-label={t("{n} conflit(s) de synchronisation à régler", { n: conflictCount })}
+        className="flex items-center gap-0.5 px-1 py-0.5 rounded text-[10px] font-semibold text-amber-500 hover:bg-hover"
+      >
+        <CloudAlert size={12} />{conflictCount}
+      </button>
+    </Tip>
+  );
+
+  if (!enabled) return conflictBadge || null;
 
   const error = status?.error || "";
   const last = status?.last ? new Date(status.last) : null;
@@ -37,6 +52,8 @@ export default function SyncIndicator() {
   const color = running ? "text-accent" : error ? "text-red-500" : last ? "text-emerald-500" : "text-muted";
 
   return (
+    <>
+    {conflictBadge}
     <Tip label={label}>
       <button
         onClick={() => { syncNow().catch(() => {}); }}
@@ -48,6 +65,7 @@ export default function SyncIndicator() {
         <Icon size={14} className={running ? "animate-spin" : ""} />
       </button>
     </Tip>
+    </>
   );
 }
 

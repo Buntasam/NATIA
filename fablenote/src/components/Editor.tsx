@@ -15,41 +15,29 @@ import { TableCell } from "@tiptap/extension-table-cell";
 import Image from "@tiptap/extension-image";
 import Link from "@tiptap/extension-link";
 import CodeBlockLowlight from "@tiptap/extension-code-block-lowlight";
-import { common, createLowlight } from "lowlight";
+import { createLowlight } from "lowlight";
+import { CODE_LANGUAGES } from "../lib/codeLanguages";
 import { PostIt } from "../extensions/PostIt";
 import { Wikilink } from "../extensions/Wikilink";
 import { Attachment } from "../extensions/Attachment";
 import { Reminder } from "../extensions/Reminder";
 import {
-  Bell,
   BrainCircuit,
   Check,
   ChevronLeft,
   ChevronRight,
   Clock,
   Clipboard,
-  Code,
   FileInput,
   FileOutput,
-  Heading1,
-  Heading2,
-  Heading3,
   LayoutTemplate,
   Link2,
-  List,
-  ListChecks,
-  ListOrdered,
   Maximize2,
   Minimize2,
-  Minus,
   MoreHorizontal,
-  Quote,
   Save,
   Search,
   ShieldCheck,
-  StickyNote,
-  Table as TableIcon,
-  X,
 } from "lucide-react";
 import TemplatesPanel from "./TemplatesPanel";
 import BacklinksPanel from "./BacklinksPanel";
@@ -58,401 +46,23 @@ import { SHARE_EVENT } from "./CommandPalette";
 import Tip from "./Tooltip";
 import { registerSaveNow } from "./CloseOverlay";
 import { markdownToHtml } from "../lib/markdown";
-
-const lowlight = createLowlight(common);
 import { useStore, isNewNoteTitle } from "../store";
 import { imageToDataUrl } from "../lib/imageToDataUrl";
-import { save } from "@tauri-apps/plugin-dialog";
 import { invoke } from "@tauri-apps/api/core";
-import { msg, tr, trError, useLocale, useT } from "../i18n";
+import { tr, trError, useLocale, useT } from "../i18n";
 import { attachFiles } from "../lib/attachments";
-import { relatedNotes, suggestTags } from "../lib/related";
 import Toolbar from "./Toolbar";
 import VoiceRecorder from "./VoiceRecorder";
+import { NoteMetadata } from "../types";
+import React from "react";
+import { SlashItem, SlashMenu, filterSlashItems } from "./editor/SlashMenu";
+import { WikilinkMenu } from "./editor/WikilinkMenu";
+import { FindReplaceBar } from "./editor/FindReplaceBar";
+import { TagsBar } from "./editor/TagsBar";
+import { escapeHtml, htmlToMarkdown, safeFilename, saveExport } from "../lib/noteExport";
+const lowlight = createLowlight(CODE_LANGUAGES);
 
 const AUTOSAVE_DELAY = 1500;
-
-// ─── Slash command items ──────────────────────────────────────────────────────
-
-interface SlashItem {
-  id: string;
-  label: string;
-  desc: string;
-  icon: React.ReactNode;
-  keywords: string[];
-  apply: (editor: ReturnType<typeof useEditor>) => void;
-}
-
-const SLASH_ITEMS: SlashItem[] = [
-  {
-    id: "h1", label: msg("Titre 1"), desc: msg("Grand titre de section"), icon: <Heading1 size={14} />,
-    keywords: ["titre", "h1", "heading"],
-    apply: (e) => e?.chain().focus().toggleHeading({ level: 1 }).run(),
-  },
-  {
-    id: "h2", label: msg("Titre 2"), desc: msg("Titre moyen"), icon: <Heading2 size={14} />,
-    keywords: ["titre", "h2", "heading"],
-    apply: (e) => e?.chain().focus().toggleHeading({ level: 2 }).run(),
-  },
-  {
-    id: "h3", label: msg("Titre 3"), desc: msg("Petit titre"), icon: <Heading3 size={14} />,
-    keywords: ["titre", "h3", "heading"],
-    apply: (e) => e?.chain().focus().toggleHeading({ level: 3 }).run(),
-  },
-  {
-    id: "ul", label: msg("Liste à puces"), desc: msg("Liste non ordonnée"), icon: <List size={14} />,
-    keywords: ["liste", "ul", "bullet"],
-    apply: (e) => e?.chain().focus().toggleBulletList().run(),
-  },
-  {
-    id: "ol", label: msg("Liste numérotée"), desc: msg("Liste ordonnée"), icon: <ListOrdered size={14} />,
-    keywords: ["liste", "ol", "numbered"],
-    apply: (e) => e?.chain().focus().toggleOrderedList().run(),
-  },
-  {
-    id: "todo", label: msg("Liste de tâches"), desc: msg("Cases à cocher"), icon: <ListChecks size={14} />,
-    keywords: ["todo", "tache", "checkbox", "task"],
-    apply: (e) => e?.chain().focus().toggleTaskList().run(),
-  },
-  {
-    id: "quote", label: msg("Citation"), desc: msg("Bloc de citation"), icon: <Quote size={14} />,
-    keywords: ["citation", "quote", "blockquote"],
-    apply: (e) => e?.chain().focus().toggleBlockquote().run(),
-  },
-  {
-    id: "code", label: msg("Bloc de code"), desc: msg("Code avec coloration syntaxique"), icon: <Code size={14} />,
-    keywords: ["code", "bloc"],
-    apply: (e) => e?.chain().focus().toggleCodeBlock().run(),
-  },
-  {
-    id: "table", label: msg("Tableau"), desc: msg("Tableau 3×3"), icon: <TableIcon size={14} />,
-    keywords: ["tableau", "table", "grid"],
-    apply: (e) => {
-      if (!e) return;
-      e.chain().focus().insertTable({ rows: 3, cols: 3, withHeaderRow: true }).run();
-      if (e.state.doc.lastChild?.type.name === "table") {
-        const cursorPos = e.state.selection.anchor;
-        e.commands.insertContentAt(e.state.doc.content.size, { type: "paragraph" });
-        e.commands.setTextSelection(cursorPos);
-      }
-    },
-  },
-  {
-    id: "postit", label: msg("Post-it"), desc: msg("Note adhésive colorée"), icon: <StickyNote size={14} />,
-    keywords: ["postit", "post", "note", "adhesive"],
-    apply: (e) => e?.chain().focus().insertPostIt().run(),
-  },
-  {
-    id: "reminder", label: msg("Rappel"), desc: msg("Bloc de rappel avec date"), icon: <Bell size={14} />,
-    keywords: ["rappel", "reminder", "alarm"],
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    apply: (e) => (e?.chain().focus() as any)?.insertReminder().run(),
-  },
-  {
-    id: "hr", label: msg("Séparateur"), desc: msg("Ligne horizontale"), icon: <Minus size={14} />,
-    keywords: ["separateur", "hr", "ligne", "divider"],
-    apply: (e) => e?.chain().focus().setHorizontalRule().run(),
-  },
-];
-
-function filterSlashItems(query: string): SlashItem[] {
-  if (!query) return SLASH_ITEMS;
-  const q = query.toLowerCase();
-  return SLASH_ITEMS.filter(
-    (item) =>
-      item.label.toLowerCase().includes(q) ||
-      tr(item.label).toLowerCase().includes(q) ||
-      item.keywords.some((k) => k.includes(q))
-  );
-}
-
-// ─── Slash menu component ─────────────────────────────────────────────────────
-
-function SlashMenu({
-  items, pos, selectedIdx, onSelect,
-}: {
-  items: SlashItem[];
-  pos: { x: number; y: number };
-  selectedIdx: number;
-  onSelect: (item: SlashItem) => void;
-}) {
-  const listRef = useRef<HTMLDivElement>(null);
-  const t = useT();
-
-  useEffect(() => {
-    const el = listRef.current?.children[selectedIdx] as HTMLElement | undefined;
-    el?.scrollIntoView({ block: "nearest" });
-  }, [selectedIdx]);
-
-  return (
-    <div
-      className="fixed z-[300] bg-panel border border-border rounded-xl shadow-2xl py-1.5 w-64 max-h-72 overflow-y-auto"
-      style={{ left: pos.x, top: pos.y }}
-    >
-      {items.length === 0 ? (
-        <p className="px-3 py-2 text-xs text-muted">{t("Aucune commande")}</p>
-      ) : (
-        <div ref={listRef}>
-          {items.map((item, i) => (
-            <button
-              key={item.id}
-              onMouseDown={(e) => { e.preventDefault(); onSelect(item); }}
-              className={`flex items-center gap-2.5 w-full px-3 py-2 text-left transition-colors ${
-                i === selectedIdx
-                  ? "bg-accent/15 text-accent"
-                  : "text-secondary hover:bg-hover hover:text-primary"
-              }`}
-            >
-              <span className={`shrink-0 ${i === selectedIdx ? "text-accent" : "text-muted"}`}>
-                {item.icon}
-              </span>
-              <div>
-                <p className="text-xs font-medium leading-none mb-0.5">{t(item.label)}</p>
-                <p className="text-[11px] text-muted">{t(item.desc)}</p>
-              </div>
-            </button>
-          ))}
-        </div>
-      )}
-    </div>
-  );
-}
-
-// ─── Wikilink autocomplete menu ───────────────────────────────────────────────
-
-import { NoteMetadata } from "../types";
-
-function WikilinkMenu({
-  notes, query, pos, selectedIdx, onSelect,
-}: {
-  notes: NoteMetadata[];
-  query: string;
-  pos: { x: number; y: number };
-  selectedIdx: number;
-  onSelect: (note: NoteMetadata) => void;
-}) {
-  const filtered = query.trim()
-    ? notes.filter((n) => n.title.toLowerCase().includes(query.toLowerCase())).slice(0, 8)
-    : notes.slice(0, 8);
-  const listRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    const el = listRef.current?.children[selectedIdx] as HTMLElement | undefined;
-    el?.scrollIntoView({ block: "nearest" });
-  }, [selectedIdx]);
-
-  if (filtered.length === 0) return null;
-
-  return (
-    <div
-      className="fixed z-[300] bg-panel border border-border rounded-xl shadow-2xl py-1.5 w-64 max-h-64 overflow-y-auto"
-      style={{ left: pos.x, top: pos.y }}
-    >
-      <div ref={listRef}>
-        {filtered.map((note, i) => (
-          <button
-            key={note.id}
-            onMouseDown={(e) => { e.preventDefault(); onSelect(note); }}
-            className={`flex items-center gap-2.5 w-full px-3 py-2 text-left transition-colors ${
-              i === selectedIdx
-                ? "bg-accent/15 text-accent"
-                : "text-secondary hover:bg-hover hover:text-primary"
-            }`}
-          >
-            <Link2 size={12} className={i === selectedIdx ? "text-accent shrink-0" : "text-muted shrink-0"} />
-            <div className="flex-1 min-w-0">
-              <p className="text-xs font-medium truncate">{note.title}</p>
-              {note.folder && <p className="text-[11px] text-muted truncate">{note.folder}</p>}
-            </div>
-          </button>
-        ))}
-      </div>
-    </div>
-  );
-}
-
-// ─── Find & replace bar ───────────────────────────────────────────────────────
-
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-function findInDoc(doc: any, search: string): { from: number; to: number }[] {
-  const matches: { from: number; to: number }[] = [];
-  if (!search.trim()) return matches;
-  const escaped = search.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-  const re = new RegExp(escaped, "gi");
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  (doc as any).descendants((node: any, pos: number) => {
-    if (!node.isText || !node.text) return;
-    let m: RegExpExecArray | null;
-    re.lastIndex = 0;
-    while ((m = re.exec(node.text)) !== null) {
-      matches.push({ from: pos + m.index, to: pos + m.index + m[0].length });
-    }
-  });
-  return matches;
-}
-
-function FindReplaceBar({
-  editor,
-  onClose,
-}: {
-  editor: ReturnType<typeof useEditor>;
-  onClose: () => void;
-}) {
-  const [search, setSearch] = useState("");
-  const [replace, setReplace] = useState("");
-  const [matches, setMatches] = useState<{ from: number; to: number }[]>([]);
-  const [idx, setIdx] = useState(0);
-  const inputRef = useRef<HTMLInputElement>(null);
-  const t = useT();
-
-  useEffect(() => { inputRef.current?.focus(); }, []);
-
-  useEffect(() => {
-    if (!editor || !search.trim()) { setMatches([]); setIdx(0); return; }
-    const found = findInDoc(editor.state.doc, search);
-    setMatches(found);
-    setIdx(0);
-    if (found[0]) editor.commands.setTextSelection(found[0]);
-  }, [search, editor]);
-
-  const goTo = (i: number) => {
-    if (!editor || matches.length === 0) return;
-    const next = ((i % matches.length) + matches.length) % matches.length;
-    setIdx(next);
-    editor.commands.setTextSelection(matches[next]);
-    editor.commands.scrollIntoView();
-  };
-
-  const replaceCurrent = () => {
-    if (!editor || !matches[idx]) return;
-    editor.chain().setTextSelection(matches[idx]).insertContent(replace).run();
-    const fresh = findInDoc(editor.state.doc, search);
-    setMatches(fresh);
-    if (fresh.length > 0) {
-      const ni = Math.min(idx, fresh.length - 1);
-      setIdx(ni);
-      editor.commands.setTextSelection(fresh[ni]);
-      editor.commands.scrollIntoView();
-    }
-  };
-
-  const replaceAll = () => {
-    if (!editor || matches.length === 0) return;
-    const chain = editor.chain();
-    for (let i = matches.length - 1; i >= 0; i--) {
-      chain.setTextSelection(matches[i]).insertContent(replace);
-    }
-    chain.run();
-    setMatches([]);
-    setIdx(0);
-  };
-
-  return (
-    <div className="flex items-center gap-2 px-4 py-2 border-b border-border bg-panel shrink-0 flex-wrap">
-      <Search size={13} className="text-muted shrink-0" />
-      <input
-        ref={inputRef}
-        value={search}
-        onChange={(e) => setSearch(e.target.value)}
-        onKeyDown={(e) => {
-          if (e.key === "Enter") { e.preventDefault(); goTo(idx + (e.shiftKey ? -1 : 1)); }
-          if (e.key === "Escape") onClose();
-        }}
-        placeholder={t("Rechercher…")}
-        className="bg-hover border border-border rounded-md px-2 py-1 text-xs text-primary outline-none focus:border-accent/50 w-40"
-      />
-      <span className="text-[11px] text-muted shrink-0 min-w-10">
-        {matches.length > 0 ? `${idx + 1}/${matches.length}` : search ? t("0 résultat") : ""}
-      </span>
-      <button onClick={() => goTo(idx - 1)} disabled={matches.length === 0} aria-label={t("Résultat précédent")} className="p-1 text-muted hover:text-primary disabled:opacity-30 transition-colors text-xs">↑</button>
-      <button onClick={() => goTo(idx + 1)} disabled={matches.length === 0} aria-label={t("Résultat suivant")} className="p-1 text-muted hover:text-primary disabled:opacity-30 transition-colors text-xs">↓</button>
-      <div className="w-px h-4 bg-border mx-1" />
-      <input
-        value={replace}
-        onChange={(e) => setReplace(e.target.value)}
-        onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); replaceCurrent(); } if (e.key === "Escape") onClose(); }}
-        placeholder={t("Remplacer…")}
-        className="bg-hover border border-border rounded-md px-2 py-1 text-xs text-primary outline-none focus:border-accent/50 w-40"
-      />
-      <button onClick={replaceCurrent} disabled={matches.length === 0} className="px-2 py-1 text-xs bg-hover border border-border rounded-md text-secondary hover:text-primary disabled:opacity-30 transition-colors">
-        {t("Remplacer")}
-      </button>
-      <button onClick={replaceAll} disabled={matches.length === 0} className="px-2 py-1 text-xs bg-hover border border-border rounded-md text-secondary hover:text-primary disabled:opacity-30 transition-colors">
-        {t("Tout")}
-      </button>
-      <button onClick={onClose} aria-label={t("Fermer")} className="ml-auto text-muted hover:text-primary transition-colors p-1">
-        <X size={13} />
-      </button>
-    </div>
-  );
-}
-
-// ─── Conversion utils ─────────────────────────────────────────────────────────
-
-function htmlToMarkdown(html: string): string {
-  const div = document.createElement("div");
-  div.innerHTML = html;
-
-  function nodeToMd(node: Node): string {
-    if (node.nodeType === Node.TEXT_NODE) return node.textContent ?? "";
-    if (node.nodeType !== Node.ELEMENT_NODE) return "";
-    const el = node as Element;
-    const children = Array.from(el.childNodes).map(nodeToMd).join("");
-    switch (el.tagName) {
-      case "H1": return `# ${children}\n\n`;
-      case "H2": return `## ${children}\n\n`;
-      case "H3": return `### ${children}\n\n`;
-      case "H4": return `#### ${children}\n\n`;
-      case "P": return children ? `${children}\n\n` : "";
-      case "STRONG": case "B": return `**${children}**`;
-      case "EM": case "I": return `*${children}*`;
-      case "U": return `__${children}__`;
-      case "CODE": return `\`${children}\``;
-      case "PRE": return `\`\`\`\n${children.replace(/`/g, "")}\n\`\`\`\n\n`;
-      case "BLOCKQUOTE": return `> ${children.trim()}\n\n`;
-      case "UL": return `${children}\n`;
-      case "OL": return `${children}\n`;
-      case "LI": {
-        const parent = el.parentElement?.tagName;
-        if (parent === "OL") {
-          const idx = Array.from(el.parentElement!.children).indexOf(el) + 1;
-          return `${idx}. ${children.trim()}\n`;
-        }
-        return `- ${children.trim()}\n`;
-      }
-      case "BR": return "\n";
-      case "HR": return "---\n\n";
-      case "MARK": return `==${children}==`;
-      default: return children;
-    }
-  }
-
-  return nodeToMd(div).trim();
-}
-
-const EXPORT_FORMATS = {
-  md: { name: "Markdown" },
-  txt: { name: msg("Texte") },
-  html: { name: msg("Page HTML") },
-} as const;
-
-/** « Enregistrer sous » puis écriture par le backend (un lien de téléchargement ne marche pas dans Tauri). */
-async function saveExport(content: string, title: string, ext: keyof typeof EXPORT_FORMATS) {
-  const path = await save({
-    defaultPath: `${safeFilename(title)}.${ext}`,
-    filters: [{ name: tr(EXPORT_FORMATS[ext].name), extensions: [ext] }],
-  });
-  if (!path) return;
-  await invoke("write_export_file", { path, content });
-}
-
-function escapeHtml(s: string) {
-  return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
-}
-
-function safeFilename(title: string) {
-  return title.replace(/[^a-zA-Z0-9\-_àâäéèêëîïôùûüçœ ]/g, "").trim() || "note";
-}
 
 // ─── Editor ───────────────────────────────────────────────────────────────────
 
@@ -1392,106 +1002,3 @@ ${editor.getHTML()}
   );
 }
 
-// ─── Tags bar ────────────────────────────────────────────────────────────────
-
-import React from "react";
-
-function TagsBar({
-  noteId,
-  tags,
-  folder,
-}: {
-  noteId: string;
-  tags: string[];
-  folder: string | null;
-}) {
-  const { activeNote, updateNote, setSearchQuery, notes } = useStore();
-  const [input, setInput] = useState("");
-  const [suggested, setSuggested] = useState<string[]>([]);
-  const t = useT();
-
-  // Tags suggérés : ceux des notes proches et ceux déjà utilisés dont le nom apparaît dans
-  // la note. Recalculés après chaque enregistrement, par les mots seulement (instantané).
-  const updatedAt = activeNote?.updated_at;
-  useEffect(() => {
-    let cancelled = false;
-    const timer = setTimeout(() => {
-      const st = useStore.getState();
-      const note = st.activeNote;
-      if (!note || note.id !== noteId) return;
-      relatedNotes(noteId, 6, false)
-        .then((rel) => {
-          if (cancelled) return;
-          const text = `${note.title} ${note.content.replace(/<[^>]+>/g, " ")}`;
-          setSuggested(suggestTags(text, note.tags, rel, st.notes));
-        })
-        .catch(() => { if (!cancelled) setSuggested([]); });
-    }, 800);
-    return () => { cancelled = true; clearTimeout(timer); };
-  }, [noteId, updatedAt, notes.length]);
-
-  const addTag = (raw = input) => {
-    const tag = raw.trim();
-    if (!tag || tags.includes(tag) || !activeNote) return;
-    const newTags = [...tags, tag];
-    updateNote(noteId, activeNote.title, activeNote.content, newTags, folder);
-    setSuggested((s) => s.filter((x) => x !== tag));
-    if (raw === input) setInput("");
-  };
-
-  const removeTag = (tag: string) => {
-    if (!activeNote) return;
-    const newTags = tags.filter((t) => t !== tag);
-    updateNote(noteId, activeNote.title, activeNote.content, newTags, folder);
-  };
-
-  return (
-    <div className="flex items-center gap-2 px-6 py-2 border-t border-border bg-sidebar shrink-0 flex-wrap">
-      {tags.map((tag) => (
-        <span
-          key={tag}
-          className="flex items-center gap-1 text-xs px-2 py-0.5 bg-hover rounded-full text-secondary"
-        >
-          <button
-            onClick={() => setSearchQuery(`#${tag}`)}
-            className="hover:text-accent transition-colors"
-            aria-label={t("Filtrer les notes par le tag {tag}", { tag })}
-          >
-            {tag}
-          </button>
-          <button onClick={() => removeTag(tag)} aria-label={t("Retirer le tag {tag}", { tag })} className="text-muted hover:text-primary transition-colors">
-            ×
-          </button>
-        </span>
-      ))}
-      <input
-        type="text"
-        value={input}
-        onChange={(e) => setInput(e.target.value)}
-        onKeyDown={(e) => {
-          if (e.key === "Enter" || e.key === ",") {
-            e.preventDefault();
-            addTag(input);
-          }
-        }}
-        placeholder={t("+ ajouter un tag")}
-        className="bg-transparent text-xs text-muted placeholder-muted outline-none min-w-24"
-      />
-      {suggested.length > 0 && (
-        <div className="flex items-center gap-1.5 ml-auto" aria-label={t("Tags suggérés")}>
-          <span className="text-[10px] text-muted">{t("Suggestions :")}</span>
-          {suggested.map((tag) => (
-            <button
-              key={tag}
-              onClick={() => addTag(tag)}
-              title={t("Ajouter le tag {tag}", { tag })}
-              className="text-xs px-2 py-0.5 rounded-full border border-dashed border-border text-muted hover:text-accent hover:border-accent transition-colors"
-            >
-              + {tag}
-            </button>
-          ))}
-        </div>
-      )}
-    </div>
-  );
-}

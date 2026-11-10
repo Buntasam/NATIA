@@ -21,6 +21,7 @@ const GROUPS: { title: string; items: { keys: string; label: string }[] }[] = [
     title: msg("Notes"),
     items: [
       { keys: "Ctrl+N", label: msg("Nouvelle note") },
+      { keys: "Ctrl+D", label: msg("Note du jour") },
       { keys: "Ctrl+S", label: msg("Sauvegarder") },
       { keys: "Ctrl+F", label: msg("Chercher dans la note") },
       { keys: "Ctrl+H", label: msg("Chercher & remplacer") },
@@ -31,6 +32,7 @@ const GROUPS: { title: string; items: { keys: string; label: string }[] }[] = [
     items: [
       { keys: "Ctrl+Shift+A", label: msg("Panneau IA") },
       { keys: "Ctrl+Shift+H", label: msg("Historique des versions") },
+      { keys: "Ctrl+Shift+T", label: msg("Tâches") },
       { keys: "Ctrl+G", label: msg("Mémoire IA (graphe)") },
       { keys: "F11", label: msg("Mode focus (plein écran)") },
       { keys: "Ctrl+,", label: msg("Paramètres") },

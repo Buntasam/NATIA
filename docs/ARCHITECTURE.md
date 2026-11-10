@@ -177,6 +177,7 @@ Les commandes de dossiers, corbeille, export et recherche délèguent à des fon
 |---|---|
 | `search_notes` | Recherche plein texte (asynchrone, avec cache) dans les titres, les notes et le texte des fichiers joints |
 | `relevant_notes` | Notes les plus utiles à une question, avec un extrait (mode « Toutes mes notes ») : mots de la question pondérés par leur rareté, bonus dans le titre ; fusionné (rang réciproque) avec la recherche par le sens si le modèle BGE-M3 est installé |
+| `get_all_tasks` | Cases à cocher de toutes les notes (`<li data-type="taskItem">`), avec leur rang dans la note ; l'interface les coche en modifiant ce rang (`lib/tasks.ts`) |
 | `related_notes` | Notes proches d'une note (panneau Liens, tags suggérés) : vecteur moyen de ses passages comparé aux autres (cosinus ≥ 0,5) si BGE-M3 est installé, sinon TF-IDF sur les mots ; `semantic: false` force les mots (les tags suggérés ne démarrent pas le modèle) |
 
 ### Commandes — `settings.rs`

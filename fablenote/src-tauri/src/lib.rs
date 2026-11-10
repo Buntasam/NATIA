@@ -316,6 +316,7 @@ pub fn run() {
             llm::llm_stream,
             llm::llm_stop,
             search::search_notes,
+            search::get_all_tasks,
             notes::get_global_stats,
             notes::get_all_reminders,
             settings::get_settings,

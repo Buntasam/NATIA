@@ -3,8 +3,6 @@ import { useStore } from "../store";
 import { lockOrSetup, lockSafely } from "../lib/lockSafely";
 import { indexAttachments } from "../lib/attachments";
 import { useT } from "../i18n";
-import AiPanel from "./AiPanel";
-import { ConvHistory, ConvPanel } from "./ConversationPanel";
 import D20Roller from "./D20Roller";
 import Editor from "./Editor";
 import ReminderDaemon from "./ReminderDaemon";
@@ -15,18 +13,26 @@ import ResizeHandle from "./ResizeHandle";
 import Sidebar from "./Sidebar";
 import SplitPane from "./SplitPane";
 import NoteTabs from "./NoteTabs";
+import WhatsNew from "./WhatsNew";
+import { openDailyNote } from "../lib/dailyNote";
 import CommandPalette from "./CommandPalette";
 import { setFocusFullscreen } from "../lib/focus";
 // Chargés à l'ouverture : ces panneaux (et d3 / diff) ne pèsent plus sur le démarrage.
+// Chargés à la première ouverture : le panneau IA, la conversation et leurs dépendances (diff…).
+const AiPanel = lazy(() => import("./AiPanel"));
+const ConvPanel = lazy(() => import("./ConversationPanel").then((m) => ({ default: m.ConvPanel })));
+const ConvHistory = lazy(() => import("./ConversationPanel").then((m) => ({ default: m.ConvHistory })));
 const Settings = lazy(() => import("./Settings"));
 const ShortcutsOverlay = lazy(() => import("./ShortcutsOverlay"));
 const TrashPanel = lazy(() => import("./TrashPanel"));
 const AttachmentsPanel = lazy(() => import("./AttachmentsPanel"));
 const VersionTree = lazy(() => import("./VersionTree"));
+const TasksPanel = lazy(() => import("./TasksPanel"));
+const ConflictsPanel = lazy(() => import("./ConflictsPanel"));
 
 export default function Layout() {
   const {
-    showAiPanel, showVersionPanel, showSettings, showTrash, showAttachments,
+    showAiPanel, showVersionPanel, showSettings, showTrash, showAttachments, showTasks, showConflicts,
     createNote, toggleSettings, toggleAiPanel, toggleVersionPanel,
     focusMode, toggleFocusMode, toggleGraph, notes, selectNote, recentNoteIds,
     settings, isLocked, showTabs,
@@ -84,6 +90,8 @@ export default function Layout() {
         const st = useStore.getState();
         if (shortcutsOpenRef.current) { e.preventDefault(); setShortcutsOpen(false); return; }
         if (st.showSettings) { e.preventDefault(); toggleSettings(); return; }
+        if (st.showTasks) { e.preventDefault(); st.toggleTasks(); return; }
+        if (st.showConflicts) { e.preventDefault(); st.toggleConflicts(); return; }
         if (st.splitNoteId) { e.preventDefault(); st.setSplitNote(null); return; }
         if (st.showAiPanel) { e.preventDefault(); toggleAiPanel(); return; }
         if (st.showVersionPanel) { e.preventDefault(); toggleVersionPanel(); return; }
@@ -93,6 +101,10 @@ export default function Layout() {
 
       // Ctrl+L : verrouiller (ou créer un mot de passe s'il n'y en a pas)
       if (ctrl && !e.shiftKey && !e.altKey && e.key.toLowerCase() === "l") { e.preventDefault(); lockOrSetup(); return; }
+
+      // Ctrl+D : note du jour ; Ctrl+Shift+T : vue Tâches
+      if (ctrl && !e.altKey && e.key.toLowerCase() === "d" && !e.shiftKey) { e.preventDefault(); openDailyNote().catch(() => {}); return; }
+      if (ctrl && e.shiftKey && !e.altKey && e.key.toLowerCase() === "t") { e.preventDefault(); useStore.getState().toggleTasks(); return; }
 
       // F11 : mode focus en plein écran
       if (e.key === "F11") { e.preventDefault(); toggleFocusMode(); return; }
@@ -199,14 +211,16 @@ export default function Layout() {
               min={280}
               max={560}
             />
-            <AiPanel onOpenConv={() => setConvOpen(true)} />
+            <Suspense fallback={null}><AiPanel onOpenConv={() => setConvOpen(true)} /></Suspense>
           </aside>
         )}
 
         {showAiPanel && convOpen && (
           <>
-            <ConvPanel onClose={() => setConvOpen(false)} />
-            <ConvHistory onExpand={() => setConvOpen(false)} />
+            <Suspense fallback={null}>
+              <ConvPanel onClose={() => setConvOpen(false)} />
+              <ConvHistory onExpand={() => setConvOpen(false)} />
+            </Suspense>
           </>
         )}
 
@@ -221,6 +235,8 @@ export default function Layout() {
         {showSettings && <Settings />}
         {showTrash && <TrashPanel />}
         {showAttachments && <AttachmentsPanel />}
+        {showTasks && <TasksPanel />}
+        {showConflicts && <ConflictsPanel />}
         {shortcutsOpen && <ShortcutsOverlay onClose={() => setShortcutsOpen(false)} />}
       </Suspense>
       <D20Roller />
@@ -228,6 +244,7 @@ export default function Layout() {
       <BackupReminder />
       <AutoBackupDaemon />
       <SyncDaemon />
+      <WhatsNew />
 
 
       {/* Quick open modal */}

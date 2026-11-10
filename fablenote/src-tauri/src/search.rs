@@ -248,11 +248,16 @@ const EXCERPT_CHARS: usize = 1800;
 
 /// Classe les notes par pertinence : chaque mot de la question pèse d'autant plus
 /// qu'il est rare dans l'ensemble des notes, et compte davantage dans le titre.
-fn rank_notes(notes: &[(String, String)], cache: &SearchCache, terms: &[String], limit: usize) -> Vec<RelevantNote> {
+fn rank_notes<'a>(
+    notes: &[(String, String)],
+    lookup: impl Fn(&str) -> Option<&'a CachedText>,
+    terms: &[String],
+    limit: usize,
+) -> Vec<RelevantNote> {
     if terms.is_empty() { return vec![]; }
     let n = notes.len() as f64;
     let titles: Vec<String> = notes.iter().map(|(_, t)| fold(t)).collect();
-    let text = |id: &str| cache.get(id).map(|c| c.folded.as_str()).unwrap_or("");
+    let text = |id: &str| lookup(id).map(|c| c.folded.as_str()).unwrap_or("");
     let weights: Vec<f64> = terms.iter().map(|t| {
         let df = notes.iter().zip(&titles)
             .filter(|((id, _), title)| title.contains(t.as_str()) || text(id).contains(t.as_str()))
@@ -272,12 +277,99 @@ fn rank_notes(notes: &[(String, String)], cache: &SearchCache, terms: &[String],
 
     scored.into_iter().take(limit).map(|(_, i)| {
         let (id, title) = &notes[i];
-        let excerpt = cache.get(id).map(|c| {
+        let excerpt = lookup(id).map(|c| {
             let first = terms.iter().filter_map(|t| c.folded.find(t.as_str())).min();
             excerpt_at(&c.plain, first.map(|b| c.folded[..b].chars().count()).unwrap_or(0))
         }).unwrap_or_default();
         RelevantNote { id: id.clone(), title: title.clone(), excerpt }
     }).collect()
+}
+
+/// Texte des notes qui ont des fichiers joints lisibles : celui de la note suivi de celui
+/// des fichiers (« 📎 nom : … »). L'empreinte change avec eux, ce qui réindexe la note.
+fn with_attachment_texts(cache: &SearchCache, files: Vec<(String, String, String)>) -> SearchCache {
+    let mut extra: std::collections::HashMap<String, String> = std::collections::HashMap::new();
+    for (note_id, name, text) in files {
+        let e = extra.entry(note_id).or_default();
+        e.push_str(&format!("\n\n📎 {name} : {text}"));
+    }
+    extra.into_iter().filter_map(|(id, files_text)| {
+        let c = cache.get(&id)?;
+        let plain = format!("{}{}", c.plain, files_text);
+        let entry = CachedText {
+            stamp: (c.stamp.0 + files_text.len() as u64, c.stamp.1),
+            with_key: c.with_key,
+            folded: fold(&plain),
+            plain,
+        };
+        Some((id, entry))
+    }).collect()
+}
+
+// ─── Tâches de toutes les notes (vue « Tâches ») ──────────────────────────────
+
+#[derive(Serialize, Debug, PartialEq)]
+pub struct TaskItem {
+    pub note_id: String,
+    pub note_title: String,
+    pub folder: Option<String>,
+    pub updated_at: String,
+    /// Rang de la case dans la note (0 = la première), pour la cocher depuis la vue.
+    pub index: usize,
+    pub text: String,
+    pub checked: bool,
+}
+
+/// Cases à cocher d'une note TipTap (`<li data-type="taskItem" data-checked="…">`), dans
+/// l'ordre du document : (texte, cochée). Le texte s'arrête à une sous-liste éventuelle.
+pub(crate) fn parse_tasks(html: &str) -> Vec<(String, bool)> {
+    let mut out = Vec::new();
+    let mut rest = html;
+    while let Some(start) = rest.find("<li") {
+        let after = &rest[start..];
+        let Some(tag_end) = after.find('>') else { break };
+        let tag = &after[..tag_end];
+        let body = &after[tag_end + 1..];
+        if tag.contains("data-type=\"taskItem\"") {
+            let checked = tag.contains("data-checked=\"true\"");
+            let end = [body.find("<ul"), body.find("<ol"), body.find("</li>")].into_iter().flatten().min().unwrap_or(body.len());
+            out.push((strip_html(&body[..end]).trim().to_string(), checked));
+        }
+        rest = body;
+    }
+    out
+}
+
+#[tauri::command]
+pub async fn get_all_tasks(state: State<'_, AppState>) -> Result<Vec<TaskItem>, String> {
+    crate::require_unlocked(&state)?;
+    let key = state.enc_key.lock().map_err(|e| e.to_string())?.clone();
+    let rows: Vec<(String, String, Option<String>, String)> = {
+        let db = state.db.lock().map_err(|e| e.to_string())?;
+        let mut stmt = db
+            .prepare("SELECT id, title, folder, updated_at FROM notes WHERE deleted_at IS NULL ORDER BY updated_at DESC")
+            .map_err(|e| e.to_string())?;
+        let mapped = stmt.query_map([], |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?))).map_err(|e| e.to_string())?;
+        let collected: SqlResult<Vec<_>> = mapped.collect();
+        collected.map_err(|e| e.to_string())?
+    };
+    let mut tasks = Vec::new();
+    for (id, title, folder, updated_at) in rows {
+        let raw = std::fs::read_to_string(state.notes_dir.join(format!("{id}.html"))).unwrap_or_default();
+        if !raw.contains("taskItem") && !raw.starts_with(crate::crypto::ENC_PREFIX) { continue; }
+        let html = maybe_dec(&key, &raw);
+        let parsed = parse_tasks(&html);
+        if parsed.is_empty() { continue; }
+        let (note_title, folder) = (maybe_dec(&key, &title), maybe_dec_opt(&key, &folder));
+        for (index, (text, checked)) in parsed.into_iter().enumerate() {
+            if text.is_empty() { continue; }
+            tasks.push(TaskItem {
+                note_id: id.clone(), note_title: note_title.clone(), folder: folder.clone(),
+                updated_at: updated_at.clone(), index, text, checked,
+            });
+        }
+    }
+    Ok(tasks)
 }
 
 /// Passage de `plain` d'au plus `EXCERPT_CHARS` caractères autour de la position `at`.
@@ -316,13 +408,20 @@ pub async fn relevant_notes(
         collected.map_err(|e| e.to_string())?
     };
     let notes: Vec<(String, String)> = rows.into_iter().map(|(id, t)| (id, maybe_dec(&key, &t))).collect();
+    // Texte des PDF et fichiers texte joints : l'IA peut aussi s'en servir.
+    let files = {
+        let db = state.db.lock().map_err(|e| e.to_string())?;
+        crate::attachments::searchable_texts(&db, &key)?
+    };
     let (keyword, texts) = {
         let mut cache = state.search_cache.lock().map_err(|e| e.to_string())?;
         for (id, _) in &notes { refresh_cached(&mut cache, id, &state.notes_dir, &key); }
-        let keyword = rank_notes(&notes, &cache, &terms, limit);
+        let with_files = with_attachment_texts(&cache, files);
+        let lookup = |id: &str| with_files.get(id).or_else(|| cache.get(id));
+        let keyword = rank_notes(&notes, lookup, &terms, limit);
         let texts: Vec<crate::semantic::NoteText> = if semantic_on {
             notes.iter().filter_map(|(id, title)| {
-                let c = cache.get(id)?;
+                let c = lookup(id)?;
                 let secs = c.stamp.1.and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok()).map(|d| d.as_secs()).unwrap_or(0);
                 Some(crate::semantic::NoteText { id: id.clone(), title: title.clone(), plain: c.plain.clone(), stamp: (c.stamp.0, secs) })
             }).collect()
@@ -503,10 +602,54 @@ mod tests {
             ("b".to_string(), "Divers".to_string()),
             ("c".to_string(), "Orion".to_string()),
         ];
-        let ranked = rank_notes(&notes, &cache, &question_terms("Où en est le budget du projet Orion ?"), 5);
+        let ranked = rank_notes(&notes, |id| cache.get(id), &question_terms("Où en est le budget du projet Orion ?"), 5);
         let ids: Vec<&str> = ranked.iter().map(|r| r.id.as_str()).collect();
         assert_eq!(ids, vec!["a", "c"]);
         assert!(ranked[0].excerpt.contains("budget"));
-        assert!(rank_notes(&notes, &cache, &question_terms("chocolat"), 5).is_empty());
+        assert!(rank_notes(&notes, |id| cache.get(id), &question_terms("chocolat"), 5).is_empty());
+
+        // Le texte d'un PDF joint compte aussi (et sert d'extrait).
+        let with_files = with_attachment_texts(&cache, vec![("b".into(), "devis.pdf".into(), "Total chocolat 120 €".into())]);
+        let ranked = rank_notes(&notes, |id| with_files.get(id).or_else(|| cache.get(id)), &question_terms("chocolat"), 5);
+        assert_eq!(ranked.len(), 1);
+        assert_eq!(ranked[0].id, "b");
+        assert!(ranked[0].excerpt.contains("📎 devis.pdf"));
     }
+
+    #[test]
+    fn tasks_are_read_in_document_order() {
+        let html = concat!(
+            r#"<p>Liste</p><ul data-type="taskList">"#,
+            r#"<li data-checked="true" data-type="taskItem"><label><input type="checkbox" checked="checked"><span></span></label><div><p>Acheter du <b>pain</b></p></div></li>"#,
+            r#"<li data-type="taskItem" data-checked="false"><label><input type="checkbox"><span></span></label><div><p>Appeler Léa</p>"#,
+            r#"<ul data-type="taskList"><li data-checked="false" data-type="taskItem"><label></label><div><p>sous-tâche</p></div></li></ul></div></li>"#,
+            r#"</ul><ul><li><p>puce normale</p></li></ul>"#,
+        );
+        assert_eq!(parse_tasks(html), vec![
+            ("Acheter du pain".to_string(), true),
+            ("Appeler Léa".to_string(), false),
+            ("sous-tâche".to_string(), false),
+        ]);
+        assert!(parse_tasks("<p>rien</p>").is_empty());
+    }
+
+
+    #[test]
+    fn attached_files_find_their_note_once() {
+        let meta: std::collections::HashMap<String, (String, Option<String>, String)> = [
+            ("n1".to_string(), ("Devis".to_string(), None, "t".to_string())),
+            ("n2".to_string(), ("Autre".to_string(), Some("Travail".to_string()), "t".to_string())),
+        ].into_iter().collect();
+        let files = vec![
+            ("n1".to_string(), "a.pdf".to_string(), "Montant TOTAL : 1 200 €".to_string()),
+            ("n1".to_string(), "b.pdf".to_string(), "total encore".to_string()),
+            ("n2".to_string(), "c.pdf".to_string(), "rien à voir".to_string()),
+            ("supprimée".to_string(), "d.pdf".to_string(), "total".to_string()),
+        ];
+        let found = search_attachment_texts(files, &meta, &[], &None, "total");
+        assert_eq!(found.len(), 1, "une seule fois par note, jamais pour une note absente");
+        assert_eq!(found[0].id, "n1");
+        assert!(found[0].snippet.starts_with("📎 a.pdf : "));
+    }
+
 }

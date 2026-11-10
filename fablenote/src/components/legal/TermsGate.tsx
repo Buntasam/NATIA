@@ -4,7 +4,7 @@ import { Check, FileText, HardDrive, ShieldCheck, Sparkles } from "lucide-react"
 import { trError, useT } from "../../i18n";
 import LanguagePicker from "../LanguagePicker";
 import LegalDocs from "./LegalDocs";
-import { LEGAL_VERSION } from "./legalContent";
+import { LEGAL_VERSION } from "./legalVersion";
 
 /**
  * Acceptation des conditions d'utilisation et de la politique de confidentialité :

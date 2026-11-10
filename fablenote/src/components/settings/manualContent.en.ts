@@ -149,6 +149,15 @@ export const MANUAL_EN: ManualChapter[] = [
         ],
       },
       {
+        title: "Today's note and tasks",
+        blocks: [
+          { list: [
+            "**Today's note** `Ctrl+D` (or the calendar next to “New note”): opens today's note, titled with the date (“2026-11-10”) and filed in the **Journal** folder. It is created the first time.",
+            "**Tasks** `Ctrl+Shift+T` (or the checklist icon at the top of the sidebar): every checkbox from all your notes, grouped by note. Filter **To do** / **Done**, search, tick them directly, or click a note's name to open it. To **create a task**, type it in the top field then `Enter`: it goes to the “Tasks” note (created if needed), today's note or the note chosen next to it.",
+          ] },
+        ],
+      },
+      {
         title: "Related notes and suggested tags",
         blocks: [
           { p: "The **Links** button (top of the note) shows **related notes**: those about the same thing, even without a `[[…]]` link. With smart search installed NATIA finds them by meaning; otherwise by shared words." },
@@ -166,6 +175,8 @@ export const MANUAL_EN: ManualChapter[] = [
         blocks: [
           { table: { head: ["Shortcut", "Action"], rows: [
             ["Ctrl+N", "New note"],
+            ["Ctrl+D", "Today's note"],
+            ["Ctrl+Shift+T", "Tasks"],
             ["Ctrl+P", "Palette (notes and commands)"],
             ["Ctrl+Shift+P", "Commands"],
             ["Ctrl+Tab", "Next tab"],
@@ -422,7 +433,7 @@ export const MANUAL_EN: ManualChapter[] = [
             "At the start of a conversation, choose **All my notes** instead of the open note.",
             "Ask your question, for example “What did I decide for the Orion project?”.",
           ] },
-          { p: "NATIA searches this PC for the notes containing the words of the question, gives excerpts to the AI, and shows the **notes used** under the answer: click one to open it." },
+          { p: "NATIA searches this PC for the notes containing the words of the question, gives excerpts to the AI, and shows the **notes used** under the answer: click one to open it. The text of **attached PDFs** counts too." },
           { tip: "With the built-in AI or Ollama, nothing leaves your PC. With an online AI, excerpts of the notes found are sent to it." },
           { p: "**Smart search** (Settings → Artificial intelligence, below the models, 0.6 GB): NATIA also finds notes that cover the topic in other words. The first question reads all your notes (“Reading your notes…”), later ones only the notes that changed. Everything stays on this PC, encrypted if a password is set." },
         ],
@@ -525,6 +536,7 @@ export const MANUAL_EN: ManualChapter[] = [
           { p: "NATIA syncs at startup, every 5 minutes and when you come back to the window (**Sync now** to force it). Notes, folders, tags, trash and attached files follow." },
           { p: "The **cloud** at the top of the sidebar shows the state: green = up to date (hover for the last sync time), spinning arrows = syncing, red = error. Click it to sync." },
           { tip: "If a note was changed on both PCs between two syncs, the most recent version is kept and the other becomes a “(conflict …)” note. Nothing is lost; each received note also keeps a version in its history." },
+          { p: "An **orange cloud with a number** then shows next to the sync cloud: click it to see the conflicts. **Compare** shows both versions side by side; **Keep current version** or **Keep the copy** resolves it, the other version goes to the trash." },
           { warn: "The whole shared folder is encrypted with the sync password: without it, its notes are unreadable, even for you. Write it down." },
         ],
       },

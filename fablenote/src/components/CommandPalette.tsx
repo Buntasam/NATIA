@@ -5,6 +5,9 @@ import { useStore } from "../store";
 import { lockSafely } from "../lib/lockSafely";
 import { syncNow, useSyncState } from "../lib/sync";
 import { useT } from "../i18n";
+import { openDailyNote } from "../lib/dailyNote";
+import { findConflicts } from "../lib/conflicts";
+import { WHATS_NEW_EVENT } from "./WhatsNew";
 import { NoteMetadata } from "../types";
 
 // Palette (Ctrl+P) : ouvrir une note par son titre ou son contenu, ou lancer une commande.
@@ -52,6 +55,8 @@ export default function CommandPalette({
     const st = useStore.getState();
     const cmds: Omit<Command, "kind">[] = [
       { id: "new", label: t("Nouvelle note"), shortcut: "Ctrl+N", run: () => st.createNote() },
+      { id: "daily", label: t("Note du jour"), shortcut: "Ctrl+D", run: () => { openDailyNote().catch(() => {}); } },
+      { id: "tasks", label: t("Tâches"), shortcut: "Ctrl+Shift+T", run: () => st.toggleTasks() },
       { id: "focus", label: st.focusMode ? t("Quitter le mode focus") : t("Mode focus (plein écran)"), shortcut: "F11", run: () => st.toggleFocusMode() },
       { id: "ai", label: st.showAiPanel ? t("Fermer le panneau IA") : t("Ouvrir le panneau IA"), shortcut: "Ctrl+Shift+A", run: () => st.toggleAiPanel() },
       { id: "versions", label: t("Historique des versions"), shortcut: "Ctrl+Shift+H", run: () => st.toggleVersionPanel() },
@@ -61,6 +66,7 @@ export default function CommandPalette({
       { id: "theme", label: t("Basculer le thème clair/sombre"), run: () => st.toggleTheme() },
       { id: "tabs", label: st.showTabs ? t("Masquer les onglets") : t("Afficher les onglets"), run: () => st.setShowTabs(!st.showTabs) },
       { id: "shortcuts", label: t("Raccourcis clavier"), shortcut: "Ctrl+/", run: onShowShortcuts },
+      { id: "whats-new", label: t("Nouveautés de NATIA"), run: () => window.dispatchEvent(new CustomEvent(WHATS_NEW_EVENT)) },
     ];
     if (st.activeNote) {
       const id = st.activeNote.id;
@@ -73,6 +79,8 @@ export default function CommandPalette({
         });
       }
     }
+    const conflicts = findConflicts(st.notes).length;
+    if (conflicts > 0) cmds.push({ id: "conflicts", label: t("Conflits de synchronisation ({n})", { n: conflicts }), run: () => st.toggleConflicts() });
     if (useSyncState.getState().enabled) cmds.push({ id: "sync", label: t("Synchroniser maintenant"), run: () => { syncNow().catch(() => {}); } });
     if (st.memoryEnabled) cmds.push({ id: "memory", label: t("Mémoire IA (graphe)"), shortcut: "Ctrl+G", run: () => st.toggleGraph() });
     if (st.hasPassword) cmds.push({ id: "lock", label: t("Verrouiller l'application"), shortcut: "Ctrl+L", run: () => { lockSafely(); } });

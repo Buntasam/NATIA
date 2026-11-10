@@ -3,6 +3,7 @@ import { getVersion } from "@tauri-apps/api/app";
 import { CheckCircle2, Download, Loader2, X } from "lucide-react";
 import { checkForUpdate, installPendingUpdate, isAutoUpdateEnabled } from "../lib/updater";
 import { useT } from "../i18n";
+import { UPDATED_FROM_KEY } from "../lib/whatsNew";
 
 const LAST_VERSION_KEY = "natia_last_version";
 
@@ -22,6 +23,7 @@ export default function UpdatePrompt() {
       let last: string | null = null;
       try { last = localStorage.getItem(LAST_VERSION_KEY); localStorage.setItem(LAST_VERSION_KEY, v); } catch { /* stockage indisponible */ }
       if (last && last !== v) {
+        try { localStorage.setItem(UPDATED_FROM_KEY, last); } catch { /* stockage indisponible */ }
         setUpdatedTo(v);
         setTimeout(() => setUpdatedTo(null), 6000);
       }

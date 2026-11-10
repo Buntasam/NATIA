@@ -8,7 +8,7 @@
 
 import type { ManualChapter } from "../settings/manualContent";
 
-export const LEGAL_VERSION = "2026-10-23";
+export { LEGAL_VERSION } from "./legalVersion";
 
 export const LEGAL: ManualChapter[] = [
   // ─── Conditions d'utilisation ──────────────────────────────────────────────

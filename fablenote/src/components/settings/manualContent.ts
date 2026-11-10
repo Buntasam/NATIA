@@ -169,6 +169,15 @@ export const MANUAL: ManualChapter[] = [
         ],
       },
       {
+        title: "Note du jour et tâches",
+        blocks: [
+          { list: [
+            "**Note du jour** `Ctrl+D` (ou le calendrier à côté de « Nouvelle note ») : ouvre la note d'aujourd'hui, titrée par la date (« 2026-11-10 ») et rangée dans le dossier **Journal**. Elle est créée la première fois.",
+            "**Tâches** `Ctrl+Shift+T` (ou l'icône de liste cochée en haut de la barre latérale) : toutes les cases à cocher de toutes vos notes, regroupées par note. Filtrez **À faire** / **Faites**, cherchez, cochez directement, ou cliquez sur le nom d'une note pour l'ouvrir. Pour **créer une tâche**, tapez-la dans le champ du haut puis `Entrée` : elle va dans la note « Tâches » (créée au besoin), la note du jour ou la note choisie à côté.",
+          ] },
+        ],
+      },
+      {
         title: "Notes liées et tags suggérés",
         blocks: [
           { p: "Le bouton **Liens** (en haut de la note) affiche les **notes liées** : celles qui parlent de la même chose, même sans lien `[[…]]`. Avec la recherche intelligente installée, NATIA les trouve par le sens ; sinon par les mots en commun." },
@@ -186,6 +195,8 @@ export const MANUAL: ManualChapter[] = [
         blocks: [
           { table: { head: ["Raccourci", "Action"], rows: [
             ["Ctrl+N", "Nouvelle note"],
+            ["Ctrl+D", "Note du jour"],
+            ["Ctrl+Shift+T", "Tâches"],
             ["Ctrl+P", "Palette (notes et commandes)"],
             ["Ctrl+Shift+P", "Commandes"],
             ["Ctrl+Tab", "Onglet suivant"],
@@ -442,7 +453,7 @@ export const MANUAL: ManualChapter[] = [
             "Au début d'une conversation, choisissez **Toutes mes notes** au lieu de la note ouverte.",
             "Posez votre question, par exemple « Qu'ai-je décidé pour le projet Orion ? ».",
           ] },
-          { p: "NATIA cherche sur ce PC les notes qui contiennent les mots de la question, en donne des extraits à l'IA, et affiche sous la réponse les **notes utilisées** : cliquez sur l'une d'elles pour l'ouvrir." },
+          { p: "NATIA cherche sur ce PC les notes qui contiennent les mots de la question, en donne des extraits à l'IA, et affiche sous la réponse les **notes utilisées** : cliquez sur l'une d'elles pour l'ouvrir. Le texte des **PDF joints** est pris en compte aussi." },
           { tip: "Avec l'IA intégrée ou Ollama, rien ne quitte votre PC. Avec une IA en ligne, les extraits des notes trouvées lui sont envoyés." },
           { p: "**Recherche intelligente** (Paramètres → Intelligence artificielle, sous les modèles, 0,6 Go) : NATIA trouve aussi les notes qui parlent du sujet avec d'autres mots. La première question lit toutes vos notes (« Lecture de vos notes… »), les suivantes seulement celles qui ont changé. Tout reste sur ce PC, chiffré si un mot de passe est actif." },
         ],
@@ -545,6 +556,7 @@ export const MANUAL: ManualChapter[] = [
           { p: "NATIA synchronise à l'ouverture, toutes les 5 minutes et quand vous revenez sur la fenêtre (**Synchroniser maintenant** pour forcer). Notes, dossiers, tags, corbeille et fichiers joints suivent." },
           { p: "Le **nuage** en haut de la barre latérale montre l'état : vert = à jour (survolez-le pour l'heure de la dernière synchro), flèches qui tournent = en cours, rouge = erreur. Cliquez dessus pour synchroniser." },
           { tip: "Si une note a été modifiée sur les deux PC entre deux synchronisations, la version la plus récente est gardée et l'autre devient une note « (conflit …) ». Rien n'est perdu ; chaque note reçue garde aussi une version dans l'historique." },
+          { p: "Un **nuage orange avec un nombre** apparaît alors à côté du nuage de synchronisation : cliquez dessus pour voir les conflits. **Comparer** affiche les deux versions côte à côte ; **Garder la version actuelle** ou **Garder la copie** règle le conflit, l'autre version va dans la corbeille." },
           { warn: "Tout le dossier partagé est chiffré avec le mot de passe de synchronisation : sans lui, ses notes sont illisibles, même pour vous. Notez-le." },
         ],
       },

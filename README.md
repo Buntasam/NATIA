@@ -44,6 +44,8 @@ L'installeur n'est pas signé : Windows SmartScreen affiche « Windows a protég
 - **Notes liées** — notes qui parlent de la même chose, même sans lien (par le sens avec la recherche intelligente, sinon par les mots)
 - **Tags suggérés** — ceux des notes proches et les tags existants présents dans le texte
 - **Tags**, **corbeille** avec restauration, **modèles de notes**
+- **Note du jour** — `Ctrl+D`, une note datée dans le dossier « Journal »
+- **Vue Tâches** — `Ctrl+Shift+T`, toutes les cases à cocher de toutes les notes
 
 ### IA multi-fournisseur
 - **IA intégrée** — llama.cpp tourne dans NATIA : installation en un clic, modèle choisi selon le PC, rien ne quitte votre PC
@@ -97,6 +99,8 @@ L'installeur n'est pas signé : Windows SmartScreen affiche « Windows a protég
 | Raccourci | Action |
 |---|---|
 | `Ctrl+N` | Nouvelle note |
+| `Ctrl+D` | Note du jour |
+| `Ctrl+Shift+T` | Tâches |
 | `Ctrl+F` | Rechercher dans la note |
 | `Ctrl+Shift+F` | Recherche globale |
 | `Ctrl+P` | Palette (notes et commandes) |
@@ -171,6 +175,8 @@ fablenote/
 │   │   ├── NoteTabs.tsx              # Onglets des notes ouvertes
 │   │   ├── Sidebar.tsx               # Navigation, recherche, dossiers, vues
 │   │   ├── Editor.tsx · Toolbar.tsx  # Éditeur TipTap
+│   │   ├── editor/                   # Menu « / », [[liens]], chercher/remplacer, tags
+│   │   ├── sidebar/                  # Éléments de l'arbre (dossiers, notes), glisser-déposer
 │   │   ├── AiPanel.tsx               # Panneau IA
 │   │   ├── LockScreen.tsx            # Écran de verrouillage
 │   │   ├── Settings.tsx              # Fenêtre des paramètres

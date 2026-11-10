@@ -3,6 +3,22 @@
 Les nouveautés de chaque version de NATIA. Les fichiers d'installation sont sur la page
 [Releases](https://github.com/Buntasam/NATIA/releases).
 
+## [Non publié]
+
+### Nouveautés
+- **Note du jour** (`Ctrl+D`) : une note datée par jour, rangée dans le dossier « Journal ».
+- **Vue Tâches** (`Ctrl+Shift+T`) : toutes les cases à cocher de toutes les notes, filtrables, à cocher sans ouvrir la note ; une tâche se crée directement depuis la vue (dans une note « Tâches », la note du jour ou une note choisie).
+- **« Demander à mes notes »** lit aussi le texte des PDF joints.
+- **Conflits de synchronisation** : un nuage orange les signale ; comparaison côte à côte, garder l'une ou l'autre version.
+- **Écran « Nouveautés »** après une mise à jour (et depuis la palette).
+
+### Performances
+- Démarrage plus léger : le panneau IA, la conversation, l'écran des conditions et le manuel se chargent à l'ouverture ; coloration du code limitée aux langages courants (fichier principal : 1,26 Mo → 1,03 Mo).
+
+### Projet
+- `Editor.tsx` et `Sidebar.tsx` découpés (`components/editor/`, `components/sidebar/`, `lib/noteExport.ts`, `lib/noteTree.ts`).
+- Nouveaux tests : tâches, note du jour, conflits, nouveautés, arbre des dossiers, recherche dans les fichiers joints.
+
 ## [6.3.0] — 2026-11-10
 
 ### Nouveautés
