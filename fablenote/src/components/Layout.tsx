@@ -14,6 +14,7 @@ import Sidebar from "./Sidebar";
 import SplitPane from "./SplitPane";
 import NoteTabs from "./NoteTabs";
 import WhatsNew from "./WhatsNew";
+import TaskDueDaemon from "./TaskDueDaemon";
 import { openDailyNote } from "../lib/dailyNote";
 import CommandPalette from "./CommandPalette";
 import { setFocusFullscreen } from "../lib/focus";
@@ -245,6 +246,7 @@ export default function Layout() {
       <AutoBackupDaemon />
       <SyncDaemon />
       <WhatsNew />
+      <TaskDueDaemon />
 
 
       {/* Quick open modal */}

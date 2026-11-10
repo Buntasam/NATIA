@@ -151,9 +151,11 @@ export const MANUAL_EN: ManualChapter[] = [
       {
         title: "Today's note and tasks",
         blocks: [
+          { p: "**Quick capture** `Ctrl+Alt+N`, from any app (even with NATIA minimized next to the clock): a small window opens. Type an idea, `Enter`: it's a new note (the first line becomes the title). `Tab` switches to **Task**: it goes to the “Tasks” note. `Esc` closes. NATIA must be unlocked." },
           { list: [
             "**Today's note** `Ctrl+D` (or the calendar next to “New note”): opens today's note, titled with the date (“2026-11-10”) and filed in the **Journal** folder. It is created the first time.",
             "**Tasks** `Ctrl+Shift+T` (or the checklist icon at the top of the sidebar): every checkbox from all your notes, grouped by note. Filter **To do** / **Done**, search, tick them directly, or click a note's name to open it. To **create a task**, type it in the top field then `Enter`: it goes to the “Tasks” note (created if needed), today's note or the note chosen next to it.",
+            "**Due date**: write `@tomorrow`, `@friday`, `@15/11` in the task (or pick a date next to it); it becomes “📅 2026-11-15”. In a note, write `📅 2026-11-15` or `@2026-11-15` directly. **By due date** groups overdue, today's and this week's tasks; the calendar shows them (green dot) and a Windows notification reminds you of today's.",
           ] },
         ],
       },
@@ -176,6 +178,7 @@ export const MANUAL_EN: ManualChapter[] = [
           { table: { head: ["Shortcut", "Action"], rows: [
             ["Ctrl+N", "New note"],
             ["Ctrl+D", "Today's note"],
+            ["Ctrl+Alt+N", "Quick capture (from anywhere)"],
             ["Ctrl+Shift+T", "Tasks"],
             ["Ctrl+P", "Palette (notes and commands)"],
             ["Ctrl+Shift+P", "Commands"],
@@ -422,6 +425,7 @@ export const MANUAL_EN: ManualChapter[] = [
           ] },
           { p: "**Linked files** (paperclip at the bottom of the sidebar) lists every attached file: search, open, **Save as…**, delete and go to the note." },
           { p: "NATIA reads the text of attached **PDFs** (and text files): search finds the note that holds the file, with a “📎 file name” excerpt." },
+          { p: "**Images** (a photo of a whiteboard, a screenshot) and **scanned PDFs** are read by the OCR built into Windows: their text is searchable too, with nothing to download. Recognized languages are those installed in Windows (Settings → Time & language)." },
           { p: "Files are stored with your notes, encrypted if a password is set, and included in exports, backups and sync. Permanently deleting a note deletes its files." },
         ],
       },

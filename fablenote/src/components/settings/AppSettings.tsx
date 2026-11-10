@@ -7,6 +7,7 @@ import { checkForUpdate, getPendingUpdate, installPendingUpdate, isAutoUpdateEna
 import { isCloseToTray, setCloseToTray } from "../../lib/windowPrefs";
 import { openSetupGuide, useSetupGuide } from "../SetupGuide";
 import { Section } from "./SettingsWidgets";
+import DiagnosticsButton from "./DiagnosticsButton";
 import { SettingsFormProps } from "./types";
 import { useT } from "../../i18n";
 
@@ -144,6 +145,7 @@ export default function AppSettings({ form, set }: Pick<SettingsFormProps, "form
             <span className={`absolute top-0.5 w-4 h-4 rounded-full bg-white shadow-sm transition-transform ${form.debug_mode ? "left-[18px]" : "left-0.5"}`} />
           </button>
         </div>
+        {form.debug_mode && <DiagnosticsButton />}
       </Section>
 
       <Section title={t("Signaler un bug ou une idée")}>

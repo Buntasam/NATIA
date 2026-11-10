@@ -45,7 +45,8 @@ L'installeur n'est pas signé : Windows SmartScreen affiche « Windows a protég
 - **Tags suggérés** — ceux des notes proches et les tags existants présents dans le texte
 - **Tags**, **corbeille** avec restauration, **modèles de notes**
 - **Note du jour** — `Ctrl+D`, une note datée dans le dossier « Journal »
-- **Vue Tâches** — `Ctrl+Shift+T`, toutes les cases à cocher de toutes les notes
+- **Vue Tâches** — `Ctrl+Shift+T`, toutes les cases à cocher de toutes les notes, avec échéances (`@demain`, `@vendredi`…) et rappel Windows
+- **Capture rapide** — `Ctrl+Alt+N` depuis n'importe quelle application : une note ou une tâche en deux secondes
 
 ### IA multi-fournisseur
 - **IA intégrée** — llama.cpp tourne dans NATIA : installation en un clic, modèle choisi selon le PC, rien ne quitte votre PC
@@ -61,7 +62,7 @@ L'installeur n'est pas signé : Windows SmartScreen affiche « Windows a protég
 - **Indicateur « IA en ligne »** — rappelle quand le texte est envoyé à un fournisseur extérieur
 
 ### Recherche et navigation
-- **Recherche plein texte** — titres, contenus et texte des PDF joints, sans tenir compte des majuscules ni des accents (« reunion » trouve « Réunion »)
+- **Recherche plein texte** — titres, contenus, texte des PDF joints et des images (OCR de Windows), sans tenir compte des majuscules ni des accents (« reunion » trouve « Réunion »)
 - **Palette** — `Ctrl+P` pour ouvrir une note ou lancer une commande, `Ctrl+Shift+P` pour les commandes seules
 
 ### Historique
@@ -75,6 +76,7 @@ L'installeur n'est pas signé : Windows SmartScreen affiche « Windows a protég
 - **Export / import** — ZIP classique, protégé AES-256 (7-Zip) ou compatible Windows ; rappel de sauvegarde chaque semaine
 - **Sauvegarde automatique** — chaque jour ou chaque semaine, dans le dossier de votre choix, en gardant les N dernières ; restauration en un clic
 - **Import Obsidian et Notion** — dossiers, tags, tâches, images et liens `[[…]]` conservés
+- **Export Markdown** — toutes les notes en fichiers `.md`, avec dossiers, images et fichiers joints
 - **Fichiers joints** — PDF, documents… par le trombone ou en les glissant dans la note, chiffrés avec elles ; vue « Fichiers liés »
 - **Synchronisation entre PC** — par un dossier partagé (OneDrive, Dropbox, clé USB), entièrement chiffré ; conflits gardés en copie ; état visible dans la barre latérale
 - **Clé de récupération** — rouvre les notes en cas d'oubli du mot de passe, de réinstallation de Windows ou de changement de PC
@@ -100,6 +102,7 @@ L'installeur n'est pas signé : Windows SmartScreen affiche « Windows a protég
 |---|---|
 | `Ctrl+N` | Nouvelle note |
 | `Ctrl+D` | Note du jour |
+| `Ctrl+Alt+N` | Capture rapide (depuis n'importe où) |
 | `Ctrl+Shift+T` | Tâches |
 | `Ctrl+F` | Rechercher dans la note |
 | `Ctrl+Shift+F` | Recherche globale |

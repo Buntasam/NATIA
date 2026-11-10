@@ -171,9 +171,11 @@ export const MANUAL: ManualChapter[] = [
       {
         title: "Note du jour et tâches",
         blocks: [
+          { p: "**Capture rapide** `Ctrl+Alt+N`, depuis n'importe quelle application (même NATIA réduite près de l'horloge) : une petite fenêtre s'ouvre. Tapez une idée, `Entrée` : c'est une nouvelle note (la première ligne devient le titre). `Tab` passe en mode **Tâche** : elle va dans la note « Tâches ». `Échap` ferme. NATIA doit être déverrouillée." },
           { list: [
             "**Note du jour** `Ctrl+D` (ou le calendrier à côté de « Nouvelle note ») : ouvre la note d'aujourd'hui, titrée par la date (« 2026-11-10 ») et rangée dans le dossier **Journal**. Elle est créée la première fois.",
             "**Tâches** `Ctrl+Shift+T` (ou l'icône de liste cochée en haut de la barre latérale) : toutes les cases à cocher de toutes vos notes, regroupées par note. Filtrez **À faire** / **Faites**, cherchez, cochez directement, ou cliquez sur le nom d'une note pour l'ouvrir. Pour **créer une tâche**, tapez-la dans le champ du haut puis `Entrée` : elle va dans la note « Tâches » (créée au besoin), la note du jour ou la note choisie à côté.",
+            "**Échéance** : écrivez `@demain`, `@vendredi`, `@15/11` dans la tâche (ou choisissez une date à côté) ; elle devient « 📅 2026-11-15 ». Dans une note, écrivez directement `📅 2026-11-15` ou `@2026-11-15`. **Par échéance** regroupe les tâches en retard, du jour, de la semaine ; le calendrier les montre (point vert) et une notification Windows rappelle celles du jour.",
           ] },
         ],
       },
@@ -196,6 +198,7 @@ export const MANUAL: ManualChapter[] = [
           { table: { head: ["Raccourci", "Action"], rows: [
             ["Ctrl+N", "Nouvelle note"],
             ["Ctrl+D", "Note du jour"],
+            ["Ctrl+Alt+N", "Capture rapide (depuis n'importe où)"],
             ["Ctrl+Shift+T", "Tâches"],
             ["Ctrl+P", "Palette (notes et commandes)"],
             ["Ctrl+Shift+P", "Commandes"],
@@ -442,6 +445,7 @@ export const MANUAL: ManualChapter[] = [
           ] },
           { p: "**Fichiers liés** (trombone en bas de la barre latérale) liste tous les fichiers joints : recherche, ouverture, **Enregistrer sous…**, suppression et accès à la note." },
           { p: "Le texte des **PDF** (et des fichiers texte) joints est lu par NATIA : la recherche trouve la note qui contient le fichier, avec un extrait « 📎 nom du fichier »." },
+          { p: "Les **images** (photo d'un tableau, capture d'écran) et les **PDF scannés** sont lus par l'OCR intégré à Windows : leur texte est cherchable aussi, sans rien télécharger. Les langues reconnues sont celles installées dans Windows (Paramètres → Heure et langue)." },
           { p: "Les fichiers sont rangés avec vos notes, chiffrés si un mot de passe est actif, et inclus dans les exports, sauvegardes et la synchronisation. Supprimer définitivement une note supprime ses fichiers." },
         ],
       },

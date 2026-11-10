@@ -22,6 +22,7 @@ const GROUPS: { title: string; items: { keys: string; label: string }[] }[] = [
     items: [
       { keys: "Ctrl+N", label: msg("Nouvelle note") },
       { keys: "Ctrl+D", label: msg("Note du jour") },
+      { keys: "Ctrl+Alt+N", label: msg("Capture rapide (depuis n'importe où)") },
       { keys: "Ctrl+S", label: msg("Sauvegarder") },
       { keys: "Ctrl+F", label: msg("Chercher dans la note") },
       { keys: "Ctrl+H", label: msg("Chercher & remplacer") },

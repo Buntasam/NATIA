@@ -6,6 +6,11 @@ Les nouveautés de chaque version de NATIA. Les fichiers d'installation sont sur
 ## [Non publié]
 
 ### Nouveautés
+- **Capture rapide** (`Ctrl+Alt+N`, depuis n'importe quelle application) : une petite fenêtre pour noter une idée ou une tâche, même NATIA réduite.
+- **Échéances des tâches** : `@demain`, `@vendredi`, `@15/11` ou une date ; vue « Par échéance », points verts dans le calendrier, notification Windows le jour J.
+- **OCR** : le texte des images et des PDF scannés joints est cherchable (OCR intégré à Windows, rien à télécharger).
+- **Export en Markdown** de toutes les notes (Paramètres → Données), avec dossiers, images et fichiers joints, lisible par Obsidian.
+- **Diagnostic** à copier pour un signalement de bug (mode débogage), sans contenu de note, chemins ni clés.
 - **Note du jour** (`Ctrl+D`) : une note datée par jour, rangée dans le dossier « Journal ».
 - **Vue Tâches** (`Ctrl+Shift+T`) : toutes les cases à cocher de toutes les notes, filtrables, à cocher sans ouvrir la note ; une tâche se crée directement depuis la vue (dans une note « Tâches », la note du jour ou une note choisie).
 - **« Demander à mes notes »** lit aussi le texte des PDF joints.
@@ -13,6 +18,7 @@ Les nouveautés de chaque version de NATIA. Les fichiers d'installation sont sur
 - **Écran « Nouveautés »** après une mise à jour (et depuis la palette).
 
 ### Performances
+- Barre latérale plus fluide avec beaucoup de notes (moins de rafraîchissements, éléments hors écran non dessinés).
 - Démarrage plus léger : le panneau IA, la conversation, l'écran des conditions et le manuel se chargent à l'ouverture ; coloration du code limitée aux langages courants (fichier principal : 1,26 Mo → 1,03 Mo).
 
 ### Projet

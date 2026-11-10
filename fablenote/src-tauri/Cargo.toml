@@ -40,6 +40,7 @@ tauri-plugin-opener = "=2.5.5"
 tauri-plugin-updater = "=2.12.0"
 tauri-plugin-single-instance = "=2.4.1"
 tauri-plugin-autostart = "=2.5.1"
+tauri-plugin-global-shortcut = "=2.4.1"
 
 [features]
 default = ["custom-protocol"]
@@ -47,3 +48,5 @@ custom-protocol = ["tauri/custom-protocol"]
 
 [target.'cfg(windows)'.dependencies]
 windows-sys = { version = "0.60", features = ["Win32_Foundation", "Win32_Security", "Win32_System_JobObjects", "Win32_System_RemoteDesktop", "Win32_System_SystemInformation", "Win32_System_WindowsProgramming"] }
+# OCR intégré à Windows (images et PDF scannés joints) ; même version que celle de Tauri.
+windows = { version = "=0.61.3", features = ["Data_Pdf", "Foundation", "Foundation_Collections", "Globalization", "Graphics_Imaging", "Media_Ocr", "Storage_Streams", "Win32_System_WinRT"] }

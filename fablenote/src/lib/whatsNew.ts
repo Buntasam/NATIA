@@ -13,6 +13,10 @@ export const RELEASES: Release[] = [
   {
     version: "6.4.0",
     items: [
+      msg("Capture rapide (Ctrl+Alt+N, depuis n'importe quelle application) : une note ou une tâche en deux secondes."),
+      msg("Échéances des tâches (@demain, @vendredi, date) : rappel Windows le jour J, vue « Par échéance », calendrier."),
+      msg("Recherche dans les images et les PDF scannés joints (OCR de Windows)."),
+      msg("Export de toutes les notes en Markdown, avec leurs images et fichiers."),
       msg("Note du jour (Ctrl+D) : une note datée, rangée dans le dossier « Journal »."),
       msg("Vue Tâches : toutes les cases à cocher de toutes vos notes ; créez une tâche directement depuis la vue."),
       msg("« Demander à mes notes » lit aussi le texte des PDF joints."),
