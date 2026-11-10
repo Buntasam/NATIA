@@ -28,7 +28,7 @@ aes-gcm = { version = "0.10", features = ["aes"] }
 rand = "0.8"
 base64 = "0.22"
 zip = { version = "=2.6.1", default-features = false, features = ["deflate", "aes-crypto"] }
-ammonia = "~4.1.8"
+ammonia = "~4.2.4"
 pulldown-cmark = { version = "=0.13.6", default-features = false, features = ["html"] }
 # Texte des PDF joints, pour la recherche.
 pdf-extract = "=0.12.1"
@@ -36,10 +36,10 @@ keyring = { version = "3", features = ["windows-native", "apple-native"] }
 tauri-plugin-dialog = "2"
 tauri-plugin-notification = "2"
 zeroize = "1"
-tauri-plugin-opener = "=2.5.5"
-tauri-plugin-updater = "=2.12.0"
-tauri-plugin-single-instance = "=2.4.1"
-tauri-plugin-autostart = "=2.5.1"
+tauri-plugin-opener = "=2.7.2"
+tauri-plugin-updater = "=2.14.1"
+tauri-plugin-single-instance = "=2.5.5"
+tauri-plugin-autostart = "=2.7.0"
 tauri-plugin-global-shortcut = "=2.4.1"
 
 [features]
