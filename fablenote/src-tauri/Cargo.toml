@@ -25,7 +25,7 @@ tokio = { version = "1", features = ["process", "io-util", "sync", "time"] }
 sha2 = "0.10"
 argon2 = "0.5"
 aes-gcm = { version = "0.10", features = ["aes"] }
-rand = "0.8"
+rand = "0.10"
 base64 = "0.22"
 zip = { version = "=2.6.1", default-features = false, features = ["deflate", "aes-crypto"] }
 ammonia = "~4.1.8"
