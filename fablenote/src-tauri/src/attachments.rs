@@ -110,15 +110,27 @@ pub(crate) fn delete_note_attachments(db: &Connection, notes_dir: &Path, note_id
 /// Au-delà, le texte d'un fichier n'est pas gardé en entier : la recherche n'en a pas besoin.
 const MAX_TEXT_CHARS: usize = 300_000;
 
-/// Texte lisible d'un fichier joint : PDF, ou fichier texte. Vide si rien à lire.
+/// En dessous, un PDF n'a pas vraiment de texte : c'est un scan, on le lit par l'OCR.
+const SCANNED_PDF_CHARS: usize = 40;
+
+/// Texte lisible d'un fichier joint : PDF (OCR si c'est un scan), image (OCR) ou fichier
+/// texte. Vide si rien à lire.
 pub(crate) fn extract_text(name: &str, bytes: &[u8]) -> String {
     let ext = Path::new(name).extension().map(|e| e.to_string_lossy().to_ascii_lowercase()).unwrap_or_default();
     let text = match ext.as_str() {
-        // pdf-extract peut paniquer sur un PDF mal formé : on l'isole.
-        "pdf" => std::panic::catch_unwind(|| pdf_extract::extract_text_from_mem(bytes).ok())
-            .ok()
-            .flatten()
-            .unwrap_or_default(),
+        "pdf" => {
+            // pdf-extract peut paniquer sur un PDF mal formé : on l'isole.
+            match std::panic::catch_unwind(|| pdf_extract::extract_text_from_mem(bytes)) {
+                // PDF lisible mais presque sans texte : un scan, lu par l'OCR. Le lecteur PDF de
+                // Windows n'est appelé que sur un PDF valide (il peut planter sur un faux PDF).
+                Ok(Ok(text)) if text.split_whitespace().map(str::len).sum::<usize>() < SCANNED_PDF_CHARS => {
+                    crate::ocr::pdf_text(bytes)
+                }
+                Ok(Ok(text)) => text,
+                _ => String::new(),
+            }
+        }
+        "png" | "jpg" | "jpeg" | "bmp" | "gif" | "tif" | "tiff" => crate::ocr::image_text(bytes),
         "txt" | "md" | "csv" | "json" | "log" | "xml" | "html" | "htm" => String::from_utf8_lossy(bytes).into_owned(),
         _ => String::new(),
     };
@@ -140,6 +152,11 @@ pub(crate) fn index_pending(state: &AppState) -> Result<(), String> {
         let key = key_of(state)?;
         let pending: Vec<(String, String)> = {
             let db = state.db.lock().map_err(|e| e.to_string())?;
+            // Une fois, à l'arrivée de l'OCR : les images et les PDF scannés lus avant, sans texte, sont relus.
+            if db.query_row("SELECT 1 FROM user_data WHERE key='ocr_reindex_v1'", [], |_| Ok(())).is_err() {
+                db.execute("UPDATE attachments SET text=NULL WHERE text=''", []).map_err(|e| e.to_string())?;
+                db.execute("INSERT OR IGNORE INTO user_data(key,value) VALUES('ocr_reindex_v1','1')", []).map_err(|e| e.to_string())?;
+            }
             let mut stmt = db.prepare("SELECT id, name FROM attachments WHERE text IS NULL").map_err(|e| e.to_string())?;
             let rows = stmt.query_map([], |r| Ok((r.get::<_, String>(0)?, r.get::<_, String>(1)?))).map_err(|e| e.to_string())?;
             rows.filter_map(|r| r.ok()).collect()

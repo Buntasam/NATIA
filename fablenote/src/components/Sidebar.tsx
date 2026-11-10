@@ -1,4 +1,5 @@
-import { lazy, Suspense, useEffect, useRef, useState } from "react";
+import { lazy, Suspense, useEffect, useMemo, useRef, useState } from "react";
+import { useShallow } from "zustand/react/shallow";
 import {
   CalendarDays,
   CalendarPlus,
@@ -73,9 +74,12 @@ const THEME_NAMES: Record<string, string> = {
 // ─── Main sidebar ─────────────────────────────────────────────────────────────
 
 export default function Sidebar() {
+  // Sélection précise : la barre latérale ne se redessine pas à chaque frappe ou enregistrement
+  // (isSaving, contenu de la note ouverte…), seulement quand ce qu'elle affiche change.
+  const activeNoteId = useStore((s) => s.activeNote?.id ?? null);
+  const activeNote = useMemo(() => (activeNoteId ? { id: activeNoteId } : null), [activeNoteId]);
   const {
     notes,
-    activeNote,
     searchQuery,
     folders,
     isDark,
@@ -103,13 +107,22 @@ export default function Sidebar() {
     sidebarWidth,
     setSidebarWidth,
     setSplitNote,
-  } = useStore();
+  } = useStore(useShallow((s) => ({
+    notes: s.notes, searchQuery: s.searchQuery, folders: s.folders, isDark: s.isDark, toggleTheme: s.toggleTheme,
+    theme: s.theme, setSearchQuery: s.setSearchQuery, createNote: s.createNote, selectNote: s.selectNote,
+    deleteNote: s.deleteNote, moveNote: s.moveNote, createFolder: s.createFolder, deleteFolder: s.deleteFolder,
+    renameFolder: s.renameFolder, toggleSettings: s.toggleSettings, toggleTrash: s.toggleTrash,
+    toggleAttachments: s.toggleAttachments, isLoading: s.isLoading, itemColors: s.itemColors,
+    setItemColor: s.setItemColor, deleteItemColor: s.deleteItemColor, hasPassword: s.hasPassword,
+    pinnedNoteIds: s.pinnedNoteIds, togglePinNote: s.togglePinNote, memoryEnabled: s.memoryEnabled,
+    sidebarWidth: s.sidebarWidth, setSidebarWidth: s.setSidebarWidth, setSplitNote: s.setSplitNote,
+  })));
 
   const t = useT();
   const [showTreeMap, setShowTreeMap] = useState(false);
   const [showCalendar, setShowCalendar] = useState(false);
   const [showPostIts, setShowPostIts] = useState(false);
-  const { showGraph, toggleGraph } = useStore();
+  const { showGraph, toggleGraph } = useStore(useShallow((s) => ({ showGraph: s.showGraph, toggleGraph: s.toggleGraph })));
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
 
   // Full-text search
@@ -246,12 +259,13 @@ export default function Sidebar() {
     setRenamingPath(null);
   };
 
-  const { root, rootNotes } = buildTree(notes, folders, searchQuery);
+  // Recalculés seulement quand les notes, les dossiers ou la recherche changent.
+  const { root, rootNotes } = useMemo(() => buildTree(notes, folders, searchQuery), [notes, folders, searchQuery]);
 
-  const allFolderPaths = [
-    ...folders,
-    ...notes.filter((n) => n.folder).map((n) => n.folder as string),
-  ].filter((v, i, a) => a.indexOf(v) === i).sort();
+  const allFolderPaths = useMemo(
+    () => [...new Set([...folders, ...notes.flatMap((n) => (n.folder ? [n.folder] : []))])].sort(),
+    [notes, folders],
+  );
 
   const handleNoteDrop = (noteId: string, toFolder: string | null) => {
     const fromFolder = notes.find((n) => n.id === noteId)?.folder ?? null;

@@ -148,6 +148,9 @@ src-tauri/src/
 ├── md_import.rs    ← import d'un coffre Obsidian ou d'un export Notion (Markdown → HTML, wikilinks, images)
 ├── semantic.rs     ← recherche par le sens dans les notes (index d'embeddings chiffré dans user_data)
 ├── attachments.rs  ← fichiers joints (attachments/<id>, chiffrés), ouverture par copie temporaire
+├── capture.rs      ← capture rapide : raccourci global Ctrl+Alt+N, petite fenêtre « capture » (index.html#capture)
+├── ocr.rs          ← OCR de Windows (Windows.Media.Ocr, Windows.Data.Pdf) pour les images et les PDF scannés joints
+├── md_export.rs    ← export Markdown : écrit seulement dans le dossier préparé par begin_markdown_export
 ├── sync.rs         ← synchronisation par dossier partagé (chiffré), fusion par empreinte de base
 └── llm.rs          ← IA intégrée : téléchargement vérifié de llama.cpp et des modèles, serveur local
 ```

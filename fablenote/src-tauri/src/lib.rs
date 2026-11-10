@@ -6,14 +6,17 @@ use tauri::Manager;
 
 mod ai;
 mod attachments;
+mod capture;
 mod backup;
 mod crypto;
 mod db;
 mod legal;
 mod md_import;
+mod md_export;
 mod semantic;
 mod sync;
 mod notes;
+pub mod ocr;
 mod search;
 mod settings;
 mod llm;
@@ -230,9 +233,11 @@ pub fn run() {
         .plugin(tauri_plugin_notification::init())
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_updater::Builder::new().build())
+        .plugin(capture::plugin())
         .setup(|app| {
             // Copies déchiffrées laissées par une fermeture brutale.
             attachments::clear_open_copies();
+            capture::register(app.handle());
             let data_dir = app.path().app_data_dir().expect("cannot resolve app data dir");
             let notes_dir = data_dir.join("notes");
             std::fs::create_dir_all(&notes_dir).expect("cannot create notes dir");
@@ -257,6 +262,7 @@ pub fn run() {
         })
         .invoke_handler(tauri::generate_handler![
             attachments::add_attachments,
+            capture::open_main_window,
             attachments::add_attachment_data,
             attachments::index_attachments,
             attachments::list_attachments,
@@ -303,6 +309,9 @@ pub fn run() {
             notes::import_zip,
             notes::export_note_to_path,
             notes::write_export_file,
+            md_export::begin_markdown_export,
+            md_export::write_markdown_files,
+            md_export::open_markdown_export,
             tray::get_autostart,
             tray::set_autostart,
             tray::hide_main_window,

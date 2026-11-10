@@ -14,6 +14,7 @@ const TermsGate = lazy(() => import("./components/legal/TermsGate"));
 import LockScreen from "./components/LockScreen";
 import CloseOverlay, { waitForCloseConfirm, callSaveNow } from "./components/CloseOverlay";
 import SplashScreen from "./components/SplashScreen";
+import { useQuickCaptureReceiver } from "./lib/quickCapture";
 
 export default function App() {
   const { loadNotes, loadSettings, loadFolders, loadColors, loadMemoryNodes, theme, setTheme, isDark, checkSecurity, isLocked, hasPassword } = useStore();
@@ -58,6 +59,9 @@ export default function App() {
   }, [isDark]);
 
   // Session Windows verrouillée ou PC sorti de veille (voir src-tauri/src/system_lock.rs).
+  // Capture rapide (Ctrl+Alt+N) : enregistrée ici, par la fenêtre principale.
+  useQuickCaptureReceiver();
+
   useEffect(() => {
     const unlisten = listen("system-lock", () => { lockSafely(); });
     return () => { unlisten.then((fn) => fn()); };

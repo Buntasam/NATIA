@@ -4,11 +4,14 @@
   "description": "Default capability for NATIA",
   "local": true,
   "windows": [
-    "main"
+    "main",
+    "capture"
   ],
   "permissions": [
     "core:default",
     "core:window:allow-set-fullscreen",
+    "core:window:allow-hide",
+    "core:window:allow-set-focus",
     "dialog:allow-save",
     "dialog:allow-open",
     "notification:default",

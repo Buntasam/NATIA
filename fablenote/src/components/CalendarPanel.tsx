@@ -1,8 +1,10 @@
 import { useEffect, useState } from "react";
-import { Bell, ChevronLeft, ChevronRight, X } from "lucide-react";
+import { Bell, ChevronLeft, ChevronRight, Square, X } from "lucide-react";
 import { invoke } from "@tauri-apps/api/core";
 import { useStore } from "../store";
 import { useLocale, useT } from "../i18n";
+import { TaskItem, getAllTasks } from "../lib/tasks";
+import { dueOf, withoutDue } from "../lib/taskDates";
 
 const capitalize = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
 
@@ -43,6 +45,7 @@ export default function CalendarPanel({ onClose }: Props) {
   const [view, setView] = useState(new Date(today.getFullYear(), today.getMonth(), 1));
   const [selected, setSelected] = useState<Date | null>(today);
   const [reminders, setReminders] = useState<ReminderItem[]>([]);
+  const [tasks, setTasks] = useState<TaskItem[]>([]);
 
   const year = view.getFullYear();
   const month = view.getMonth();
@@ -51,6 +54,7 @@ export default function CalendarPanel({ onClose }: Props) {
     invoke<ReminderItem[]>("get_all_reminders")
       .then(setReminders)
       .catch(() => {});
+    getAllTasks().then((all) => setTasks(all.filter((x) => !x.checked && dueOf(x.text)))).catch(() => {});
   }, []);
 
   // Build calendar grid (Mon-start)
@@ -79,6 +83,15 @@ export default function CalendarPanel({ onClose }: Props) {
     if (isNaN(d.getTime())) continue;
     remindersByDate[getKey(d)] = [...(remindersByDate[getKey(d)] ?? []), r];
   }
+
+  // Tâches à faire, par échéance
+  const tasksByDate: Record<string, TaskItem[]> = {};
+  for (const x of tasks) {
+    const [y, m, d] = dueOf(x.text)!.split("-").map(Number);
+    const k = getKey(new Date(y, m - 1, d));
+    tasksByDate[k] = [...(tasksByDate[k] ?? []), x];
+  }
+  const selectedTasks = selected ? (tasksByDate[getKey(selected)] ?? []) : [];
 
   const selectedNotes = selected ? (notesByDate[getKey(selected)] ?? []) : [];
   const selectedReminders = selected ? (remindersByDate[getKey(selected)] ?? []) : [];
@@ -149,6 +162,7 @@ export default function CalendarPanel({ onClose }: Props) {
               const key = getKey(day);
               const noteCount = notesByDate[key]?.length ?? 0;
               const remCount = remindersByDate[key]?.length ?? 0;
+              const taskCount = tasksByDate[key]?.length ?? 0;
               const isToday = sameDay(day, today);
               const isSel = selected && sameDay(day, selected);
               return (
@@ -160,20 +174,23 @@ export default function CalendarPanel({ onClose }: Props) {
                       ? "bg-accent text-white"
                       : isToday
                       ? "bg-accent/15 text-accent font-semibold"
-                      : noteCount > 0 || remCount > 0
+                      : noteCount > 0 || remCount > 0 || taskCount > 0
                       ? "hover:bg-hover text-primary"
                       : "hover:bg-hover text-muted"
                   }`}
                 >
                   {day.getDate()}
                   {/* Dots: blue=notes, orange=reminders */}
-                  {(noteCount > 0 || remCount > 0) && (
+                  {(noteCount > 0 || remCount > 0 || taskCount > 0) && (
                     <div className="absolute bottom-1 left-1/2 -translate-x-1/2 flex gap-0.5">
                       {noteCount > 0 && (
                         <span className={`w-1 h-1 rounded-full ${isSel ? "bg-white" : "bg-accent"}`} />
                       )}
                       {remCount > 0 && (
                         <span className={`w-1 h-1 rounded-full ${isSel ? "bg-white" : "bg-orange-400"}`} />
+                      )}
+                      {taskCount > 0 && (
+                        <span className={`w-1 h-1 rounded-full ${isSel ? "bg-white" : "bg-emerald-500"}`} />
                       )}
                     </div>
                   )}
@@ -225,8 +242,28 @@ export default function CalendarPanel({ onClose }: Props) {
                 </div>
               )}
 
+              {/* Tâches à faire ce jour */}
+              {selectedTasks.length > 0 && (
+                <div className="mb-2 space-y-1">
+                  <p className="text-[10px] text-emerald-500 uppercase tracking-wider font-medium mb-1">{t("Tâches")}</p>
+                  {selectedTasks.map((x) => (
+                    <button
+                      key={`${x.note_id}:${x.index}`}
+                      onClick={() => { selectNote(x.note_id); onClose(); }}
+                      className="w-full text-left px-3 py-2 rounded-lg hover:bg-hover transition-colors flex items-start gap-2"
+                    >
+                      <Square size={11} className="text-emerald-500 shrink-0 mt-0.5" />
+                      <div className="flex-1 min-w-0">
+                        <p className="text-xs text-primary truncate">{withoutDue(x.text)}</p>
+                        <p className="text-[10px] text-muted truncate">{x.note_title}</p>
+                      </div>
+                    </button>
+                  ))}
+                </div>
+              )}
+
               {/* Notes */}
-              {selectedNotes.length === 0 && selectedReminders.length === 0 ? (
+              {selectedNotes.length === 0 && selectedReminders.length === 0 && selectedTasks.length === 0 ? (
                 <p className="text-xs text-muted py-2">{t("Aucune note ni rappel ce jour")}</p>
               ) : selectedNotes.length > 0 && (
                 <>
@@ -262,6 +299,9 @@ export default function CalendarPanel({ onClose }: Props) {
           </span>
           <span className="flex items-center gap-1 text-[10px] text-muted">
             <span className="w-2 h-2 rounded-full bg-orange-400 inline-block" /> {t("Rappels")}
+          </span>
+          <span className="flex items-center gap-1 text-[10px] text-muted">
+            <span className="w-2 h-2 rounded-full bg-emerald-500 inline-block" /> {t("Tâches")}
           </span>
         </div>
       </div>

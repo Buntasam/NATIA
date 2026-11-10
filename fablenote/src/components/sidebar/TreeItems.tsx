@@ -38,7 +38,7 @@ export function FolderNode({
   folder: TreeFolder;
   depth: number;
   expanded: Set<string>;
-  activeNote: NoteMetadata | Note | null;
+  activeNote: { id: string } | null;
   renamingPath: string | null;
   renameValue: string;
   renameRef: React.RefObject<HTMLInputElement>;
@@ -244,7 +244,9 @@ export function NoteItem({
       className={`group px-3 py-2 rounded-lg cursor-grab active:cursor-grabbing mb-0.5 transition-colors select-none ${
         active ? "bg-active text-primary" : "text-secondary hover:bg-hover hover:text-primary"
       }`}
-      style={{ paddingLeft: `${12 + indent}px` }}
+      // Hors de l'écran, le navigateur ne calcule pas son rendu : la liste reste fluide avec
+      // des milliers de notes.
+      style={{ paddingLeft: `${12 + indent}px`, contentVisibility: "auto", containIntrinsicSize: "auto 40px" }}
     >
       <div className="flex items-start justify-between gap-1">
         <div className="flex items-center gap-1.5 flex-1 min-w-0">

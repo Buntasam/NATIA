@@ -2,6 +2,7 @@ import React from "react";
 import ReactDOM from "react-dom/client";
 import "./debug/logger"; // installe les intercepteurs console + window.onerror dès le boot
 import App from "./App";
+import CaptureWindow from "./components/CaptureWindow";
 import "./index.css";
 
 class ErrorBoundary extends React.Component<
@@ -32,7 +33,8 @@ class ErrorBoundary extends React.Component<
 ReactDOM.createRoot(document.getElementById("root")!).render(
   <React.StrictMode>
     <ErrorBoundary>
-      <App />
+      {/* La fenêtre de capture rapide (Ctrl+Alt+N) charge la même page, avec #capture. */}
+      {window.location.hash === "#capture" ? <CaptureWindow /> : <App />}
     </ErrorBoundary>
   </React.StrictMode>
 );

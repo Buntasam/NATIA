@@ -6,6 +6,7 @@ import { useStore } from "../../store";
 import ResetConfirmDialog from "../ResetConfirmDialog";
 import AutoBackupSettings from "./AutoBackupSettings";
 import ExternalImport from "./ExternalImport";
+import MarkdownExport from "./MarkdownExport";
 import SyncSettings from "./SyncSettings";
 import { formatLastBackup, isBackupReminderEnabled, recordBackup, setBackupReminderEnabled } from "../../lib/backupReminder";
 import { Section, SecInput } from "./SettingsWidgets";
@@ -179,6 +180,7 @@ export default function DataSettings() {
           </div>
 
           <ExternalImport />
+          <MarkdownExport />
         </div>
       </Section>
 
