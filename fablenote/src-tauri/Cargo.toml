@@ -23,7 +23,7 @@ uuid = { version = "1", features = ["v4"] }
 reqwest = { version = "0.12", features = ["json"] }
 tokio = { version = "1", features = ["process", "io-util", "sync", "time"] }
 sha2 = "0.10"
-argon2 = "0.5"
+argon2 = "0.6"
 aes-gcm = { version = "0.10", features = ["aes"] }
 rand = "0.8"
 base64 = "0.22"
